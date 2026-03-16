@@ -115,9 +115,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
                 itemBuilder: (_, i) {
                   final p = polizas[i];
 
-                  final titulo = p.idPoliza?.trim().isNotEmpty == true
-                      ? '${p.nroPoliza}  •  ${p.idPoliza}'
-                      : p.nroPoliza;
+                  final titulo = 'Código: ${p.id} • Póliza: ${p.nroPoliza}';
 
                   return ListTile(
                     title: Text(titulo),

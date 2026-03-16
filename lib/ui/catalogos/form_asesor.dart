@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../../utils/formatters.dart';
 
 class FormAsesor extends StatefulWidget {
   final Asesor? asesor;
@@ -20,6 +21,7 @@ class _FormAsesorState extends State<FormAsesor> {
   late final TextEditingController docCtrl;
   late final TextEditingController telCtrl;
   late final TextEditingController correoCtrl;
+  late final TextEditingController porccomCtrl;
 
   final List<String> tiposDoc = const ['CC', 'CE', 'NIT', 'PAS', 'OTRO'];
   String? tipoDocSel;
@@ -32,18 +34,22 @@ class _FormAsesorState extends State<FormAsesor> {
   void initState() {
     super.initState();
     nombreCtrl = TextEditingController(text: widget.asesor?.nombreAsesor ?? '');
-    docCtrl = TextEditingController(text: widget.asesor?.docAsesor ?? '');
+    docCtrl = TextEditingController(text: widget.asesor?.docAsesor ?? '');  
     telCtrl = TextEditingController(text: widget.asesor?.telAsesor ?? '');
     correoCtrl = TextEditingController(text: widget.asesor?.correoAsesor ?? '');
+    porccomCtrl = TextEditingController(
+      text: widget.asesor?.porccomAsesor == null
+          ? ''
+          : Fmt.numCO(widget.asesor!.porccomAsesor, dec: 2),
+    );
+
     tipoDocSel = widget.asesor?.tipodocAsesor;
     estadoAsesor = widget.asesor?.estadoAsesor ?? true;
 
-    // Si viene sin doc, no tiene sentido tener tipo doc seleccionado
     if (docCtrl.text.trim().isEmpty) {
       tipoDocSel = null;
     }
 
-    // Si el usuario borra el doc, limpiamos el tipo doc automáticamente
     docCtrl.addListener(() {
       final doc = docCtrl.text.trim();
       if (doc.isEmpty && tipoDocSel != null) {
@@ -58,6 +64,7 @@ class _FormAsesorState extends State<FormAsesor> {
     docCtrl.dispose();
     telCtrl.dispose();
     correoCtrl.dispose();
+    porccomCtrl.dispose();
     super.dispose();
   }
 
@@ -71,9 +78,27 @@ class _FormAsesorState extends State<FormAsesor> {
     return t.isEmpty ? null : t;
   }
 
+  num? _parseNumeroONull(String v) {
+    final t = v.trim();
+    if (t.isEmpty) return null;
+
+    final limpio = t
+        .replaceAll(RegExp(r'[^0-9,.\-]'), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
+
+    return num.tryParse(limpio);
+  }
+
+  void _formatearPorcentaje() {
+    final n = _parseNumeroONull(porccomCtrl.text);
+    if (n == null) return;
+    porccomCtrl.text = Fmt.numCO(n, dec: 2);
+  }
+
   String? _validarCorreo(String? v) {
     final s = (v ?? '').trim();
-    if (s.isEmpty) return null; // correo es opcional
+    if (s.isEmpty) return null;
     final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(s);
     return ok ? null : 'Correo inválido';
   }
@@ -89,7 +114,6 @@ class _FormAsesorState extends State<FormAsesor> {
     final doc = _limpiarONull(docCtrl.text);
     final tipo = (tipoDocSel?.trim().isEmpty ?? true) ? null : tipoDocSel!.trim();
 
-    // Regla: si hay doc, debe haber tipo; si no hay doc, tipo debe ser null
     if (doc != null && tipo == null) {
       _toast('Selecciona el tipo de documento.');
       return;
@@ -98,21 +122,17 @@ class _FormAsesorState extends State<FormAsesor> {
     setState(() => guardando = true);
     try {
       final a = Asesor(
-        // 🔥 IMPORTANTE:
-        // Con PK int8, el id es int.
-        // - En edición: viene del widget (int).
-        // - En creación: puedes mandar 0 (y el repo NO debe incluir id en el insert).
         id: widget.asesor?.id ?? 0,
         nombreAsesor: nombreCtrl.text.trim(),
         tipodocAsesor: doc == null ? null : tipo,
         docAsesor: doc,
         telAsesor: _limpiarONull(telCtrl.text),
         correoAsesor: _limpiarONull(correoCtrl.text),
+        porccomAsesor: _parseNumeroONull(porccomCtrl.text),
         estadoAsesor: estadoAsesor,
       );
 
       if (esEdicion) {
-        // ✅ ahora el repo debe recibir int
         await repo.actualizarAsesor(widget.asesor!.id, a);
       } else {
         await repo.crearAsesor(a);
@@ -165,7 +185,6 @@ class _FormAsesorState extends State<FormAsesor> {
                               ),
                             ),
                             const SizedBox(height: 12),
-
                             TextFormField(
                               controller: nombreCtrl,
                               textInputAction: TextInputAction.next,
@@ -177,7 +196,6 @@ class _FormAsesorState extends State<FormAsesor> {
                               validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                             ),
                             const SizedBox(height: 12),
-
                             Row(
                               children: [
                                 Expanded(
@@ -193,8 +211,6 @@ class _FormAsesorState extends State<FormAsesor> {
                                         .toList(),
                                     onChanged: (v) {
                                       setState(() => tipoDocSel = v);
-
-                                      // Si el usuario quita el tipo doc, limpiamos el doc
                                       if ((v ?? '').trim().isEmpty) {
                                         docCtrl.text = '';
                                       }
@@ -216,13 +232,26 @@ class _FormAsesorState extends State<FormAsesor> {
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: porccomCtrl,
+                              textInputAction: TextInputAction.next,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(
+                                labelText: '% comisión',
+                                helperText: 'Ej: 70 o 70,5',
+                                border: OutlineInputBorder(),
+                              ),
+                              onEditingComplete: () {
+                                _formatearPorcentaje();
+                                FocusScope.of(context).nextFocus();
+                              },
+                            ),
                           ],
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 12),
-
                     Card(
                       elevation: 1,
                       child: Padding(
@@ -237,7 +266,6 @@ class _FormAsesorState extends State<FormAsesor> {
                               ),
                             ),
                             const SizedBox(height: 12),
-
                             Row(
                               children: [
                                 Expanded(
@@ -269,9 +297,7 @@ class _FormAsesorState extends State<FormAsesor> {
                                 ),
                               ],
                             ),
-
                             const SizedBox(height: 12),
-
                             SwitchListTile(
                               value: estadoAsesor,
                               onChanged: (v) => setState(() => estadoAsesor = v),
@@ -283,9 +309,7 @@ class _FormAsesorState extends State<FormAsesor> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
                     Align(
                       alignment: Alignment.centerRight,
                       child: FilledButton.icon(

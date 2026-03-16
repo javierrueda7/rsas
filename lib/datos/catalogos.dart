@@ -59,6 +59,7 @@ class Asesor {
   final String? docAsesor;
   final String? telAsesor;
   final String? correoAsesor;
+  final num? porccomAsesor;
   final bool estadoAsesor;
 
   Asesor({
@@ -68,6 +69,7 @@ class Asesor {
     this.docAsesor,
     this.telAsesor,
     this.correoAsesor,
+    this.porccomAsesor,
     this.estadoAsesor = true,
   });
 
@@ -78,6 +80,12 @@ class Asesor {
     return int.tryParse(v.toString()) ?? 0;
   }
 
+  static num? _toNum(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v;
+    return num.tryParse(v.toString());
+  }
+
   factory Asesor.fromMap(Map<String, dynamic> m) => Asesor(
         id: _toInt(m['id']),
         nombreAsesor: (m['nombre_asesor'] ?? '') as String,
@@ -85,6 +93,7 @@ class Asesor {
         docAsesor: m['doc_asesor'] as String?,
         telAsesor: m['tel_asesor'] as String?,
         correoAsesor: m['correo_asesor'] as String?,
+        porccomAsesor: _toNum(m['porccom_asesor']),
         estadoAsesor: (m['estado_asesor'] ?? true) as bool,
       );
 
@@ -94,6 +103,7 @@ class Asesor {
         'doc_asesor': docAsesor,
         'tel_asesor': telAsesor,
         'correo_asesor': correoAsesor,
+        'porccom_asesor': porccomAsesor,
         'estado_asesor': estadoAsesor,
       };
 }
