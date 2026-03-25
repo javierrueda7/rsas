@@ -1,0 +1,188 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.aseguradoras (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  nombre_aseg text NOT NULL UNIQUE,
+  nit_aseg text,
+  estado_aseg boolean NOT NULL DEFAULT true,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  clave text,
+  CONSTRAINT aseguradoras_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.asesores (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  nombre_asesor text NOT NULL,
+  tipodoc_asesor text,
+  doc_asesor text,
+  tel_asesor text,
+  correo_asesor text,
+  estado_asesor boolean NOT NULL DEFAULT true,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  obs_asesor text,
+  porccom_asesor numeric,
+  CONSTRAINT asesores_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.clientes (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  nombre_cliente text NOT NULL,
+  tipodoc_cliente text,
+  doc_cliente text,
+  tel_cliente text,
+  correo_cliente text,
+  dir_cliente text,
+  munic_id bigint,
+  notas_cliente text,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  tipopers_cliente text NOT NULL DEFAULT 'N'::text CHECK (tipopers_cliente = ANY (ARRAY['N'::text, 'J'::text])),
+  contacto_cliente text,
+  cargocont_cliente text,
+  asesor_id bigint,
+  estado_cliente boolean NOT NULL DEFAULT true,
+  recordar_cliente boolean NOT NULL DEFAULT false,
+  CONSTRAINT clientes_pkey PRIMARY KEY (id),
+  CONSTRAINT clientes_asesor_fk FOREIGN KEY (asesor_id) REFERENCES public.asesores(id),
+  CONSTRAINT clientes_munic_fk FOREIGN KEY (munic_id) REFERENCES public.municipio(id)
+);
+CREATE TABLE public.estados_poliza (
+  id text NOT NULL,
+  nombre_estado text NOT NULL UNIQUE,
+  estado_activo boolean NOT NULL DEFAULT true,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT estados_poliza_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.formaexp (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  nombre_formaexp text NOT NULL UNIQUE,
+  desc_formaexp text,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT formaexp_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.formas_pago (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  nombre_forma_pago text NOT NULL UNIQUE,
+  estado_forma_pago boolean NOT NULL DEFAULT true,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  desc_forma_pago text,
+  CONSTRAINT formas_pago_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.intermediarios (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  nombre_interm text NOT NULL UNIQUE,
+  estado_interm boolean NOT NULL DEFAULT true,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT intermediarios_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.municipio (
+  id bigint NOT NULL UNIQUE,
+  nombre_munic text,
+  CONSTRAINT municipio_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.polizas (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  nro_poliza text,
+  cliente_id bigint,
+  asesor_id bigint,
+  ramo_id bigint,
+  producto_id bigint,
+  fexp_poliza timestamp with time zone,
+  fini_poliza timestamp with time zone,
+  ffin_poliza timestamp with time zone,
+  prima_poliza numeric NOT NULL,
+  valor_poliza numeric NOT NULL,
+  bien_asegurado text,
+  obs_poliza text,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  vlraseg_poliza numeric,
+  porccom_poliza numeric,
+  vlrbasecom_poliza numeric,
+  intermediario_id bigint,
+  porcom_agencia numeric,
+  vlrcom_poliza numeric,
+  vlrcomfija_poliza numeric,
+  porcomadic_poliza numeric,
+  vlrcomadic_poliza numeric,
+  porcom_asesor1 numeric,
+  agencia_id bigint,
+  forma_pago_id bigint,
+  estado_poliza_id text DEFAULT 'I'::text,
+  vlrprimapagada_poliza numeric,
+  asesor2_id bigint,
+  porcom_asesor2 numeric,
+  asesor3_id bigint,
+  porcom_asesor3 numeric,
+  asesorad_id bigint,
+  porcom_asesorad numeric,
+  agenciaad_id bigint,
+  porcom_agenciaad numeric,
+  fechareg date,
+  horareg time without time zone,
+  norecordar boolean,
+  formaexp_id bigint,
+  aseg_id bigint,
+  usuario_id bigint,
+  CONSTRAINT polizas_pkey PRIMARY KEY (id),
+  CONSTRAINT polizas_asesorad_id_fkey FOREIGN KEY (asesorad_id) REFERENCES public.asesores(id),
+  CONSTRAINT polizas_formaexp_id_fkey FOREIGN KEY (formaexp_id) REFERENCES public.formaexp(id),
+  CONSTRAINT polizas_agenciaad_id_fkey FOREIGN KEY (agenciaad_id) REFERENCES public.asesores(id),
+  CONSTRAINT polizas_asesor2_id_fkey FOREIGN KEY (asesor2_id) REFERENCES public.asesores(id),
+  CONSTRAINT polizas_agencia_id_fkey FOREIGN KEY (agencia_id) REFERENCES public.asesores(id),
+  CONSTRAINT polizas_forma_pago_id_fkey FOREIGN KEY (forma_pago_id) REFERENCES public.formas_pago(id),
+  CONSTRAINT polizas_estado_poliza_id_fkey FOREIGN KEY (estado_poliza_id) REFERENCES public.estados_poliza(id),
+  CONSTRAINT polizas_aseg_id_fkey FOREIGN KEY (aseg_id) REFERENCES public.aseguradoras(id),
+  CONSTRAINT polizas_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES public.clientes(id),
+  CONSTRAINT polizas_asesor_id_fkey FOREIGN KEY (asesor_id) REFERENCES public.asesores(id),
+  CONSTRAINT polizas_ramo_id_fkey FOREIGN KEY (ramo_id) REFERENCES public.ramos(id),
+  CONSTRAINT polizas_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id),
+  CONSTRAINT polizas_asesor3_id_fkey FOREIGN KEY (asesor3_id) REFERENCES public.asesores(id),
+  CONSTRAINT polizas_intermediario_id_fkey FOREIGN KEY (intermediario_id) REFERENCES public.intermediarios(id),
+  CONSTRAINT polizas_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.productos (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  nombre_prod text NOT NULL,
+  ramo_id bigint NOT NULL,
+  estado_prod boolean NOT NULL DEFAULT true,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  aseguradora_id bigint NOT NULL,
+  vlrfijocom_prod numeric,
+  porccom_prod numeric,
+  desc_prod text,
+  porcad_prod numeric,
+  obs_prod text,
+  CONSTRAINT productos_pkey PRIMARY KEY (id),
+  CONSTRAINT productos_ramo_id_fkey FOREIGN KEY (ramo_id) REFERENCES public.ramos(id),
+  CONSTRAINT productos_aseguradora_id_fkey FOREIGN KEY (aseguradora_id) REFERENCES public.aseguradoras(id)
+);
+CREATE TABLE public.ramos (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  nombre_ramo text NOT NULL UNIQUE,
+  estado_ramo boolean NOT NULL DEFAULT true,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  obs_ramo text,
+  porcom_base_ramo numeric NOT NULL DEFAULT 100,
+  CONSTRAINT ramos_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.usuarios (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  apodo_usuario text NOT NULL UNIQUE,
+  nombre_usuario text NOT NULL,
+  rol text NOT NULL CHECK (rol = ANY (ARRAY['A'::text, 'D'::text, 'S'::text])),
+  asesor_id bigint,
+  clave_usuario text,
+  estado_usuario boolean NOT NULL DEFAULT true,
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT usuarios_pkey PRIMARY KEY (id),
+  CONSTRAINT usuarios_asesor_id_fkey FOREIGN KEY (asesor_id) REFERENCES public.asesores(id)
+);

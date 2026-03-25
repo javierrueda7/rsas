@@ -15,10 +15,12 @@ class _FormAseguradoraState extends State<FormAseguradora> {
   final repo = RepositorioCatalogos();
 
   bool guardando = false;
+  bool cargandoId = true;
 
+  late final TextEditingController idCtrl;
   late final TextEditingController nombreCtrl;
   late final TextEditingController nitCtrl;
-  late final TextEditingController claveCtrl; // ✅ nuevo
+  late final TextEditingController claveCtrl;
 
   bool estadoAseg = true;
 
@@ -27,27 +29,78 @@ class _FormAseguradoraState extends State<FormAseguradora> {
   @override
   void initState() {
     super.initState();
-    nombreCtrl = TextEditingController(text: widget.aseguradora?.nombreAseg ?? '');
-    nitCtrl = TextEditingController(text: widget.aseguradora?.nitAseg ?? '');
-    claveCtrl = TextEditingController(text: widget.aseguradora?.clave ?? ''); // ✅ carga al editar
+
+    idCtrl = TextEditingController(
+      text: esEdicion ? widget.aseguradora!.id.toString() : '',
+    );
+    nombreCtrl = TextEditingController(
+      text: widget.aseguradora?.nombreAseg ?? '',
+    );
+    nitCtrl = TextEditingController(
+      text: widget.aseguradora?.nitAseg ?? '',
+    );
+    claveCtrl = TextEditingController(
+      text: widget.aseguradora?.clave ?? '',
+    );
+
     estadoAseg = widget.aseguradora?.estadoAseg ?? true;
+
+    if (!esEdicion) {
+      _cargarSiguienteId();
+    } else {
+      cargandoId = false;
+    }
   }
 
   @override
   void dispose() {
+    idCtrl.dispose();
     nombreCtrl.dispose();
     nitCtrl.dispose();
-    claveCtrl.dispose(); // ✅ nuevo
+    claveCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarSiguienteId() async {
+    try {
+      final nextId = await repo.obtenerSiguienteIdAseguradora();
+      if (!mounted) return;
+      idCtrl.text = nextId.toString();
+      setState(() => cargandoId = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => cargandoId = false);
+      _toast('No se pudo cargar el siguiente ID: $e');
+    }
   }
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
+  String? _limpiarONull(String v) {
+    final limpio = v.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return limpio.isEmpty ? null : limpio;
+  }
+
+  String _limpiarObligatorio(String v) {
+    return v.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  String? _validarId(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Requerido';
+    final n = int.tryParse(s);
+    if (n == null) return 'Debe ser numérico';
+    if (n <= 0) return 'Debe ser mayor que 0';
+    return null;
   }
 
   String? _nitLimpioONull(String v) {
-    final t = v.trim();
+    final t = v.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (t.isEmpty) return null;
     final limpio = t.replaceAll(RegExp(r'[\s\.\-]'), '');
     return limpio.isEmpty ? null : limpio;
@@ -60,7 +113,6 @@ class _FormAseguradoraState extends State<FormAseguradora> {
     return null;
   }
 
-  // ✅ clave opcional: si hay valor, debe ser alfanumérico (sin espacios ni símbolos)
   String? _claveLimpiaONull(String v) {
     final t = v.trim();
     return t.isEmpty ? null : t;
@@ -68,8 +120,7 @@ class _FormAseguradoraState extends State<FormAseguradora> {
 
   String? _validarClave(String? v) {
     final c = _claveLimpiaONull(v ?? '');
-    if (c == null) return null; // opcional
-
+    if (c == null) return null;
     final ok = RegExp(r'^[a-zA-Z0-9]+$').hasMatch(c);
     if (!ok) return 'Clave inválida (solo letras y números)';
     return null;
@@ -83,13 +134,30 @@ class _FormAseguradoraState extends State<FormAseguradora> {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
+    final idTexto = idCtrl.text.trim();
+    final idNum = int.tryParse(idTexto);
+
+    if (idNum == null || idNum <= 0) {
+      _toast('El ID debe ser un número válido mayor que 0.');
+      return;
+    }
+
     setState(() => guardando = true);
+
     try {
+      if (!esEdicion) {
+        final existe = await repo.existeAseguradoraId(idNum);
+        if (existe) {
+          _toast('Ya existe una aseguradora con ese ID.');
+          return;
+        }
+      }
+
       final a = Aseguradora(
-        id: esEdicion ? widget.aseguradora!.id : 0,
-        nombreAseg: nombreCtrl.text.trim(),
+        id: esEdicion ? widget.aseguradora!.id : idNum,
+        nombreAseg: _limpiarObligatorio(nombreCtrl.text),
         nitAseg: _nitLimpioONull(nitCtrl.text),
-        clave: _claveLimpiaONull(claveCtrl.text), // ✅ nuevo
+        clave: _claveLimpiaONull(claveCtrl.text),
         estadoAseg: estadoAseg,
       );
 
@@ -137,12 +205,39 @@ class _FormAseguradoraState extends State<FormAseguradora> {
                     child: Column(
                       children: [
                         TextFormField(
+                          controller: idCtrl,
+                          enabled: !esEdicion,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: esEdicion ? 'ID' : 'ID sugerido',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: cargandoId
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          validator: _validarId,
+                        ),
+                        const SizedBox(height: 12),
+
+                        TextFormField(
                           controller: nombreCtrl,
                           decoration: const InputDecoration(
                             labelText: 'Nombre *',
                             border: OutlineInputBorder(),
                           ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                          validator: (v) {
+                            final limpio = _limpiarONull(v ?? '');
+                            return limpio == null ? 'Requerido' : null;
+                          },
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
@@ -158,7 +253,6 @@ class _FormAseguradoraState extends State<FormAseguradora> {
                         ),
                         const SizedBox(height: 12),
 
-                        // ✅ NUEVO: clave
                         TextFormField(
                           controller: claveCtrl,
                           decoration: const InputDecoration(
@@ -182,6 +276,7 @@ class _FormAseguradoraState extends State<FormAseguradora> {
                           contentPadding: EdgeInsets.zero,
                         ),
                         const SizedBox(height: 8),
+
                         Align(
                           alignment: Alignment.centerRight,
                           child: FilledButton.icon(
@@ -190,7 +285,9 @@ class _FormAseguradoraState extends State<FormAseguradora> {
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Icon(Icons.save),
                             label: Text(guardando ? 'Guardando...' : 'Guardar'),

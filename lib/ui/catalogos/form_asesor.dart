@@ -16,7 +16,9 @@ class _FormAsesorState extends State<FormAsesor> {
   final repo = RepositorioCatalogos();
 
   bool guardando = false;
+  bool cargandoId = true;
 
+  late final TextEditingController idCtrl;
   late final TextEditingController nombreCtrl;
   late final TextEditingController docCtrl;
   late final TextEditingController telCtrl;
@@ -26,6 +28,9 @@ class _FormAsesorState extends State<FormAsesor> {
   final List<String> tiposDoc = const ['CC', 'CE', 'NIT', 'PAS', 'OTRO'];
   String? tipoDocSel;
 
+  List<String> get tiposDocNormalizados =>
+      tiposDoc.map((e) => e.trim().toUpperCase()).toSet().toList();
+
   bool estadoAsesor = true;
 
   bool get esEdicion => widget.asesor != null;
@@ -33,8 +38,12 @@ class _FormAsesorState extends State<FormAsesor> {
   @override
   void initState() {
     super.initState();
+
+    idCtrl = TextEditingController(
+      text: esEdicion ? widget.asesor!.id.toString() : '',
+    );
     nombreCtrl = TextEditingController(text: widget.asesor?.nombreAsesor ?? '');
-    docCtrl = TextEditingController(text: widget.asesor?.docAsesor ?? '');  
+    docCtrl = TextEditingController(text: widget.asesor?.docAsesor ?? '');
     telCtrl = TextEditingController(text: widget.asesor?.telAsesor ?? '');
     correoCtrl = TextEditingController(text: widget.asesor?.correoAsesor ?? '');
     porccomCtrl = TextEditingController(
@@ -43,7 +52,9 @@ class _FormAsesorState extends State<FormAsesor> {
           : Fmt.numCO(widget.asesor!.porccomAsesor, dec: 2),
     );
 
-    tipoDocSel = widget.asesor?.tipodocAsesor;
+    final td = widget.asesor?.tipodocAsesor?.trim().toUpperCase();
+    tipoDocSel = (td != null && tiposDocNormalizados.contains(td)) ? td : null;
+
     estadoAsesor = widget.asesor?.estadoAsesor ?? true;
 
     if (docCtrl.text.trim().isEmpty) {
@@ -56,10 +67,17 @@ class _FormAsesorState extends State<FormAsesor> {
         setState(() => tipoDocSel = null);
       }
     });
+
+    if (!esEdicion) {
+      _cargarSiguienteId();
+    } else {
+      cargandoId = false;
+    }
   }
 
   @override
   void dispose() {
+    idCtrl.dispose();
     nombreCtrl.dispose();
     docCtrl.dispose();
     telCtrl.dispose();
@@ -68,14 +86,40 @@ class _FormAsesorState extends State<FormAsesor> {
     super.dispose();
   }
 
+  Future<void> _cargarSiguienteId() async {
+    try {
+      final nextId = await repo.obtenerSiguienteIdAsesor();
+      if (!mounted) return;
+      idCtrl.text = nextId.toString();
+      setState(() => cargandoId = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => cargandoId = false);
+      _toast('No se pudo cargar el siguiente ID: $e');
+    }
+  }
+
   void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   String? _limpiarONull(String v) {
-    final t = v.trim();
+    final t = v.replaceAll(RegExp(r'\s+'), ' ').trim();
     return t.isEmpty ? null : t;
+  }
+
+  String _limpiarObligatorio(String v) {
+    return v.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  String? _validarId(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Requerido';
+    final n = int.tryParse(s);
+    if (n == null) return 'Debe ser numérico';
+    if (n <= 0) return 'Debe ser mayor que 0';
+    return null;
   }
 
   num? _parseNumeroONull(String v) {
@@ -111,6 +155,14 @@ class _FormAsesorState extends State<FormAsesor> {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
+    final idTexto = idCtrl.text.trim();
+    final idNum = int.tryParse(idTexto);
+
+    if (idNum == null || idNum <= 0) {
+      _toast('El ID debe ser un número válido mayor que 0.');
+      return;
+    }
+
     final doc = _limpiarONull(docCtrl.text);
     final tipo = (tipoDocSel?.trim().isEmpty ?? true) ? null : tipoDocSel!.trim();
 
@@ -121,9 +173,17 @@ class _FormAsesorState extends State<FormAsesor> {
 
     setState(() => guardando = true);
     try {
+      if (!esEdicion) {
+        final existe = await repo.existeAsesorId(idNum);
+        if (existe) {
+          _toast('Ya existe un asesor con ese ID.');
+          return;
+        }
+      }
+
       final a = Asesor(
-        id: widget.asesor?.id ?? 0,
-        nombreAsesor: nombreCtrl.text.trim(),
+        id: esEdicion ? widget.asesor!.id : idNum,
+        nombreAsesor: _limpiarObligatorio(nombreCtrl.text),
         tipodocAsesor: doc == null ? null : tipo,
         docAsesor: doc,
         telAsesor: _limpiarONull(telCtrl.text),
@@ -186,6 +246,27 @@ class _FormAsesorState extends State<FormAsesor> {
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
+                              controller: idCtrl,
+                              enabled: !esEdicion,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: esEdicion ? 'ID' : 'ID sugerido',
+                                border: const OutlineInputBorder(),
+                                suffixIcon: cargandoId
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                              validator: _validarId,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
                               controller: nombreCtrl,
                               textInputAction: TextInputAction.next,
                               autofillHints: const [AutofillHints.name],
@@ -193,7 +274,10 @@ class _FormAsesorState extends State<FormAsesor> {
                                 labelText: 'Nombre *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                              validator: (v) {
+                                final limpio = _limpiarONull(v ?? '');
+                                return limpio == null ? 'Requerido' : null;
+                              },
                             ),
                             const SizedBox(height: 12),
                             Row(
@@ -201,13 +285,20 @@ class _FormAsesorState extends State<FormAsesor> {
                                 Expanded(
                                   flex: 2,
                                   child: DropdownButtonFormField<String>(
-                                    value: tipoDocSel,
+                                    value: tiposDocNormalizados.contains(tipoDocSel)
+                                        ? tipoDocSel
+                                        : null,
                                     decoration: const InputDecoration(
                                       labelText: 'Tipo de documento',
                                       border: OutlineInputBorder(),
                                     ),
-                                    items: tiposDoc
-                                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                                    items: tiposDocNormalizados
+                                        .map(
+                                          (t) => DropdownMenuItem<String>(
+                                            value: t,
+                                            child: Text(t),
+                                          ),
+                                        )
                                         .toList(),
                                     onChanged: (v) {
                                       setState(() => tipoDocSel = v);

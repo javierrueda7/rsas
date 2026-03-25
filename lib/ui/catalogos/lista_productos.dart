@@ -66,8 +66,14 @@ class _ListaProductosState extends State<ListaProductos> {
         ..clear()
         ..addEntries(aseg.map((a) => MapEntry(a.id, a.nombreAseg)));
 
+      prods.sort((a, b) => a.id.compareTo(b.id));
+
       if (!mounted) return;
-      setState(() => items = prods);
+      setState(() {
+        items = prods;
+        _sortColumnIndex = 0;
+        _sortAscending = true;
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -142,14 +148,26 @@ class _ListaProductosState extends State<ListaProductos> {
     if (_filtro.isEmpty) return items;
 
     return items.where((p) {
+      final id = p.id.toString();
       final nombre = p.nombreProd.toLowerCase();
       final ramo = _ramoNombre(p.ramoId).toLowerCase();
       final aseg = _asegNombre(p.aseguradoraId).toLowerCase();
+      final desc = (p.descProd ?? '').toLowerCase();
+      final obs = (p.obsProd ?? '').toLowerCase();
+      final comision = (p.comisionProd?.toString() ?? '').toLowerCase();
+      final porcom = (p.porcomProd?.toString() ?? '').toLowerCase();
+      final porcad = (p.porcadProd?.toString() ?? '').toLowerCase();
       final estado = p.estadoProd ? 'activo' : 'inactivo';
 
-      return nombre.contains(_filtro) ||
+      return id.contains(_filtro) ||
+          nombre.contains(_filtro) ||
           ramo.contains(_filtro) ||
           aseg.contains(_filtro) ||
+          desc.contains(_filtro) ||
+          obs.contains(_filtro) ||
+          comision.contains(_filtro) ||
+          porcom.contains(_filtro) ||
+          porcad.contains(_filtro) ||
           estado.contains(_filtro);
     }).toList();
   }
@@ -187,7 +205,7 @@ class _ListaProductosState extends State<ListaProductos> {
             child: TextField(
               controller: _buscarCtrl,
               decoration: const InputDecoration(
-                labelText: 'Buscar (producto, ramo o aseguradora)',
+                labelText: 'Buscar (ID, producto, ramo, aseguradora, descripción, observaciones o estado)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.search),
               ),
@@ -220,10 +238,21 @@ class _ListaProductosState extends State<ListaProductos> {
                                   sortColumnIndex: _sortColumnIndex,
                                   sortAscending: _sortAscending,
                                   columnSpacing: 12,
-                                  horizontalMargin: 8,
+                                  horizontalMargin: 0,
                                   headingRowColor:
                                       WidgetStateProperty.all(Colors.grey.shade200),
                                   columns: [
+                                    DataColumn(
+                                      label: const Text('ID          '),
+                                      numeric: true,
+                                      onSort: (columnIndex, ascending) {
+                                        _sort<num>(
+                                          (p) => p.id,
+                                          columnIndex,
+                                          ascending,
+                                        );
+                                      },
+                                    ),
                                     DataColumn(
                                       label: const Text('Producto'),
                                       onSort: (columnIndex, ascending) {
@@ -249,6 +278,56 @@ class _ListaProductosState extends State<ListaProductos> {
                                       onSort: (columnIndex, ascending) {
                                         _sort<String>(
                                           (p) => _asegNombre(p.aseguradoraId).toLowerCase(),
+                                          columnIndex,
+                                          ascending,
+                                        );
+                                      },
+                                    ),
+                                    DataColumn(
+                                      label: const Text('Comisión fija'),
+                                      onSort: (columnIndex, ascending) {
+                                        _sort<num>(
+                                          (p) => p.comisionProd ?? 0,
+                                          columnIndex,
+                                          ascending,
+                                        );
+                                      },
+                                    ),
+                                    DataColumn(
+                                      label: const Text('% Comisión'),
+                                      onSort: (columnIndex, ascending) {
+                                        _sort<num>(
+                                          (p) => p.porcomProd ?? 0,
+                                          columnIndex,
+                                          ascending,
+                                        );
+                                      },
+                                    ),
+                                    DataColumn(
+                                      label: const Text('% Adicional'),
+                                      onSort: (columnIndex, ascending) {
+                                        _sort<num>(
+                                          (p) => p.porcadProd ?? 0,
+                                          columnIndex,
+                                          ascending,
+                                        );
+                                      },
+                                    ),
+                                    DataColumn(
+                                      label: const Text('Descripción'),
+                                      onSort: (columnIndex, ascending) {
+                                        _sort<String>(
+                                          (p) => (p.descProd ?? '').toLowerCase(),
+                                          columnIndex,
+                                          ascending,
+                                        );
+                                      },
+                                    ),
+                                    DataColumn(
+                                      label: const Text('Observaciones'),
+                                      onSort: (columnIndex, ascending) {
+                                        _sort<String>(
+                                          (p) => (p.obsProd ?? '').toLowerCase(),
                                           columnIndex,
                                           ascending,
                                         );
@@ -288,7 +367,13 @@ class _ListaProductosState extends State<ListaProductos> {
                                       cells: [
                                         DataCell(
                                           SizedBox(
-                                            width: 320,
+                                            width: 70,
+                                            child: Text(p.id.toString()),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          SizedBox(
+                                            width: 220,
                                             child: Text(
                                               p.nombreProd,
                                               overflow: TextOverflow.ellipsis,
@@ -297,7 +382,7 @@ class _ListaProductosState extends State<ListaProductos> {
                                         ),
                                         DataCell(
                                           SizedBox(
-                                            width: 220,
+                                            width: 180,
                                             child: Text(
                                               ramo,
                                               overflow: TextOverflow.ellipsis,
@@ -306,10 +391,48 @@ class _ListaProductosState extends State<ListaProductos> {
                                         ),
                                         DataCell(
                                           SizedBox(
-                                            width: 220,
+                                            width: 200,
                                             child: Text(
                                               aseg,
                                               overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          SizedBox(
+                                            width: 110,
+                                            child: Text(p.comisionProd?.toString() ?? ''),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          SizedBox(
+                                            width: 100,
+                                            child: Text(p.porcomProd?.toString() ?? ''),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          SizedBox(
+                                            width: 100,
+                                            child: Text(p.porcadProd?.toString() ?? ''),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          SizedBox(
+                                            width: 200,
+                                            child: Text(
+                                              p.descProd ?? '',
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 2,
+                                            ),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          SizedBox(
+                                            width: 220,
+                                            child: Text(
+                                              p.obsProd ?? '',
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 2,
                                             ),
                                           ),
                                         ),

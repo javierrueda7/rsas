@@ -19,7 +19,13 @@ class _ListaAsesoresState extends State<ListaAsesores> {
   final TextEditingController _buscarCtrl = TextEditingController();
   String _filtro = '';
 
-  bool _soloActivos = false; // 👈 toggle
+  bool _soloActivos = false;
+
+  final ScrollController _verticalCtrl = ScrollController();
+  final ScrollController _horizontalCtrl = ScrollController();
+
+  int? _sortColumnIndex;
+  bool _sortAscending = true;
 
   @override
   void initState() {
@@ -34,40 +40,80 @@ class _ListaAsesoresState extends State<ListaAsesores> {
   @override
   void dispose() {
     _buscarCtrl.dispose();
+    _verticalCtrl.dispose();
+    _horizontalCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _cargar() async {
     setState(() => cargando = true);
     try {
-      // Si ya aplicaste el repo mejorado con {soloActivos}, úsalo:
       final res = await repo.listarAsesores(soloActivos: _soloActivos);
 
+      res.sort((a, b) => a.id.compareTo(b.id)); // 👈 orden inicial
+
       if (!mounted) return;
-      setState(() => items = res);
+      setState(() {
+        items = res;
+        _sortColumnIndex = 0;
+        _sortAscending = true;
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     } finally {
       if (mounted) setState(() => cargando = false);
     }
   }
 
+  void _sort<T>(
+    Comparable<T> Function(Asesor a) getField,
+    int columnIndex,
+    bool ascending,
+  ) {
+    setState(() {
+      _sortColumnIndex = columnIndex;
+      _sortAscending = ascending;
+
+      items.sort((a, b) {
+        final aValue = getField(a);
+        final bValue = getField(b);
+
+        return ascending
+            ? Comparable.compare(aValue, bValue)
+            : Comparable.compare(bValue, aValue);
+      });
+    });
+  }
+
   List<Asesor> get _filtrados {
-    if (_filtro.isEmpty) return items;
+    Iterable<Asesor> data = items;
 
-    return items.where((a) {
-      final nombre = a.nombreAsesor.toLowerCase();
-      final doc = (a.docAsesor ?? '').toLowerCase();
-      final tel = (a.telAsesor ?? '').toLowerCase();
-      final correo = (a.correoAsesor ?? '').toLowerCase();
+    if (_soloActivos) {
+      data = data.where((a) => a.estadoAsesor);
+    }
 
-      return nombre.contains(_filtro) ||
-          doc.contains(_filtro) ||
-          tel.contains(_filtro) ||
-          correo.contains(_filtro);
-    }).toList();
+    if (_filtro.isNotEmpty) {
+      data = data.where((a) {
+        final id = a.id.toString();
+        final nombre = a.nombreAsesor.toLowerCase();
+        final doc = (a.docAsesor ?? '').toLowerCase();
+        final tel = (a.telAsesor ?? '').toLowerCase();
+        final correo = (a.correoAsesor ?? '').toLowerCase();
+        final estado = a.estadoAsesor ? 'activo' : 'inactivo';
+
+        return id.contains(_filtro) ||
+            nombre.contains(_filtro) ||
+            doc.contains(_filtro) ||
+            tel.contains(_filtro) ||
+            correo.contains(_filtro) ||
+            estado.contains(_filtro);
+      });
+    }
+
+    return data.toList();
   }
 
   Future<void> _eliminar(Asesor a) async {
@@ -89,9 +135,9 @@ class _ListaAsesoresState extends State<ListaAsesores> {
       await repo.eliminarAsesor(a.id);
       await _cargar();
     } catch (e) {
-      // Tu repo ya puede lanzar Exception(mensajeFK). Mostramos eso:
       final msg = e.toString().replaceFirst('Exception: ', '');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
@@ -106,14 +152,17 @@ class _ListaAsesoresState extends State<ListaAsesores> {
           IconButton(
             tooltip: 'Refrescar',
             icon: const Icon(Icons.refresh),
-            onPressed: _cargar,
+            onPressed: cargando ? null : _cargar,
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Nuevo asesor',
         onPressed: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => const FormAsesor()));
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const FormAsesor()),
+          );
           _cargar();
         },
         child: const Icon(Icons.add),
@@ -127,25 +176,20 @@ class _ListaAsesoresState extends State<ListaAsesores> {
                 TextField(
                   controller: _buscarCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Buscar (nombre, doc, tel, correo)',
+                    labelText: 'Buscar (ID, nombre, doc, tel, correo o estado)',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.search),
                   ),
                 ),
-                const SizedBox(height: 10),
-
-                // 👇 filtro rápido de activos
-                Row(
-                  children: [
-                    FilterChip(
-                      label: const Text('Solo activos'),
-                      selected: _soloActivos,
-                      onSelected: (v) async {
-                        setState(() => _soloActivos = v);
-                        await _cargar();
-                      },
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _soloActivos,
+                  onChanged: (v) async {
+                    setState(() => _soloActivos = v);
+                    await _cargar();
+                  },
+                  title: const Text('Solo activos'),
                 ),
               ],
             ),
@@ -156,72 +200,102 @@ class _ListaAsesoresState extends State<ListaAsesores> {
                 ? const Center(child: CircularProgressIndicator())
                 : data.isEmpty
                     ? const Center(child: Text('No hay asesores.'))
-                    : ListView.separated(
-                        itemCount: data.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (_, i) {
-                          final a = data[i];
-
-                          final docTxt = [
-                            if ((a.tipodocAsesor ?? '').trim().isNotEmpty) a.tipodocAsesor!.trim(),
-                            if ((a.docAsesor ?? '').trim().isNotEmpty) a.docAsesor!.trim(),
-                          ].join(' ');
-
-                          final parts = <String>[
-                            if (docTxt.trim().isNotEmpty) 'Doc: $docTxt',
-                            if ((a.telAsesor ?? '').trim().isNotEmpty) 'Tel: ${a.telAsesor!.trim()}',
-                            if ((a.correoAsesor ?? '').trim().isNotEmpty) a.correoAsesor!.trim(),
-                          ];
-
-                          return ListTile(
-                            title: Row(
-                              children: [
-                                Expanded(child: Text(a.nombreAsesor)),
-                                const SizedBox(width: 8),
-                                _EstadoChip(activo: a.estadoAsesor),
-                              ],
+                    : Scrollbar(
+                        controller: _verticalCtrl,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _verticalCtrl,
+                          child: Scrollbar(
+                            controller: _horizontalCtrl,
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              controller: _horizontalCtrl,
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                sortColumnIndex: _sortColumnIndex,
+                                sortAscending: _sortAscending,
+                                columns: [
+                                  DataColumn(
+                                    label: const Text('ID'),
+                                    onSort: (i, asc) => _sort<num>((a) => a.id, i, asc),
+                                  ),
+                                  DataColumn(
+                                    label: const Text('Nombre'),
+                                    onSort: (i, asc) =>
+                                        _sort<String>((a) => a.nombreAsesor.toLowerCase(), i, asc),
+                                  ),
+                                  DataColumn(
+                                    label: const Text('Documento'),
+                                    onSort: (i, asc) =>
+                                        _sort<String>((a) => (a.docAsesor ?? ''), i, asc),
+                                  ),
+                                  DataColumn(
+                                    label: const Text('Teléfono'),
+                                  ),
+                                  DataColumn(
+                                    label: const Text('Correo'),
+                                  ),
+                                  DataColumn(
+                                    label: const Text('%'),
+                                    onSort: (i, asc) =>
+                                        _sort<num>((a) => a.porccomAsesor ?? 0, i, asc),
+                                  ),
+                                  DataColumn(
+                                    label: const Text('Estado'),
+                                  ),
+                                  const DataColumn(label: Text('Acciones')),
+                                ],
+                                rows: data.map((a) {
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(a.id.toString())),
+                                      DataCell(Text(a.nombreAsesor)),
+                                      DataCell(Text(
+                                          '${a.tipodocAsesor ?? ''} ${a.docAsesor ?? ''}')),
+                                      DataCell(Text(a.telAsesor ?? '')),
+                                      DataCell(Text(a.correoAsesor ?? '')),
+                                      DataCell(Text(a.porccomAsesor?.toString() ?? '')),
+                                      DataCell(
+                                        Chip(
+                                          label: Text(
+                                            a.estadoAsesor ? 'Activo' : 'Inactivo',
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Row(
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit),
+                                              onPressed: () async {
+                                                await Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        FormAsesor(asesor: a),
+                                                  ),
+                                                );
+                                                _cargar();
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete_outline),
+                                              onPressed: () => _eliminar(a),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
                             ),
-                            subtitle: parts.isEmpty ? null : Text(parts.join(' • ')),
-                            trailing: Wrap(
-                              spacing: 8,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Editar',
-                                  icon: const Icon(Icons.edit),
-                                  onPressed: () async {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => FormAsesor(asesor: a)),
-                                    );
-                                    _cargar();
-                                  },
-                                ),
-                                IconButton(
-                                  tooltip: 'Eliminar',
-                                  icon: const Icon(Icons.delete_outline),
-                                  onPressed: () => _eliminar(a),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _EstadoChip extends StatelessWidget {
-  final bool activo;
-  const _EstadoChip({required this.activo});
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      label: Text(activo ? 'Activo' : 'Inactivo'),
-      visualDensity: VisualDensity.compact,
     );
   }
 }

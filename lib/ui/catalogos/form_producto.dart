@@ -16,14 +16,12 @@ class _FormProductoState extends State<FormProducto> {
 
   bool cargando = true;
   bool guardando = false;
+  bool cargandoId = true;
 
+  late final TextEditingController idCtrl;
   late final TextEditingController nombreCtrl;
-
-  // existentes
   late final TextEditingController comisionCtrl;
   late final TextEditingController porcomCtrl;
-
-  // ✅ nuevos
   late final TextEditingController descCtrl;
   late final TextEditingController porcadCtrl;
   late final TextEditingController obsCtrl;
@@ -44,13 +42,14 @@ class _FormProductoState extends State<FormProducto> {
 
     final p = widget.producto;
 
+    idCtrl = TextEditingController(
+      text: esEdicion ? widget.producto!.id.toString() : '',
+    );
     nombreCtrl = TextEditingController(text: p?.nombreProd ?? '');
     estadoProd = p?.estadoProd ?? true;
 
     comisionCtrl = TextEditingController(text: _numToText(p?.comisionProd));
     porcomCtrl = TextEditingController(text: _numToText(p?.porcomProd));
-
-    // ✅ nuevos
     descCtrl = TextEditingController(text: p?.descProd ?? '');
     porcadCtrl = TextEditingController(text: _numToText(p?.porcadProd));
     obsCtrl = TextEditingController(text: p?.obsProd ?? '');
@@ -60,6 +59,7 @@ class _FormProductoState extends State<FormProducto> {
 
   @override
   void dispose() {
+    idCtrl.dispose();
     nombreCtrl.dispose();
     comisionCtrl.dispose();
     porcomCtrl.dispose();
@@ -70,6 +70,24 @@ class _FormProductoState extends State<FormProducto> {
   }
 
   String _numToText(num? n) => n == null ? '' : n.toString();
+
+  String? _limpiarONull(String v) {
+    final t = v.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return t.isEmpty ? null : t;
+  }
+
+  String _limpiarObligatorio(String v) {
+    return v.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  String? _validarId(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Requerido';
+    final n = int.tryParse(s);
+    if (n == null) return 'Debe ser numérico';
+    if (n <= 0) return 'Debe ser mayor que 0';
+    return null;
+  }
 
   num? _parseNumeroONull(String v) {
     final t = v.trim();
@@ -83,20 +101,30 @@ class _FormProductoState extends State<FormProducto> {
     return num.tryParse(limpio);
   }
 
-  String? _textToNull(String v) {
-    final t = v.trim();
-    return t.isEmpty ? null : t;
+  String? _validarNumeroOpcional(String? v) {
+    final t = (v ?? '').trim();
+    if (t.isEmpty) return null;
+
+    final limpio = t
+        .replaceAll(RegExp(r'[^0-9,.\-]'), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
+
+    final n = num.tryParse(limpio);
+    if (n == null) return 'Valor inválido';
+    return null;
   }
 
   Future<void> _cargar() async {
     try {
-      final res = await Future.wait([
+      final resultados = await Future.wait([
         repo.listarRamos(),
         repo.listarAseguradoras(),
+        if (!esEdicion) repo.obtenerSiguienteIdProducto(),
       ]);
 
-      ramos = res[0] as List<Ramo>;
-      aseguradoras = res[1] as List<Aseguradora>;
+      ramos = resultados[0] as List<Ramo>;
+      aseguradoras = resultados[1] as List<Aseguradora>;
 
       if (esEdicion) {
         final p = widget.producto!;
@@ -106,13 +134,22 @@ class _FormProductoState extends State<FormProducto> {
 
         final aOk = aseguradoras.any((a) => a.id == p.aseguradoraId);
         asegSel = aOk ? aseguradoras.firstWhere((a) => a.id == p.aseguradoraId) : null;
+
+        cargandoId = false;
+      } else {
+        final nextId = resultados[2] as int;
+        idCtrl.text = nextId.toString();
+        cargandoId = false;
       }
 
       if (!mounted) return;
       setState(() => cargando = false);
     } catch (e) {
       if (!mounted) return;
-      setState(() => cargando = false);
+      setState(() {
+        cargando = false;
+        cargandoId = false;
+      });
       _toast('Error cargando catálogos: $e');
     }
   }
@@ -131,36 +168,53 @@ class _FormProductoState extends State<FormProducto> {
     if (!ok) return;
 
     if (ramoSel == null) {
-      _toast('Selecciona un ramo.');
+      _toast('Selecciona un ramo válido.');
       return;
     }
     if (asegSel == null) {
-      _toast('Selecciona una aseguradora.');
+      _toast('Selecciona una aseguradora válida.');
+      return;
+    }
+
+    final idTexto = idCtrl.text.trim();
+    final idNum = int.tryParse(idTexto);
+
+    if (idNum == null || idNum <= 0) {
+      _toast('El ID debe ser un número válido mayor que 0.');
+      return;
+    }
+
+    final nombre = _limpiarObligatorio(nombreCtrl.text);
+    if (nombre.isEmpty) {
+      _toast('El nombre es requerido.');
       return;
     }
 
     final comision = _parseNumeroONull(comisionCtrl.text);
     final porcom = _parseNumeroONull(porcomCtrl.text);
-
-    // ✅ nuevos
     final porcad = _parseNumeroONull(porcadCtrl.text);
-    final desc = _textToNull(descCtrl.text);
-    final obs = _textToNull(obsCtrl.text);
+    final desc = _limpiarONull(descCtrl.text);
+    final obs = _limpiarONull(obsCtrl.text);
 
     setState(() => guardando = true);
 
     try {
+      if (!esEdicion) {
+        final existe = await repo.existeProductoId(idNum);
+        if (existe) {
+          _toast('Ya existe un producto con ese ID.');
+          return;
+        }
+      }
+
       final p = Producto(
-        id: esEdicion ? widget.producto!.id : 0,
-        nombreProd: nombreCtrl.text.trim(),
+        id: esEdicion ? widget.producto!.id : idNum,
+        nombreProd: nombre,
         ramoId: ramoSel!.id,
         aseguradoraId: asegSel!.id,
         estadoProd: estadoProd,
-
         comisionProd: comision,
         porcomProd: porcom,
-
-        // ✅ nuevos
         descProd: desc,
         porcadProd: porcad,
         obsProd: obs,
@@ -190,6 +244,8 @@ class _FormProductoState extends State<FormProducto> {
     }
 
     final titulo = esEdicion ? 'Editar producto' : 'Nuevo producto';
+    final ramoInicial = ramoSel?.nombreRamo ?? '';
+    final asegInicial = asegSel?.nombreAseg ?? '';
 
     return Scaffold(
       appBar: AppBar(
@@ -228,96 +284,203 @@ class _FormProductoState extends State<FormProducto> {
                           const SizedBox(height: 12),
 
                           TextFormField(
+                            controller: idCtrl,
+                            enabled: !esEdicion,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: esEdicion ? 'ID' : 'ID sugerido',
+                              border: const OutlineInputBorder(),
+                              suffixIcon: cargandoId
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            validator: _validarId,
+                          ),
+                          const SizedBox(height: 12),
+
+                          TextFormField(
                             controller: nombreCtrl,
                             textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'Nombre del producto *',
                               border: OutlineInputBorder(),
                             ),
-                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                            validator: (v) {
+                              final limpio = _limpiarONull(v ?? '');
+                              return limpio == null ? 'Requerido' : null;
+                            },
                           ),
                           const SizedBox(height: 12),
 
-                          DropdownButtonFormField<Ramo>(
-                            value: ramoSel,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Ramo *',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: ramos
-                                .map((r) => DropdownMenuItem(
-                                      value: r,
-                                      child: Text(r.nombreRamo, overflow: TextOverflow.ellipsis),
-                                    ))
-                                .toList(),
-                            onChanged: (v) => setState(() => ramoSel = v),
-                            validator: (v) => v == null ? 'Requerido' : null,
+                          Autocomplete<Ramo>(
+                            initialValue: TextEditingValue(text: ramoInicial),
+                            optionsBuilder: (TextEditingValue textEditingValue) {
+                              final query = textEditingValue.text.trim().toLowerCase();
+                              if (query.isEmpty) return ramos.take(20);
+                              return ramos.where((r) {
+                                return r.nombreRamo.toLowerCase().contains(query) ||
+                                    r.id.toString().contains(query);
+                              }).take(20);
+                            },
+                            displayStringForOption: (Ramo r) => r.nombreRamo,
+                            onSelected: (Ramo r) {
+                              setState(() => ramoSel = r);
+                            },
+                            fieldViewBuilder: (
+                              context,
+                              textEditingController,
+                              focusNode,
+                              onFieldSubmitted,
+                            ) {
+                              if (ramoInicial.isNotEmpty && textEditingController.text.isEmpty) {
+                                textEditingController.text = ramoInicial;
+                              }
+
+                              return TextFormField(
+                                controller: textEditingController,
+                                focusNode: focusNode,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  labelText: 'Ramo *',
+                                  border: OutlineInputBorder(),
+                                  suffixIcon: Icon(Icons.search),
+                                ),
+                                validator: (_) {
+                                  final texto = textEditingController.text.trim();
+                                  if (texto.isEmpty) return 'Requerido';
+                                  if (ramoSel == null) return 'Selecciona un ramo válido';
+                                  return null;
+                                },
+                                onChanged: (value) {
+                                  final query = value.trim().toLowerCase();
+
+                                  Ramo? exacto;
+                                  for (final r in ramos) {
+                                    if (r.nombreRamo.toLowerCase() == query ||
+                                        r.id.toString() == query) {
+                                      exacto = r;
+                                      break;
+                                    }
+                                  }
+
+                                  setState(() => ramoSel = exacto);
+                                },
+                              );
+                            },
                           ),
                           const SizedBox(height: 12),
 
-                          DropdownButtonFormField<Aseguradora>(
-                            value: asegSel,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Aseguradora *',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: aseguradoras
-                                .map((a) => DropdownMenuItem(
-                                      value: a,
-                                      child: Text(a.nombreAseg, overflow: TextOverflow.ellipsis),
-                                    ))
-                                .toList(),
-                            onChanged: (v) => setState(() => asegSel = v),
-                            validator: (v) => v == null ? 'Requerido' : null,
+                          Autocomplete<Aseguradora>(
+                            initialValue: TextEditingValue(text: asegInicial),
+                            optionsBuilder: (TextEditingValue textEditingValue) {
+                              final query = textEditingValue.text.trim().toLowerCase();
+                              if (query.isEmpty) return aseguradoras.take(20);
+                              return aseguradoras.where((a) {
+                                return a.nombreAseg.toLowerCase().contains(query) ||
+                                    a.id.toString().contains(query);
+                              }).take(20);
+                            },
+                            displayStringForOption: (Aseguradora a) => a.nombreAseg,
+                            onSelected: (Aseguradora a) {
+                              setState(() => asegSel = a);
+                            },
+                            fieldViewBuilder: (
+                              context,
+                              textEditingController,
+                              focusNode,
+                              onFieldSubmitted,
+                            ) {
+                              if (asegInicial.isNotEmpty && textEditingController.text.isEmpty) {
+                                textEditingController.text = asegInicial;
+                              }
+
+                              return TextFormField(
+                                controller: textEditingController,
+                                focusNode: focusNode,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  labelText: 'Aseguradora *',
+                                  border: OutlineInputBorder(),
+                                  suffixIcon: Icon(Icons.search),
+                                ),
+                                validator: (_) {
+                                  final texto = textEditingController.text.trim();
+                                  if (texto.isEmpty) return 'Requerido';
+                                  if (asegSel == null) return 'Selecciona una aseguradora válida';
+                                  return null;
+                                },
+                                onChanged: (value) {
+                                  final query = value.trim().toLowerCase();
+
+                                  Aseguradora? exacto;
+                                  for (final a in aseguradoras) {
+                                    if (a.nombreAseg.toLowerCase() == query ||
+                                        a.id.toString() == query) {
+                                      exacto = a;
+                                      break;
+                                    }
+                                  }
+
+                                  setState(() => asegSel = exacto);
+                                },
+                              );
+                            },
                           ),
 
                           const SizedBox(height: 12),
 
-                          // existentes
                           Row(
                             children: [
                               Expanded(
                                 child: TextFormField(
                                   controller: comisionCtrl,
-                                  keyboardType: TextInputType.number,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   textInputAction: TextInputAction.next,
                                   decoration: const InputDecoration(
                                     labelText: 'Comisión fija',
                                     border: OutlineInputBorder(),
                                   ),
+                                  validator: _validarNumeroOpcional,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: TextFormField(
                                   controller: porcomCtrl,
-                                  keyboardType: TextInputType.number,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   textInputAction: TextInputAction.next,
                                   decoration: const InputDecoration(
                                     labelText: '% Comisión',
                                     border: OutlineInputBorder(),
                                   ),
+                                  validator: _validarNumeroOpcional,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: TextFormField(
                                   controller: porcadCtrl,
-                                  keyboardType: TextInputType.number,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   textInputAction: TextInputAction.next,
                                   decoration: const InputDecoration(
                                     labelText: '% Comisión adicional',
                                     border: OutlineInputBorder(),
                                   ),
+                                  validator: _validarNumeroOpcional,
                                 ),
                               ),
                             ],
                           ),
 
                           const SizedBox(height: 12),
-                          // ✅ nuevos
+
                           TextFormField(
                             controller: descCtrl,
                             maxLines: 2,
@@ -327,7 +490,8 @@ class _FormProductoState extends State<FormProducto> {
                               border: OutlineInputBorder(),
                             ),
                           ),
-                          const SizedBox(height: 12),                          
+                          const SizedBox(height: 12),
+
                           TextFormField(
                             controller: obsCtrl,
                             maxLines: 2,
@@ -340,11 +504,14 @@ class _FormProductoState extends State<FormProducto> {
                           ),
 
                           const SizedBox(height: 12),
+
                           SwitchListTile.adaptive(
                             value: estadoProd,
                             onChanged: (v) => setState(() => estadoProd = v),
                             title: const Text('Activo'),
-                            subtitle: const Text('Si está inactivo, puedes ocultarlo en los dropdowns.'),
+                            subtitle: const Text(
+                              'Si está inactivo, puedes ocultarlo en los dropdowns.',
+                            ),
                             contentPadding: EdgeInsets.zero,
                           ),
                         ],

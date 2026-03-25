@@ -1,24 +1,38 @@
 class Cliente {
   final int id;
   final String nombreCliente;
+  final String tipopersCliente; // 'N' o 'J'
   final String? tipodocCliente;
   final String? docCliente;
   final String? telCliente;
   final String? correoCliente;
   final String? dirCliente;
-  final String? ciudadCliente;
+  final int? municId;
+  final String? nombreMunicipio; // solo para mostrar si haces join
   final String? notasCliente;
+  final String? contactoCliente;
+  final String? cargocontCliente;
+  final int? asesorId;
+  final bool estadoCliente;
+  final bool recordarCliente;
 
   Cliente({
     required this.id,
     required this.nombreCliente,
+    required this.tipopersCliente,
     this.tipodocCliente,
     this.docCliente,
     this.telCliente,
     this.correoCliente,
     this.dirCliente,
-    this.ciudadCliente,
+    this.municId,
+    this.nombreMunicipio,
     this.notasCliente,
+    this.contactoCliente,
+    this.cargocontCliente,
+    this.asesorId,
+    this.estadoCliente = true,
+    this.recordarCliente = false,
   });
 
   static int _toInt(dynamic v) {
@@ -28,28 +42,105 @@ class Cliente {
     return int.tryParse(v.toString()) ?? 0;
   }
 
-  factory Cliente.fromMap(Map<String, dynamic> m) => Cliente(
-        id: _toInt(m['id']),
-        nombreCliente: (m['nombre_cliente'] ?? '') as String,
-        tipodocCliente: m['tipodoc_cliente'] as String?,
-        docCliente: m['doc_cliente'] as String?,
-        telCliente: m['tel_cliente'] as String?,
-        correoCliente: m['correo_cliente'] as String?,
-        dirCliente: m['dir_cliente'] as String?,
-        ciudadCliente: m['ciudad_cliente'] as String?,
-        notasCliente: m['notas_cliente'] as String?,
-      );
+  static int? _toIntOrNull(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
 
-  Map<String, dynamic> toInsertMap() => {
+  static bool _toBool(dynamic v, {bool fallback = false}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    return s == 'true' || s == '1' || s == 't';
+  }
+
+  factory Cliente.fromMap(Map<String, dynamic> m) {
+    final munic = m['municipio'];
+
+    String? nombreMunicipio;
+    if (munic is Map<String, dynamic>) {
+      nombreMunicipio = munic['nombre_munic'] as String?;
+    }
+
+    return Cliente(
+      id: _toInt(m['id']),
+      nombreCliente: (m['nombre_cliente'] ?? '') as String,
+      tipopersCliente: (m['tipopers_cliente'] ?? 'N').toString(),
+      tipodocCliente: m['tipodoc_cliente'] as String?,
+      docCliente: m['doc_cliente'] as String?,
+      telCliente: m['tel_cliente'] as String?,
+      correoCliente: m['correo_cliente'] as String?,
+      dirCliente: m['dir_cliente'] as String?,
+      municId: _toIntOrNull(m['munic_id']),
+      nombreMunicipio: nombreMunicipio ?? m['nombre_munic'] as String?,
+      notasCliente: m['notas_cliente'] as String?,
+      contactoCliente: m['contacto_cliente'] as String?,
+      cargocontCliente: m['cargocont_cliente'] as String?,
+      asesorId: _toIntOrNull(m['asesor_id']),
+      estadoCliente: _toBool(m['estado_cliente'], fallback: true),
+      recordarCliente: _toBool(m['recordar_cliente'], fallback: false),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
         'nombre_cliente': nombreCliente,
+        'tipopers_cliente': tipopersCliente,
         'tipodoc_cliente': tipodocCliente,
         'doc_cliente': docCliente,
         'tel_cliente': telCliente,
         'correo_cliente': correoCliente,
         'dir_cliente': dirCliente,
-        'ciudad_cliente': ciudadCliente,
+        'munic_id': municId,
         'notas_cliente': notasCliente,
+        'contacto_cliente': contactoCliente,
+        'cargocont_cliente': cargocontCliente,
+        'asesor_id': asesorId,
+        'estado_cliente': estadoCliente,
+        'recordar_cliente': recordarCliente,
       };
+
+  Map<String, dynamic> toInsertMap() => {
+        'nombre_cliente': nombreCliente,
+        'tipopers_cliente': tipopersCliente,
+        'tipodoc_cliente': tipodocCliente,
+        'doc_cliente': docCliente,
+        'tel_cliente': telCliente,
+        'correo_cliente': correoCliente,
+        'dir_cliente': dirCliente,
+        'munic_id': municId,
+        'notas_cliente': notasCliente,
+        'contacto_cliente': contactoCliente,
+        'cargocont_cliente': cargocontCliente,
+        'asesor_id': asesorId,
+        'estado_cliente': estadoCliente,
+        'recordar_cliente': recordarCliente,
+      };
+}
+
+class Municipio {
+  final int id;
+  final String nombreMunic;
+
+  Municipio({
+    required this.id,
+    required this.nombreMunic,
+  });
+
+  static int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
+  factory Municipio.fromMap(Map<String, dynamic> m) => Municipio(
+        id: _toInt(m['id']),
+        nombreMunic: (m['nombre_munic'] ?? '') as String,
+      );
 }
 
 class Asesor {
@@ -86,6 +177,14 @@ class Asesor {
     return num.tryParse(v.toString());
   }
 
+  static bool _toBool(dynamic v, {bool fallback = true}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    return s == 'true' || s == '1' || s == 't';
+  }
+
   factory Asesor.fromMap(Map<String, dynamic> m) => Asesor(
         id: _toInt(m['id']),
         nombreAsesor: (m['nombre_asesor'] ?? '') as String,
@@ -94,7 +193,7 @@ class Asesor {
         telAsesor: m['tel_asesor'] as String?,
         correoAsesor: m['correo_asesor'] as String?,
         porccomAsesor: _toNum(m['porccom_asesor']),
-        estadoAsesor: (m['estado_asesor'] ?? true) as bool,
+        estadoAsesor: _toBool(m['estado_asesor'], fallback: true),
       );
 
   Map<String, dynamic> toInsertMap() => {
@@ -112,7 +211,7 @@ class Aseguradora {
   final int id;
   final String nombreAseg;
   final String? nitAseg;
-  final String? clave; // ✅ opcional
+  final String? clave;
   final bool estadoAseg;
 
   Aseguradora({
@@ -130,18 +229,26 @@ class Aseguradora {
     return int.tryParse(v.toString()) ?? 0;
   }
 
+  static bool _toBool(dynamic v, {bool fallback = true}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    return s == 'true' || s == '1' || s == 't';
+  }
+
   factory Aseguradora.fromMap(Map<String, dynamic> m) => Aseguradora(
         id: _toInt(m['id']),
         nombreAseg: (m['nombre_aseg'] ?? '') as String,
         nitAseg: m['nit_aseg'] as String?,
-        clave: m['clave'] as String?, // ✅ nuevo
-        estadoAseg: (m['estado_aseg'] ?? true) as bool,
+        clave: m['clave'] as String?,
+        estadoAseg: _toBool(m['estado_aseg'], fallback: true),
       );
 
   Map<String, dynamic> toInsertMap() => {
         'nombre_aseg': nombreAseg,
         'nit_aseg': nitAseg,
-        'clave': clave, // ✅ nuevo
+        'clave': clave,
         'estado_aseg': estadoAseg,
       };
 }
@@ -150,10 +257,8 @@ class Ramo {
   final int id;
   final String nombreRamo;
   final bool estadoRamo;
-
-  // ✅ NUEVO
   final String? obsRamo;
-  final num porcomBaseRamo; // no null, default 100
+  final num porcomBaseRamo;
 
   Ramo({
     required this.id,
@@ -176,11 +281,18 @@ class Ramo {
     return num.tryParse(v.toString()) ?? def;
   }
 
+  static bool _toBool(dynamic v, {bool fallback = true}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    return s == 'true' || s == '1' || s == 't';
+  }
+
   factory Ramo.fromMap(Map<String, dynamic> m) => Ramo(
         id: _toInt(m['id']),
         nombreRamo: (m['nombre_ramo'] ?? '') as String,
-        estadoRamo: (m['estado_ramo'] ?? true) as bool,
-        // ✅ NUEVO
+        estadoRamo: _toBool(m['estado_ramo'], fallback: true),
         obsRamo: m['obs_ramo'] as String?,
         porcomBaseRamo: _toNum(m['porcom_base_ramo'], def: 100),
       );
@@ -188,7 +300,6 @@ class Ramo {
   Map<String, dynamic> toInsertMap() => {
         'nombre_ramo': nombreRamo,
         'estado_ramo': estadoRamo,
-        // ✅ NUEVO
         'obs_ramo': (obsRamo == null || obsRamo!.trim().isEmpty) ? null : obsRamo!.trim(),
         'porcom_base_ramo': porcomBaseRamo,
       };
@@ -201,14 +312,12 @@ class Producto {
   final int aseguradoraId;
   final bool estadoProd;
 
-  // existentes
-  final num? comisionProd;   // vlrfijocom_prod
-  final num? porcomProd;     // porccom_prod
+  final num? comisionProd;
+  final num? porcomProd;
 
-  // ✅ nuevos
-  final String? descProd;    // desc_prod
-  final num? porcadProd;     // porcad_prod
-  final String? obsProd;     // obs_prod
+  final String? descProd;
+  final num? porcadProd;
+  final String? obsProd;
 
   Producto({
     required this.id,
@@ -236,6 +345,14 @@ class Producto {
     return num.tryParse(v.toString());
   }
 
+  static bool _toBool(dynamic v, {bool fallback = true}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    return s == 'true' || s == '1' || s == 't';
+  }
+
   static String? _toTextOrNull(dynamic v) {
     final s = (v ?? '').toString().trim();
     return s.isEmpty ? null : s;
@@ -246,12 +363,9 @@ class Producto {
         nombreProd: (m['nombre_prod'] ?? '') as String,
         ramoId: _toInt(m['ramo_id']),
         aseguradoraId: _toInt(m['aseguradora_id']),
-        estadoProd: (m['estado_prod'] ?? true) as bool,
-
+        estadoProd: _toBool(m['estado_prod'], fallback: true),
         comisionProd: _toNumOrNull(m['vlrfijocom_prod']),
         porcomProd: _toNumOrNull(m['porccom_prod']),
-
-        // ✅ nuevos
         descProd: _toTextOrNull(m['desc_prod']),
         porcadProd: _toNumOrNull(m['porcad_prod']),
         obsProd: _toTextOrNull(m['obs_prod']),
@@ -262,14 +376,148 @@ class Producto {
         'ramo_id': ramoId,
         'aseguradora_id': aseguradoraId,
         'estado_prod': estadoProd,
-
-        // existentes
         'vlrfijocom_prod': comisionProd,
         'porccom_prod': porcomProd,
-
-        // ✅ nuevos
         'desc_prod': descProd,
         'porcad_prod': porcadProd,
         'obs_prod': obsProd,
       };
 }
+
+class Usuario {
+  final int id;
+  final String apodoUsuario;
+  final String nombreUsuario;
+  final String rol;
+  final int? asesorId;
+  final String? claveUsuario;
+  final bool estadoUsuario;
+
+  Usuario({
+    required this.id,
+    required this.apodoUsuario,
+    required this.nombreUsuario,
+    required this.rol,
+    this.asesorId,
+    this.claveUsuario,
+    this.estadoUsuario = true,
+  });
+
+  static int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
+  static int? _toIntOrNull(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
+
+  static bool _toBool(dynamic v, {bool fallback = true}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    return s == 'true' || s == '1' || s == 't';
+  }
+
+  factory Usuario.fromMap(Map<String, dynamic> m) => Usuario(
+        id: _toInt(m['id']),
+        apodoUsuario: (m['apodo_usuario'] ?? '') as String,
+        nombreUsuario: (m['nombre_usuario'] ?? '') as String,
+        rol: (m['rol'] ?? '') as String,
+        asesorId: _toIntOrNull(m['asesor_id']),
+        claveUsuario: m['clave_usuario'] as String?,
+        estadoUsuario: _toBool(m['estado_usuario']),
+      );
+
+  Map<String, dynamic> toInsertMap() => {
+        'apodo_usuario': apodoUsuario,
+        'nombre_usuario': nombreUsuario,
+        'rol': rol,
+        'asesor_id': asesorId,
+        'clave_usuario': claveUsuario,
+        'estado_usuario': estadoUsuario,
+      };
+}
+
+class Intermediario {
+  final int id;
+  final String nombreInterm;
+  final bool estadoInterm;
+
+  Intermediario({
+    required this.id,
+    required this.nombreInterm,
+    this.estadoInterm = true,
+  });
+
+  static int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
+  static bool _toBool(dynamic v, {bool fallback = true}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    return s == 'true' || s == '1' || s == 't';
+  }
+
+  factory Intermediario.fromMap(Map<String, dynamic> m) => Intermediario(
+        id: _toInt(m['id']),
+        nombreInterm: (m['nombre_interm'] ?? '') as String,
+        estadoInterm: _toBool(m['estado_interm']),
+      );
+
+  Map<String, dynamic> toInsertMap() => {
+        'nombre_interm': nombreInterm,
+        'estado_interm': estadoInterm,
+      };
+}
+
+class FormaPago {
+  final int id;
+  final String nombreFormaPago;
+  final bool estadoFormaPago;
+
+  FormaPago({
+    required this.id,
+    required this.nombreFormaPago,
+    this.estadoFormaPago = true,
+  });
+
+  static int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
+  static bool _toBool(dynamic v, {bool fallback = true}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().toLowerCase().trim();
+    return s == 'true' || s == '1' || s == 't';
+  }
+
+  factory FormaPago.fromMap(Map<String, dynamic> m) => FormaPago(
+        id: _toInt(m['id']),
+        nombreFormaPago: (m['nombre_forma_pago'] ?? '') as String,
+        estadoFormaPago: _toBool(m['estado_forma_pago']),
+      );
+
+  Map<String, dynamic> toInsertMap() => {
+        'nombre_forma_pago': nombreFormaPago,
+        'estado_forma_pago': estadoFormaPago,
+      };
+}
+

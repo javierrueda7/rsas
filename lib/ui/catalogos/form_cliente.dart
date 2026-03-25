@@ -15,41 +15,90 @@ class _FormClienteState extends State<FormCliente> {
   final repo = RepositorioCatalogos();
 
   bool guardando = false;
+  bool cargandoMunicipios = true;
+  bool cargandoId = true;
 
+  late final TextEditingController idCtrl;
   late final TextEditingController nombreCtrl;
   late final TextEditingController docCtrl;
   late final TextEditingController telCtrl;
   late final TextEditingController correoCtrl;
   late final TextEditingController dirCtrl;
-  late final TextEditingController ciudadCtrl;
   late final TextEditingController notasCtrl;
 
   final List<String> tiposDoc = const ['CC', 'CE', 'NIT', 'PAS', 'OTRO'];
   String? tipoDocSel;
+
+  List<String> get tiposDocNormalizados =>
+      tiposDoc.map((e) => e.trim().toUpperCase()).toSet().toList();
+
+  List<Municipio> municipios = [];
+  int? municIdSel;
 
   bool get esEdicion => widget.cliente != null;
 
   @override
   void initState() {
     super.initState();
+
+    idCtrl = TextEditingController(
+      text: esEdicion ? widget.cliente!.id.toString() : '',
+    );
     nombreCtrl = TextEditingController(text: widget.cliente?.nombreCliente ?? '');
     docCtrl = TextEditingController(text: widget.cliente?.docCliente ?? '');
     telCtrl = TextEditingController(text: widget.cliente?.telCliente ?? '');
     correoCtrl = TextEditingController(text: widget.cliente?.correoCliente ?? '');
     dirCtrl = TextEditingController(text: widget.cliente?.dirCliente ?? '');
-    ciudadCtrl = TextEditingController(text: widget.cliente?.ciudadCliente ?? '');
     notasCtrl = TextEditingController(text: widget.cliente?.notasCliente ?? '');
+
     tipoDocSel = widget.cliente?.tipodocCliente;
+    municIdSel = widget.cliente?.municId;
+
+    _cargarMunicipios();
+
+    if (!esEdicion) {
+      _cargarSiguienteId();
+    } else {
+      cargandoId = false;
+    }
+  }
+
+  Future<void> _cargarMunicipios() async {
+    try {
+      final res = await repo.listarMunicipios();
+      if (!mounted) return;
+      setState(() {
+        municipios = res;
+        cargandoMunicipios = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => cargandoMunicipios = false);
+      _toast('Error cargando municipios: $e');
+    }
+  }
+
+  Future<void> _cargarSiguienteId() async {
+    try {
+      final nextId = await repo.obtenerSiguienteIdCliente();
+      if (!mounted) return;
+      idCtrl.text = nextId.toString();
+      setState(() => cargandoId = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => cargandoId = false);
+      _toast('No se pudo cargar el siguiente ID: $e');
+    }
   }
 
   @override
   void dispose() {
+    idCtrl.dispose();
     nombreCtrl.dispose();
     docCtrl.dispose();
     telCtrl.dispose();
     correoCtrl.dispose();
     dirCtrl.dispose();
-    ciudadCtrl.dispose();
     notasCtrl.dispose();
     super.dispose();
   }
@@ -64,6 +113,15 @@ class _FormClienteState extends State<FormCliente> {
     if (s.isEmpty) return null;
     final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(s);
     return ok ? null : 'Correo inválido';
+  }
+
+  String? _validarId(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Requerido';
+    final n = int.tryParse(s);
+    if (n == null) return 'Debe ser numérico';
+    if (n <= 0) return 'Debe ser mayor que 0';
+    return null;
   }
 
   String? _limpiarONull(String v) {
@@ -83,33 +141,55 @@ class _FormClienteState extends State<FormCliente> {
       return;
     }
 
+    final idTexto = idCtrl.text.trim();
+    final idNum = int.tryParse(idTexto);
+
+    if (idNum == null || idNum <= 0) {
+      _toast('El ID debe ser un número válido mayor que 0.');
+      return;
+    }
+
     setState(() => guardando = true);
 
     try {
+      if (!esEdicion) {
+        final existe = await repo.existeClienteId(idNum);
+        if (existe) {
+          _toast('Ya existe un cliente con ese ID.');
+          return;
+        }
+      }
+
       if (esEdicion) {
         final c = Cliente(
           id: widget.cliente!.id,
           nombreCliente: nombreCtrl.text.trim(),
+          tipopersCliente: widget.cliente?.tipopersCliente ?? 'N',
           tipodocCliente: (tipoDocSel?.trim().isEmpty ?? true) ? null : tipoDocSel!.trim(),
           docCliente: doc,
           telCliente: _limpiarONull(telCtrl.text),
           correoCliente: _limpiarONull(correoCtrl.text),
           dirCliente: _limpiarONull(dirCtrl.text),
-          ciudadCliente: _limpiarONull(ciudadCtrl.text),
+          municId: municIdSel,
           notasCliente: _limpiarONull(notasCtrl.text),
+          contactoCliente: widget.cliente?.contactoCliente,
+          cargocontCliente: widget.cliente?.cargocontCliente,
+          asesorId: widget.cliente?.asesorId,
+          estadoCliente: widget.cliente?.estadoCliente ?? true,
+          recordarCliente: widget.cliente?.recordarCliente ?? false,
         );
         await repo.actualizarCliente(widget.cliente!.id, c);
       } else {
-        // 👇 id lo genera la base de datos
         final cNuevo = Cliente(
-          id: 0, // valor dummy (no se usa en insert)
+          id: idNum,
           nombreCliente: nombreCtrl.text.trim(),
+          tipopersCliente: 'N',
           tipodocCliente: (tipoDocSel?.trim().isEmpty ?? true) ? null : tipoDocSel!.trim(),
           docCliente: doc,
           telCliente: _limpiarONull(telCtrl.text),
           correoCliente: _limpiarONull(correoCtrl.text),
           dirCliente: _limpiarONull(dirCtrl.text),
-          ciudadCliente: _limpiarONull(ciudadCtrl.text),
+          municId: municIdSel,
           notasCliente: _limpiarONull(notasCtrl.text),
         );
         await repo.crearCliente(cNuevo);
@@ -126,6 +206,8 @@ class _FormClienteState extends State<FormCliente> {
 
   @override
   Widget build(BuildContext context) {
+    final municipioInicial = widget.cliente?.nombreMunicipio ?? '';
+
     return Scaffold(
       appBar: AppBar(
         title: Text(esEdicion ? 'Editar cliente' : 'Nuevo cliente'),
@@ -163,6 +245,27 @@ class _FormClienteState extends State<FormCliente> {
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
+                              controller: idCtrl,
+                              enabled: !esEdicion,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: esEdicion ? 'ID' : 'ID sugerido',
+                                border: const OutlineInputBorder(),
+                                suffixIcon: cargandoId
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                              validator: _validarId,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
                               controller: nombreCtrl,
                               decoration: const InputDecoration(
                                 labelText: 'Nombre *',
@@ -176,12 +279,19 @@ class _FormClienteState extends State<FormCliente> {
                                 Expanded(
                                   flex: 2,
                                   child: DropdownButtonFormField<String>(
-                                    value: tipoDocSel,
+                                    value: tiposDocNormalizados.contains(tipoDocSel) ? tipoDocSel : null,
                                     decoration: const InputDecoration(
                                       labelText: 'Tipo de documento',
                                       border: OutlineInputBorder(),
                                     ),
-                                    items: tiposDoc.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                                    items: tiposDocNormalizados
+                                        .map(
+                                          (t) => DropdownMenuItem<String>(
+                                            value: t,
+                                            child: Text(t),
+                                          ),
+                                        )
+                                        .toList(),
                                     onChanged: (v) => setState(() => tipoDocSel = v),
                                   ),
                                 ),
@@ -197,6 +307,80 @@ class _FormClienteState extends State<FormCliente> {
                                   ),
                                 ),
                               ],
+                            ),
+                            const SizedBox(height: 12),
+                            Autocomplete<Municipio>(
+                              initialValue: TextEditingValue(text: municipioInicial),
+                              optionsBuilder: (TextEditingValue textEditingValue) {
+                                final query = textEditingValue.text.trim().toLowerCase();
+
+                                if (query.isEmpty) {
+                                  return municipios.take(20);
+                                }
+
+                                return municipios.where((m) {
+                                  return m.nombreMunic.toLowerCase().contains(query);
+                                }).take(20);
+                              },
+                              displayStringForOption: (Municipio m) => m.nombreMunic,
+                              onSelected: (Municipio m) {
+                                setState(() {
+                                  municIdSel = m.id;
+                                });
+                              },
+                              fieldViewBuilder: (
+                                context,
+                                textEditingController,
+                                focusNode,
+                                onFieldSubmitted,
+                              ) {
+                                if (municipioInicial.isNotEmpty &&
+                                    textEditingController.text.isEmpty) {
+                                  textEditingController.text = municipioInicial;
+                                }
+
+                                return TextFormField(
+                                  controller: textEditingController,
+                                  focusNode: focusNode,
+                                  decoration: InputDecoration(
+                                    labelText: 'Municipio',
+                                    border: const OutlineInputBorder(),
+                                    suffixIcon: cargandoMunicipios
+                                        ? const Padding(
+                                            padding: EdgeInsets.all(12),
+                                            child: SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(strokeWidth: 2),
+                                            ),
+                                          )
+                                        : const Icon(Icons.search),
+                                  ),
+                                  validator: (_) {
+                                    final texto = textEditingController.text.trim();
+                                    if (texto.isEmpty) return null;
+                                    if (municIdSel == null) {
+                                      return 'Selecciona un municipio válido';
+                                    }
+                                    return null;
+                                  },
+                                  onChanged: (value) {
+                                    final query = value.trim().toLowerCase();
+
+                                    Municipio? exacto;
+                                    for (final m in municipios) {
+                                      if (m.nombreMunic.toLowerCase() == query) {
+                                        exacto = m;
+                                        break;
+                                      }
+                                    }
+
+                                    setState(() {
+                                      municIdSel = exacto?.id;
+                                    });
+                                  },
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -248,14 +432,6 @@ class _FormClienteState extends State<FormCliente> {
                               controller: dirCtrl,
                               decoration: const InputDecoration(
                                 labelText: 'Dirección',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: ciudadCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Ciudad',
                                 border: OutlineInputBorder(),
                               ),
                             ),

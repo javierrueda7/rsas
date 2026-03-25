@@ -49,13 +49,19 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
     try {
       final res = await repo.listarAseguradoras(soloActivas: _soloActivas);
       if (!mounted) return;
-      setState(() => items = res);
+
+      res.sort((a, b) => a.id.compareTo(b.id)); // 👈 orden por ID ascendente
+
+      setState(() {
+        items = res;
+        _sortColumnIndex = 0; // 👈 columna ID
+        _sortAscending = true;
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     } finally {
       if (mounted) setState(() => cargando = false);
     }
@@ -90,16 +96,19 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
     Iterable<Aseguradora> data = items;
 
     if (_soloActivas) {
-      data = data.where((a) => a.estadoAseg == true);
+      data = data.where((a) => a.estadoAseg);
     }
 
     if (_filtro.isNotEmpty) {
       data = data.where((a) {
+        final id = a.id.toString();
         final nombre = a.nombreAseg.toLowerCase();
         final nit = (a.nitAseg ?? '').toLowerCase();
         final clave = (a.clave ?? '').toLowerCase();
         final estado = a.estadoAseg ? 'activo' : 'inactivo';
-        return nombre.contains(_filtro) ||
+
+        return id.contains(_filtro) ||
+            nombre.contains(_filtro) ||
             nit.contains(_filtro) ||
             clave.contains(_filtro) ||
             estado.contains(_filtro);
@@ -127,6 +136,7 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
         ],
       ),
     );
+
     if (ok != true) return;
 
     try {
@@ -136,9 +146,11 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
       final msg = _esErrorRelacion(e)
           ? 'No se puede eliminar porque esta aseguradora está relacionada con productos o pólizas.'
           : 'Error eliminando: $e';
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
     }
   }
 
@@ -153,7 +165,7 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
           IconButton(
             tooltip: 'Refrescar',
             icon: const Icon(Icons.refresh),
-            onPressed: _cargar,
+            onPressed: cargando ? null : _cargar,
           ),
         ],
       ),
@@ -177,7 +189,7 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
                 TextField(
                   controller: _buscarCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Buscar (nombre, NIT o clave)',
+                    labelText: 'Buscar (ID, nombre, NIT, clave o estado)',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.search),
                   ),
@@ -227,10 +239,21 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
                                   sortColumnIndex: _sortColumnIndex,
                                   sortAscending: _sortAscending,
                                   columnSpacing: 12,
-                                  horizontalMargin: 8,
+                                  horizontalMargin: 0,
                                   headingRowColor:
                                       WidgetStateProperty.all(Colors.grey.shade200),
                                   columns: [
+                                    DataColumn(
+                                      label: const Text('ID              '),
+                                      numeric: true,
+                                      onSort: (columnIndex, ascending) {
+                                        _sort<num>(
+                                          (a) => a.id,
+                                          columnIndex,
+                                          ascending,
+                                        );
+                                      },
+                                    ),
                                     DataColumn(
                                       label: const Text('Nombre'),
                                       onSort: (columnIndex, ascending) {
@@ -265,7 +288,7 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
                                       label: const SizedBox(
                                         width: 90,
                                         child: Align(
-                                          alignment: Alignment.centerRight,
+                                          alignment: Alignment.center,
                                           child: Text('Estado'),
                                         ),
                                       ),
@@ -292,7 +315,13 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
                                       cells: [
                                         DataCell(
                                           SizedBox(
-                                            width: 320,
+                                            width: 70,
+                                            child: Text(a.id.toString()),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          SizedBox(
+                                            width: 280,
                                             child: Text(
                                               a.nombreAseg,
                                               overflow: TextOverflow.ellipsis,
@@ -301,13 +330,13 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
                                         ),
                                         DataCell(
                                           SizedBox(
-                                            width: 70,
+                                            width: 90,
                                             child: Text(a.clave ?? ''),
                                           ),
                                         ),
                                         DataCell(
                                           SizedBox(
-                                            width: 130,
+                                            width: 140,
                                             child: Text(a.nitAseg ?? ''),
                                           ),
                                         ),
@@ -317,7 +346,9 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
                                             child: Align(
                                               alignment: Alignment.centerRight,
                                               child: Chip(
-                                                label: Text(a.estadoAseg ? 'Activo' : 'Inactivo'),
+                                                label: Text(
+                                                  a.estadoAseg ? 'Activo' : 'Inactivo',
+                                                ),
                                                 visualDensity: VisualDensity.compact,
                                               ),
                                             ),
@@ -332,6 +363,7 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   IconButton(
+                                                    tooltip: 'Editar',
                                                     icon: const Icon(Icons.edit, size: 20),
                                                     onPressed: () async {
                                                       await Navigator.push(
@@ -345,7 +377,11 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
                                                     },
                                                   ),
                                                   IconButton(
-                                                    icon: const Icon(Icons.delete_outline, size: 20),
+                                                    tooltip: 'Eliminar',
+                                                    icon: const Icon(
+                                                      Icons.delete_outline,
+                                                      size: 20,
+                                                    ),
                                                     onPressed: () => _eliminar(a),
                                                   ),
                                                 ],

@@ -16,7 +16,6 @@ class _ListaClientesState extends State<ListaClientes> {
   bool cargando = true;
   List<Cliente> items = [];
 
-  // búsqueda local
   final TextEditingController _buscarCtrl = TextEditingController();
   String _filtro = '';
 
@@ -62,7 +61,7 @@ class _ListaClientesState extends State<ListaClientes> {
       final doc = (c.docCliente ?? '').toLowerCase();
       final tel = (c.telCliente ?? '').toLowerCase();
       final correo = (c.correoCliente ?? '').toLowerCase();
-      final ciudad = (c.ciudadCliente ?? '').toLowerCase();
+      final ciudad = (c.nombreMunicipio ?? '').toLowerCase();
 
       return nombre.contains(_filtro) ||
           doc.contains(_filtro) ||
@@ -129,15 +128,13 @@ class _ListaClientesState extends State<ListaClientes> {
             child: TextField(
               controller: _buscarCtrl,
               decoration: const InputDecoration(
-                labelText: 'Buscar (nombre, doc, tel, correo, ciudad)',
+                labelText: 'Buscar (nombre, doc, tel, correo, municipio)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.search),
               ),
             ),
           ),
-
           if (cargando) const LinearProgressIndicator(),
-
           Expanded(
             child: RefreshIndicator(
               onRefresh: _cargar,
@@ -164,7 +161,8 @@ class _ListaClientesState extends State<ListaClientes> {
                           if (docTxt.trim().isNotEmpty) 'Doc: $docTxt',
                           if ((c.telCliente ?? '').trim().isNotEmpty) 'Tel: ${c.telCliente!.trim()}',
                           if ((c.correoCliente ?? '').trim().isNotEmpty) c.correoCliente!.trim(),
-                          if ((c.ciudadCliente ?? '').trim().isNotEmpty) 'Ciudad: ${c.ciudadCliente!.trim()}',
+                          if ((c.nombreMunicipio ?? '').trim().isNotEmpty)
+                            'Municipio: ${c.nombreMunicipio!.trim()}',
                           if ((c.notasCliente ?? '').trim().isNotEmpty) 'Notas: ${c.notasCliente!.trim()}',
                         ];
 

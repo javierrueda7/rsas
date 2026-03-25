@@ -15,10 +15,12 @@ class _FormRamoState extends State<FormRamo> {
   final repo = RepositorioCatalogos();
 
   bool guardando = false;
+  bool cargandoId = true;
 
+  late final TextEditingController idCtrl;
   late final TextEditingController nombreCtrl;
-  late final TextEditingController obsCtrl;     // ✅ NUEVO
-  late final TextEditingController porcomCtrl;  // ✅ NUEVO
+  late final TextEditingController obsCtrl;
+  late final TextEditingController porcomCtrl;
 
   bool estadoRamo = true;
 
@@ -27,22 +29,45 @@ class _FormRamoState extends State<FormRamo> {
   @override
   void initState() {
     super.initState();
+
+    idCtrl = TextEditingController(
+      text: esEdicion ? widget.ramo!.id.toString() : '',
+    );
     nombreCtrl = TextEditingController(text: widget.ramo?.nombreRamo ?? '');
     obsCtrl = TextEditingController(text: widget.ramo?.obsRamo ?? '');
 
-    // ✅ default 100 si es nuevo
     final por = widget.ramo?.porcomBaseRamo ?? 100;
     porcomCtrl = TextEditingController(text: por.toString());
 
     estadoRamo = widget.ramo?.estadoRamo ?? true;
+
+    if (!esEdicion) {
+      _cargarSiguienteId();
+    } else {
+      cargandoId = false;
+    }
   }
 
   @override
   void dispose() {
+    idCtrl.dispose();
     nombreCtrl.dispose();
     obsCtrl.dispose();
     porcomCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarSiguienteId() async {
+    try {
+      final nextId = await repo.obtenerSiguienteIdRamo();
+      if (!mounted) return;
+      idCtrl.text = nextId.toString();
+      setState(() => cargandoId = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => cargandoId = false);
+      _toast('No se pudo cargar el siguiente ID: $e');
+    }
   }
 
   void _toast(String msg) {
@@ -50,16 +75,49 @@ class _FormRamoState extends State<FormRamo> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // Normaliza espacios: "  Seguro   Vida " -> "Seguro Vida"
-  String _normalizarNombre(String s) => s.trim().replaceAll(RegExp(r'\s+'), ' ');
+  String? _limpiarONull(String v) {
+    final t = v.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return t.isEmpty ? null : t;
+  }
+
+  String _limpiarObligatorio(String v) {
+    return v.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  String? _validarId(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Requerido';
+    final n = int.tryParse(s);
+    if (n == null) return 'Debe ser numérico';
+    if (n <= 0) return 'Debe ser mayor que 0';
+    return null;
+  }
 
   num _parseNumConDefault100(String s) {
     final t = s.trim();
     if (t.isEmpty) return 100;
 
-    // permite "10", "10.5", "10,5"
-    final limpio = t.replaceAll('.', '').replaceAll(',', '.');
+    final limpio = t
+        .replaceAll(RegExp(r'[^0-9,.\-]'), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
+
     return num.tryParse(limpio) ?? 100;
+  }
+
+  String? _validarPorcom(String? v) {
+    final t = (v ?? '').trim();
+    if (t.isEmpty) return null;
+
+    final limpio = t
+        .replaceAll(RegExp(r'[^0-9,.\-]'), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
+
+    final n = num.tryParse(limpio);
+    if (n == null) return 'Valor inválido';
+    if (n < 0) return 'No puede ser negativo';
+    return null;
   }
 
   Future<void> _guardar() async {
@@ -70,7 +128,15 @@ class _FormRamoState extends State<FormRamo> {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
-    final nombre = _normalizarNombre(nombreCtrl.text);
+    final idTexto = idCtrl.text.trim();
+    final idNum = int.tryParse(idTexto);
+
+    if (idNum == null || idNum <= 0) {
+      _toast('El ID debe ser un número válido mayor que 0.');
+      return;
+    }
+
+    final nombre = _limpiarObligatorio(nombreCtrl.text);
     if (nombre.isEmpty) {
       _toast('El nombre es requerido.');
       return;
@@ -80,14 +146,20 @@ class _FormRamoState extends State<FormRamo> {
 
     setState(() => guardando = true);
     try {
+      if (!esEdicion) {
+        final existe = await repo.existeRamoId(idNum);
+        if (existe) {
+          _toast('Ya existe un ramo con ese ID.');
+          return;
+        }
+      }
+
       final r = Ramo(
-        id: esEdicion ? widget.ramo!.id : 0,
+        id: esEdicion ? widget.ramo!.id : idNum,
         nombreRamo: nombre,
         estadoRamo: estadoRamo,
-
-        // ✅ NUEVO
-        obsRamo: obsCtrl.text.trim().isEmpty ? null : obsCtrl.text.trim(),
-        porcomBaseRamo: porcom, // default 100 si quedó vacío o inválido
+        obsRamo: _limpiarONull(obsCtrl.text),
+        porcomBaseRamo: porcom,
       );
 
       if (esEdicion) {
@@ -134,6 +206,30 @@ class _FormRamoState extends State<FormRamo> {
                     child: Column(
                       children: [
                         TextFormField(
+                          controller: idCtrl,
+                          enabled: !esEdicion,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: esEdicion ? 'ID' : 'ID sugerido',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: cargandoId
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          validator: _validarId,
+                        ),
+                        const SizedBox(height: 12),
+
+                        TextFormField(
                           controller: nombreCtrl,
                           textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
@@ -141,26 +237,25 @@ class _FormRamoState extends State<FormRamo> {
                             border: OutlineInputBorder(),
                           ),
                           validator: (v) {
-                            final nombre = _normalizarNombre(v ?? '');
+                            final nombre = _limpiarObligatorio(v ?? '');
                             return nombre.isEmpty ? 'Requerido' : null;
                           },
                         ),
                         const SizedBox(height: 12),
 
-                        // ✅ NUEVO: % base comisión
                         TextFormField(
                           controller: porcomCtrl,
                           textInputAction: TextInputAction.next,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: const InputDecoration(
                             labelText: '% base comisión',
                             helperText: 'Si lo dejas vacío, se guarda como 100',
                             border: OutlineInputBorder(),
                           ),
+                          validator: _validarPorcom,
                         ),
                         const SizedBox(height: 12),
 
-                        // ✅ NUEVO: observaciones
                         TextFormField(
                           controller: obsCtrl,
                           maxLines: 3,
@@ -182,6 +277,7 @@ class _FormRamoState extends State<FormRamo> {
                           contentPadding: EdgeInsets.zero,
                         ),
                         const SizedBox(height: 8),
+
                         Align(
                           alignment: Alignment.centerRight,
                           child: FilledButton.icon(
@@ -190,7 +286,9 @@ class _FormRamoState extends State<FormRamo> {
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Icon(Icons.save),
                             label: Text(guardando ? 'Guardando...' : 'Guardar'),

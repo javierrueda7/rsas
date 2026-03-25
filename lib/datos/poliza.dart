@@ -2,18 +2,16 @@
 
 class Poliza {
   final int id;
+  final String? nroPoliza;
 
-  // código = mismo id, no se guarda aparte
-  final String nroPoliza;
+  final int? clienteId;
+  final int? asesorId;
+  final int? ramoId;
+  final int? productoId;
 
-  final int clienteId;
-  final int asesorId;
-  final int ramoId;
-  final int productoId;
-
-  final DateTime fexpPoliza;
-  final DateTime finiPoliza;
-  final DateTime ffinPoliza;
+  final DateTime? fexpPoliza;
+  final DateTime? finiPoliza;
+  final DateTime? ffinPoliza;
 
   final num primaPoliza;
   final num valorPoliza;
@@ -21,30 +19,17 @@ class Poliza {
   final String? bienAsegurado;
   final String? obsPoliza;
 
-  // ===== NUEVOS =====
   final num? vlrasegPoliza;
-  final num? vlrtotalPoliza;
-
-  final num? porcombasePoliza;
+  final num? porccomPoliza;
   final num? vlrbasecomPoliza;
 
   final int? intermediarioId;
-
-  final num? porcomPoliza;
+  final num? porcomAgencia;
   final num? vlrcomPoliza;
-  final num? comfijaPoliza;
-
+  final num? vlrcomfijaPoliza;
   final num? porcomadicPoliza;
   final num? vlrcomadicPoliza;
-
-  final int? asesor1Id;
   final num? porcomAsesor1;
-
-  final int? asesor2Id;
-  final num? porcomAsesor2;
-
-  final int? asesor3Id;
-  final num? porcomAsesor3;
 
   final int? agenciaId;
   final int? formaPagoId;
@@ -52,120 +37,193 @@ class Poliza {
 
   final num? vlrprimapagadaPoliza;
 
-  final DateTime fcreado;
-  final DateTime fultmod;
+  final int? asesor2Id;
+  final int? asesor3Id;
+  final int? asesoradId;
+
+  final int? agenciaadId;
+
+  final int? formaexpId;
+  final int? asegId;
+  final int? usuarioId;
+
+  final DateTime? fcreado;
+  final DateTime? fultmod;
+
+  // Campos extra de la vista de búsqueda
+  final String? nombreCliente;
+  final String? docCliente;
+  final String? nombreAsesor;
+  final String? nombreRamo;
+  final String? nombreProd;
+  final String? nombreAseg;
+  final String? nombreInterm;
+  final String? nombreFormaPago;
+  final String? nombreFormaexp;
+  final String? nombreUsuario;
+  final String? apodoUsuario;
 
   Poliza({
     required this.id,
-    required this.nroPoliza,
-    required this.clienteId,
-    required this.asesorId,
-    required this.ramoId,
-    required this.productoId,
-    required this.fexpPoliza,
-    required this.finiPoliza,
-    required this.ffinPoliza,
+    this.nroPoliza,
+    this.clienteId,
+    this.asesorId,
+    this.ramoId,
+    this.productoId,
+    this.fexpPoliza,
+    this.finiPoliza,
+    this.ffinPoliza,
     required this.primaPoliza,
     required this.valorPoliza,
-    required this.bienAsegurado,
-    required this.obsPoliza,
-    required this.vlrasegPoliza,
-    required this.vlrtotalPoliza,
-    required this.porcombasePoliza,
-    required this.vlrbasecomPoliza,
-    required this.intermediarioId,
-    required this.porcomPoliza,
-    required this.vlrcomPoliza,
-    required this.comfijaPoliza,
-    required this.porcomadicPoliza,
-    required this.vlrcomadicPoliza,
-    required this.asesor1Id,
-    required this.porcomAsesor1,
-    required this.asesor2Id,
-    required this.porcomAsesor2,
-    required this.asesor3Id,
-    required this.porcomAsesor3,
-    required this.agenciaId,
-    required this.formaPagoId,
-    required this.estadoPolizaId,
-    required this.vlrprimapagadaPoliza,
-    required this.fcreado,
-    required this.fultmod,
+    this.bienAsegurado,
+    this.obsPoliza,
+    this.vlrasegPoliza,
+    this.porccomPoliza,
+    this.vlrbasecomPoliza,
+    this.intermediarioId,
+    this.porcomAgencia,
+    this.vlrcomPoliza,
+    this.vlrcomfijaPoliza,
+    this.porcomadicPoliza,
+    this.vlrcomadicPoliza,
+    this.porcomAsesor1,
+    this.agenciaId,
+    this.formaPagoId,
+    this.estadoPolizaId,
+    this.vlrprimapagadaPoliza,
+    this.asesor2Id,
+    this.asesor3Id,
+    this.asesoradId,
+    this.agenciaadId,
+    this.formaexpId,
+    this.asegId,
+    this.usuarioId,
+    this.fcreado,
+    this.fultmod,
+    this.nombreCliente,
+    this.docCliente,
+    this.nombreAsesor,
+    this.nombreRamo,
+    this.nombreProd,
+    this.nombreAseg,
+    this.nombreInterm,
+    this.nombreFormaPago,
+    this.nombreFormaexp,
+    this.nombreUsuario,
+    this.apodoUsuario,
   });
 
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
-  static int? _toIntOrNull(dynamic v) {
+  static int? _toInt(dynamic v) {
     if (v == null) return null;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString());
+    final s = v.toString().trim();
+    if (s.isEmpty) return null;
+    return int.tryParse(s);
   }
 
-  static num _toNum(dynamic v) {
-    if (v == null) return 0;
-    if (v is num) return v;
-    return num.tryParse(v.toString()) ?? 0;
-  }
-
-  static num? _toNumOrNull(dynamic v) {
+  static num? _toNum(dynamic v) {
     if (v == null) return null;
-    if (v is num) return v;
-    return num.tryParse(v.toString());
+    final s = v.toString().trim();
+    if (s.isEmpty) return null;
+    return num.tryParse(s.replaceAll(',', '.'));
   }
 
-  static String? _toTextOrNull(dynamic v) {
-    final s = (v ?? '').toString().trim();
+  static DateTime? _toDate(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().trim();
+    if (s.isEmpty) return null;
+    return DateTime.tryParse(s);
+  }
+
+  static String? _toText(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().trim();
     return s.isEmpty ? null : s;
   }
 
-  static DateTime _dt(dynamic v) => DateTime.parse(v as String);
+  factory Poliza.fromMap(Map<String, dynamic> m) => Poliza(
+        id: int.parse(m['id'].toString()),
+        nroPoliza: _toText(m['nro_poliza']),
+        clienteId: _toInt(m['cliente_id']),
+        asesorId: _toInt(m['asesor_id']),
+        ramoId: _toInt(m['ramo_id']),
+        productoId: _toInt(m['producto_id']),
+        fexpPoliza: _toDate(m['fexp_poliza']),
+        finiPoliza: _toDate(m['fini_poliza']),
+        ffinPoliza: _toDate(m['ffin_poliza']),
+        primaPoliza: _toNum(m['prima_poliza']) ?? 0,
+        valorPoliza: _toNum(m['valor_poliza']) ?? 0,
+        bienAsegurado: _toText(m['bien_asegurado']),
+        obsPoliza: _toText(m['obs_poliza']),
+        vlrasegPoliza: _toNum(m['vlraseg_poliza']),
+        porccomPoliza: _toNum(m['porccom_poliza']),
+        vlrbasecomPoliza: _toNum(m['vlrbasecom_poliza']),
+        intermediarioId: _toInt(m['intermediario_id']),
+        porcomAgencia: _toNum(m['porcom_agencia']),
+        vlrcomPoliza: _toNum(m['vlrcom_poliza']),
+        vlrcomfijaPoliza: _toNum(m['vlrcomfija_poliza']),
+        porcomadicPoliza: _toNum(m['porcomadic_poliza']),
+        vlrcomadicPoliza: _toNum(m['vlrcomadic_poliza']),
+        porcomAsesor1: _toNum(m['porcom_asesor1']),
+        agenciaId: _toInt(m['agencia_id']),
+        formaPagoId: _toInt(m['forma_pago_id']),
+        estadoPolizaId: _toText(m['estado_poliza_id']),
+        vlrprimapagadaPoliza: _toNum(m['vlrprimapagada_poliza']),
+        asesor2Id: _toInt(m['asesor2_id']),
+        asesor3Id: _toInt(m['asesor3_id']),
+        asesoradId: _toInt(m['asesorad_id']),
+        agenciaadId: _toInt(m['agenciaad_id']),
+        formaexpId: _toInt(m['formaexp_id']),
+        asegId: _toInt(m['aseg_id']),
+        usuarioId: _toInt(m['usuario_id']),
+        fcreado: _toDate(m['fcreado']),
+        fultmod: _toDate(m['fultmod']),
+        nombreCliente: _toText(m['nombre_cliente']),
+        docCliente: _toText(m['doc_cliente']),
+        nombreAsesor: _toText(m['nombre_asesor']),
+        nombreRamo: _toText(m['nombre_ramo']),
+        nombreProd: _toText(m['nombre_prod']),
+        nombreAseg: _toText(m['nombre_aseg']),
+        nombreInterm: _toText(m['nombre_interm']),
+        nombreFormaPago: _toText(m['nombre_forma_pago']),
+        nombreFormaexp: _toText(m['nombre_formaexp']),
+        nombreUsuario: _toText(m['nombre_usuario']),
+        apodoUsuario: _toText(m['apodo_usuario']),
+      );
 
-  factory Poliza.fromMap(Map<String, dynamic> m) {
-    return Poliza(
-      id: _toInt(m['id']),
-      nroPoliza: (m['nro_poliza'] ?? '') as String,
-      clienteId: _toInt(m['cliente_id']),
-      asesorId: _toInt(m['asesor_id']),
-      ramoId: _toInt(m['ramo_id']),
-      productoId: _toInt(m['producto_id']),
-      fexpPoliza: _dt(m['fexp_poliza']),
-      finiPoliza: _dt(m['fini_poliza']),
-      ffinPoliza: _dt(m['ffin_poliza']),
-      primaPoliza: _toNum(m['prima_poliza']),
-      valorPoliza: _toNum(m['valor_poliza']),
-      bienAsegurado: _toTextOrNull(m['bien_asegurado']),
-      obsPoliza: _toTextOrNull(m['obs_poliza']),
-
-      // ===== NUEVOS =====
-      vlrasegPoliza: _toNumOrNull(m['vlraseg_poliza']),
-      vlrtotalPoliza: _toNumOrNull(m['vlrtotal_poliza']),
-      porcombasePoliza: _toNumOrNull(m['porcombase_poliza']),
-      vlrbasecomPoliza: _toNumOrNull(m['vlrbasecom_poliza']),
-      intermediarioId: _toIntOrNull(m['intermediario_id']),
-      porcomPoliza: _toNumOrNull(m['porcom_poliza']),
-      vlrcomPoliza: _toNumOrNull(m['vlrcom_poliza']),
-      comfijaPoliza: _toNumOrNull(m['comfija_poliza']),
-      porcomadicPoliza: _toNumOrNull(m['porcomadic_poliza']),
-      vlrcomadicPoliza: _toNumOrNull(m['vlrcomadic_poliza']),
-      asesor1Id: _toIntOrNull(m['asesor1_id']),
-      porcomAsesor1: _toNumOrNull(m['porcom_asesor1']),
-      asesor2Id: _toIntOrNull(m['asesor2_id']),
-      porcomAsesor2: _toNumOrNull(m['porcom_asesor2']),
-      asesor3Id: _toIntOrNull(m['asesor3_id']),
-      porcomAsesor3: _toNumOrNull(m['porcom_asesor3']),
-      agenciaId: _toIntOrNull(m['agencia_id']),
-      formaPagoId: _toIntOrNull(m['forma_pago_id']),
-      estadoPolizaId: _toTextOrNull(m['estado_poliza_id']),
-      vlrprimapagadaPoliza: _toNumOrNull(m['vlrprimapagada_poliza']),
-
-      fcreado: _dt(m['fcreado']),
-      fultmod: _dt(m['fultmod']),
-    );
-  }
+  Map<String, dynamic> toInsertMap() => {
+        'id': id,
+        'nro_poliza': nroPoliza,
+        'cliente_id': clienteId,
+        'asesor_id': asesorId,
+        'ramo_id': ramoId,
+        'producto_id': productoId,
+        'fexp_poliza': fexpPoliza?.toIso8601String(),
+        'fini_poliza': finiPoliza?.toIso8601String(),
+        'ffin_poliza': ffinPoliza?.toIso8601String(),
+        'prima_poliza': primaPoliza,
+        'valor_poliza': valorPoliza,
+        'bien_asegurado': bienAsegurado,
+        'obs_poliza': obsPoliza,
+        'vlraseg_poliza': vlrasegPoliza,
+        'porccom_poliza': porccomPoliza,
+        'vlrbasecom_poliza': vlrbasecomPoliza,
+        'intermediario_id': intermediarioId,
+        'porcom_agencia': porcomAgencia,
+        'vlrcom_poliza': vlrcomPoliza,
+        'vlrcomfija_poliza': vlrcomfijaPoliza,
+        'porcomadic_poliza': porcomadicPoliza,
+        'vlrcomadic_poliza': vlrcomadicPoliza,
+        'porcom_asesor1': porcomAsesor1,
+        'agencia_id': agenciaId,
+        'forma_pago_id': formaPagoId,
+        'estado_poliza_id': estadoPolizaId,
+        'vlrprimapagada_poliza': vlrprimapagadaPoliza,
+        'asesor2_id': asesor2Id,
+        'asesor3_id': asesor3Id,
+        'asesorad_id': asesoradId,
+        'agenciaad_id': agenciaadId,
+        'formaexp_id': formaexpId,
+        'aseg_id': asegId,
+        'usuario_id': usuarioId,
+      };
 }
