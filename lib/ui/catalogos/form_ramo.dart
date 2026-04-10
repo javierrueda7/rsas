@@ -96,24 +96,20 @@ class _FormRamoState extends State<FormRamo> {
   num _parseNumConDefault100(String s) {
     final t = s.trim();
     if (t.isEmpty) return 100;
-
     final limpio = t
         .replaceAll(RegExp(r'[^0-9,.\-]'), '')
         .replaceAll('.', '')
         .replaceAll(',', '.');
-
     return num.tryParse(limpio) ?? 100;
   }
 
   String? _validarPorcom(String? v) {
     final t = (v ?? '').trim();
     if (t.isEmpty) return null;
-
     final limpio = t
         .replaceAll(RegExp(r'[^0-9,.\-]'), '')
         .replaceAll('.', '')
         .replaceAll(',', '.');
-
     final n = num.tryParse(limpio);
     if (n == null) return 'Valor inválido';
     if (n < 0) return 'No puede ser negativo';
@@ -177,129 +173,167 @@ class _FormRamoState extends State<FormRamo> {
     }
   }
 
+  Widget _seccion(String titulo, List<Widget> campos) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              titulo,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const Divider(height: 18),
+            ...campos,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fila2(Widget a, Widget b) {
+    final w = MediaQuery.of(context).size.width;
+    if (w < 700) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [a, const SizedBox(height: 12), b],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: a),
+        const SizedBox(width: 16),
+        Expanded(child: b),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(esEdicion ? 'Editar ramo' : 'Nuevo ramo'),
         actions: [
-          TextButton.icon(
-            onPressed: guardando ? null : _guardar,
-            icon: const Icon(Icons.save),
-            label: Text(guardando ? 'Guardando...' : 'Guardar'),
-          ),
+          if (guardando)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: cargandoId ? null : _guardar,
+              icon: const Icon(Icons.save),
+              label: const Text('Guardar'),
+            ),
           const SizedBox(width: 8),
         ],
       ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Card(
-                elevation: 1,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        TextFormField(
-                          controller: idCtrl,
-                          enabled: !esEdicion,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: esEdicion ? 'ID' : 'ID sugerido',
-                            border: const OutlineInputBorder(),
-                            suffixIcon: cargandoId
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                          ),
-                          validator: _validarId,
-                        ),
-                        const SizedBox(height: 12),
-
-                        TextFormField(
-                          controller: nombreCtrl,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Nombre del ramo *',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (v) {
-                            final nombre = _limpiarObligatorio(v ?? '');
-                            return nombre.isEmpty ? 'Requerido' : null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
-                        TextFormField(
-                          controller: porcomCtrl,
-                          textInputAction: TextInputAction.next,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: '% base comisión',
-                            helperText: 'Si lo dejas vacío, se guarda como 100',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: _validarPorcom,
-                        ),
-                        const SizedBox(height: 12),
-
-                        TextFormField(
-                          controller: obsCtrl,
-                          maxLines: 3,
-                          textInputAction: TextInputAction.newline,
-                          decoration: const InputDecoration(
-                            labelText: 'Observaciones (opcional)',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        SwitchListTile(
-                          value: estadoRamo,
-                          onChanged: (v) => setState(() => estadoRamo = v),
-                          title: const Text('Activo'),
-                          subtitle: const Text(
-                            'Si está inactivo, no debería aparecer en dropdowns (si lo filtras).',
-                          ),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        const SizedBox(height: 8),
-
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton.icon(
-                            onPressed: guardando ? null : _guardar,
-                            icon: guardando
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.save),
-                            label: Text(guardando ? 'Guardando...' : 'Guardar'),
-                          ),
-                        ),
-                      ],
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // ── 1. Identificación ────────────────────────────────────────
+                _seccion('Identificación', [
+                  _fila2(
+                    TextFormField(
+                      controller: idCtrl,
+                      enabled: !esEdicion,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: esEdicion ? 'ID' : 'ID sugerido',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: cargandoId
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
+                                ),
+                              )
+                            : null,
+                      ),
+                      validator: _validarId,
+                    ),
+                    TextFormField(
+                      controller: nombreCtrl,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre del ramo *',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) {
+                        final nombre = _limpiarObligatorio(v ?? '');
+                        return nombre.isEmpty ? 'Requerido' : null;
+                      },
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: porcomCtrl,
+                    textInputAction: TextInputAction.next,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: '% Base comisión',
+                      helperText: 'Si lo dejas vacío, se guarda como 100',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: _validarPorcom,
+                  ),
+                ]),
+
+                // ── 2. Observaciones ─────────────────────────────────────────
+                _seccion('Observaciones', [
+                  TextFormField(
+                    controller: obsCtrl,
+                    maxLines: 3,
+                    textInputAction: TextInputAction.newline,
+                    decoration: const InputDecoration(
+                      labelText: 'Observaciones (opcional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    value: estadoRamo,
+                    onChanged: (v) => setState(() => estadoRamo = v),
+                    title: const Text('Activo'),
+                    subtitle: Text(estadoRamo ? 'Activo' : 'Inactivo'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ]),
+
+                FilledButton.icon(
+                  onPressed: (guardando || cargandoId) ? null : _guardar,
+                  icon: guardando
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save),
+                  label: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(guardando ? 'Guardando...' : 'Guardar ramo'),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,13 +1,16 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show TextInputFormatter, TextEditingValue;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../datos/repositorio_catalogos.dart';
 import '../datos/repositorio_polizas.dart';
 import '../datos/catalogos.dart';
 import '../datos/poliza.dart';
+import '../datos/sesion.dart';
 import '../utils/formatters.dart';
+import 'catalogos/form_cliente.dart';
 import 'widgets/buscador_dropdown.dart';
 
 extension FirstWhereOrNullExt<E> on Iterable<E> {
@@ -65,6 +68,60 @@ class IntermediarioLite {
       );
 }
 
+/// Formatea números al estilo colombiano (1.234.567,89) mientras el usuario escribe.
+class _ColMoneyInputFormatter extends TextInputFormatter {
+  final int decimales;
+  _ColMoneyInputFormatter({this.decimales = 2});
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final raw = newValue.text;
+    // Solo dígitos, coma y signo negativo
+    final soloDigitos = raw.replaceAll(RegExp(r'[^0-9,\-]'), '');
+    if (soloDigitos.isEmpty) return newValue.copyWith(text: '');
+
+    // Separar parte entera y decimal (coma como separador)
+    final partes = soloDigitos.split(',');
+    final entera = partes[0].replaceAll(RegExp(r'[^0-9\-]'), '');
+    final decimal = partes.length > 1 ? partes[1].replaceAll(RegExp(r'[^0-9]'), '') : null;
+
+    // Formatear miles con punto
+    final enteroNum = int.tryParse(entera.replaceAll('-', '')) ?? 0;
+    final negativo = entera.startsWith('-');
+    final enteroFmt = _formatMiles(enteroNum);
+    final resultado = '${negativo ? '-' : ''}$enteroFmt'
+        '${decimal != null ? ',${decimal.substring(0, decimal.length > decimales ? decimales : decimal.length)}' : ''}';
+
+    return newValue.copyWith(
+      text: resultado,
+      selection: TextSelection.collapsed(offset: resultado.length),
+    );
+  }
+
+  String _formatMiles(int n) {
+    final s = n.toString();
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return buf.toString();
+  }
+}
+
+class FormaExpLite {
+  final int id;
+  final String nombre;
+
+  FormaExpLite({required this.id, required this.nombre});
+
+  factory FormaExpLite.fromMap(Map<String, dynamic> m) => FormaExpLite(
+        id: (m['id'] as num).toInt(),
+        nombre: (m['nombre_formaexp'] ?? '') as String,
+      );
+}
+
 class PaginaFormularioPolizas extends StatefulWidget {
   final Poliza? poliza;
   const PaginaFormularioPolizas({super.key, this.poliza});
@@ -99,9 +156,16 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   final _porcComCtrl = TextEditingController();
   final _porcomAgenciaCtrl = TextEditingController();
   final _vlrComCtrl = TextEditingController();
+  final _vlrComFijaCtrl = TextEditingController();
   final _porcomAdicCtrl = TextEditingController();
   final _vlrComAdicCtrl = TextEditingController();
+  final _comDistribCtrl = TextEditingController();
+  final _comAdicDistribCtrl = TextEditingController();
   final _porcomAsesor1Ctrl = TextEditingController();
+  final _porcomAsesor2Ctrl = TextEditingController();
+  final _porcomAsesor3Ctrl = TextEditingController();
+  final _porcomAsesoradCtrl = TextEditingController();
+  final _porcomAgenciaadCtrl = TextEditingController();
   final _vlrPrimaPagadaCtrl = TextEditingController();
   final _obsCtrl = TextEditingController();
 
@@ -134,6 +198,8 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   List<FormaPagoLite> formasPago = [];
   List<EstadoPolizaLite> estadosPoliza = [];
   List<IntermediarioLite> intermediarios = [];
+  List<FormaExpLite> formasExp = [];
+  FormaExpLite? formaExp;
 
   bool get esEdicion => widget.poliza != null;
 
@@ -141,6 +207,18 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   void initState() {
     super.initState();
     _cargar();
+    // Rebuild en tiempo real para los valores calculados por asesor
+    for (final ctrl in [
+      _comDistribCtrl, _comAdicDistribCtrl,
+      _porcomAsesor1Ctrl, _porcomAsesor2Ctrl, _porcomAsesor3Ctrl,
+      _porcomAsesoradCtrl, _porcomAgenciaCtrl, _porcomAgenciaadCtrl,
+    ]) {
+      ctrl.addListener(_onComDistribChanged);
+    }
+  }
+
+  void _onComDistribChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -158,9 +236,16 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     _porcComCtrl.dispose();
     _porcomAgenciaCtrl.dispose();
     _vlrComCtrl.dispose();
+    _vlrComFijaCtrl.dispose();
     _porcomAdicCtrl.dispose();
     _vlrComAdicCtrl.dispose();
+    _comDistribCtrl.dispose();
+    _comAdicDistribCtrl.dispose();
     _porcomAsesor1Ctrl.dispose();
+    _porcomAsesor2Ctrl.dispose();
+    _porcomAsesor3Ctrl.dispose();
+    _porcomAsesoradCtrl.dispose();
+    _porcomAgenciaadCtrl.dispose();
     _vlrPrimaPagadaCtrl.dispose();
     _obsCtrl.dispose();
     super.dispose();
@@ -263,6 +348,16 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     final porc = _parseNumero(_porcComCtrl.text) ?? 0;
     final calculado = vlrBase * (porc / 100);
     _vlrComCtrl.text = _fmtMoney(calculado);
+    // Sugerir Com a distrib = Vlr Com + Com Fija (solo si el usuario no lo ha editado)
+    final comFija = _parseNumero(_vlrComFijaCtrl.text) ?? 0;
+    _comDistribCtrl.text = _fmtMoney(calculado + comFija);
+  }
+
+  /// Valor que le corresponde a un participante según Com a distrib y su %.
+  num _vlrParticipante(TextEditingController porcCtrl, TextEditingController baseCtrl) {
+    final base = _parseNumero(baseCtrl.text) ?? 0;
+    final porc = _parseNumero(porcCtrl.text) ?? 0;
+    return base * (porc / 100);
   }
 
   int? _idValido(int? v) {
@@ -271,38 +366,17 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   }
 
   Future<void> _cargarCatalogosExtra() async {
-    final resFormas = await _db
-        .from('formas_pago')
-        .select()
-        .eq('estado_forma_pago', true)
-        .order('nombre_forma_pago', ascending: true);
+    final results = await Future.wait([
+      _db.from('formas_pago').select().eq('estado_forma_pago', true).order('nombre_forma_pago', ascending: true),
+      _db.from('estados_poliza').select().eq('estado_activo', true).order('nombre_estado', ascending: true),
+      _db.from('intermediarios').select().eq('estado_interm', true).order('nombre_interm', ascending: true),
+      _db.from('formaexp').select().order('nombre_formaexp', ascending: true),
+    ]);
 
-    final resEstados = await _db
-        .from('estados_poliza')
-        .select()
-        .eq('estado_activo', true)
-        .order('nombre_estado', ascending: true);
-
-    final resIntermediarios = await _db
-        .from('intermediarios')
-        .select()
-        .eq('estado_interm', true)
-        .order('nombre_interm', ascending: true);
-
-    formasPago = (resFormas as List)
-        .cast<Map<String, dynamic>>()
-        .map(FormaPagoLite.fromMap)
-        .toList();
-
-    estadosPoliza = (resEstados as List)
-        .cast<Map<String, dynamic>>()
-        .map(EstadoPolizaLite.fromMap)
-        .toList();
-
-    intermediarios = (resIntermediarios as List)
-        .cast<Map<String, dynamic>>()
-        .map(IntermediarioLite.fromMap)
-        .toList();
+    formasPago    = (results[0] as List).cast<Map<String, dynamic>>().map(FormaPagoLite.fromMap).toList();
+    estadosPoliza = (results[1] as List).cast<Map<String, dynamic>>().map(EstadoPolizaLite.fromMap).toList();
+    intermediarios = (results[2] as List).cast<Map<String, dynamic>>().map(IntermediarioLite.fromMap).toList();
+    formasExp     = (results[3] as List).cast<Map<String, dynamic>>().map(FormaExpLite.fromMap).toList();
   }
 
   Future<Asesor?> _asegurarAsesor(int? id) async {
@@ -338,7 +412,6 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   Future<void> _cargar() async {
     try {
       final results = await Future.wait([
-        _repoCat.listarClientes(),
         _repoCat.listarAsesores(soloActivos: true),
         _repoCat.listarAseguradoras(soloActivas: true),
         _repoCat.listarRamos(soloActivos: true),
@@ -346,11 +419,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         _cargarCatalogosExtra(),
       ]);
 
-      clientes = results[0] as List<Cliente>;
-      asesores = results[1] as List<Asesor>;
-      aseguradoras = results[2] as List<Aseguradora>;
-      ramos = results[3] as List<Ramo>;
-      final allProductosActivos = results[4] as List<Producto>;
+      asesores = results[0] as List<Asesor>;
+      aseguradoras = results[1] as List<Aseguradora>;
+      ramos = results[2] as List<Ramo>;
+      final allProductosActivos = results[3] as List<Producto>;
 
       if (esEdicion) {
         final p = await _repoPol.obtenerPoliza(widget.poliza!.id) ?? widget.poliza!;
@@ -366,9 +438,17 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         _porcComCtrl.text = _fmtNum(p.porccomPoliza);
         _porcomAgenciaCtrl.text = _fmtNum(p.porcomAgencia);
         _vlrComCtrl.text = _fmtMoney(p.vlrcomPoliza);
+        _vlrComFijaCtrl.text = _fmtMoney(p.vlrcomfijaPoliza);
+        final comDistrib = (p.vlrcomPoliza ?? 0) + (p.vlrcomfijaPoliza ?? 0);
+        _comDistribCtrl.text = _fmtMoney(comDistrib);
+        _comAdicDistribCtrl.text = _fmtMoney(p.vlrcomadicPoliza);
         _porcomAdicCtrl.text = _fmtNum(p.porcomadicPoliza);
         _vlrComAdicCtrl.text = _fmtMoney(p.vlrcomadicPoliza);
         _porcomAsesor1Ctrl.text = _fmtNum(p.porcomAsesor1);
+        _porcomAsesor2Ctrl.text = _fmtNum(p.porcomAsesor2);
+        _porcomAsesor3Ctrl.text = _fmtNum(p.porcomAsesor3);
+        _porcomAsesoradCtrl.text = _fmtNum(p.porcomAsesorad);
+        _porcomAgenciaadCtrl.text = _fmtNum(p.porcomAgenciaad);
         _vlrPrimaPagadaCtrl.text = _fmtMoney(p.vlrprimapagadaPoliza);
         _obsCtrl.text = p.obsPoliza ?? '';
 
@@ -381,8 +461,8 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         _fFinCtrl.text = fFin == null ? '' : _formatearFecha(fFin!);
 
         cliente = await _asegurarCliente(p.clienteId);
-        intermediario =
-            intermediarios.firstWhereOrNull((x) => x.id == p.intermediarioId);
+        intermediario = intermediarios.firstWhereOrNull((x) => x.id == p.intermediarioId);
+        formaExp = formasExp.firstWhereOrNull((x) => x.id == p.formaexpId);
 
         asesor1 = await _asegurarAsesor(p.asesorId);
         asesor2 = await _asegurarAsesor(p.asesor2Id);
@@ -513,6 +593,9 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       keyboardType: num
           ? const TextInputType.numberWithOptions(decimal: true)
           : null,
+      inputFormatters: (num && !readOnly && lines == 1)
+          ? [_ColMoneyInputFormatter()]
+          : null,
       validator: req
           ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null
           : null,
@@ -557,12 +640,14 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       },
       validator: (v) {
         final s = (v ?? '').trim();
-        if (s.isEmpty) return 'Requerido';
+        final esFin = label.contains('fin') || label.contains('Fin');
+
+        if (s.isEmpty) return esFin ? 'Requerido' : null;
 
         final parsed = _parseFecha(s);
         if (parsed == null) return 'Fecha inválida';
 
-        if (label.contains('Fin') && fIni != null && parsed.isBefore(fIni!)) {
+        if (esFin && fIni != null && parsed.isBefore(fIni!)) {
           return 'Fin < Inicio';
         }
         return null;
@@ -606,23 +691,47 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
-    if (cliente == null ||
-        ramo == null ||
-        aseguradora == null ||
-        producto == null ||
-        formaPago == null ||
-        estadoPoliza == null) {
-      _toast('Completa los campos obligatorios.');
-      return;
-    }
-
-    if (fExp == null || fIni == null || fFin == null) {
-      _toast('Completa las fechas.');
-      return;
-    }
+    // Campos obligatorios según la base de datos
+    if (cliente == null) { _toast('El campo Cliente es obligatorio.'); return; }
+    if (aseguradora == null) { _toast('El campo Aseguradora es obligatorio.'); return; }
+    if (ramo == null) { _toast('El campo Ramo es obligatorio.'); return; }
+    if (producto == null) { _toast('El campo Producto es obligatorio.'); return; }
+    if (asesor1 == null) { _toast('El campo Asesor es obligatorio.'); return; }
+    if (fFin == null) { _toast('La Fecha fin es obligatoria.'); return; }
+    if (Sesion.usuarioId == null) { _toast('No hay un usuario activo en sesión.'); return; }
 
     if (fFin!.isBefore(fIni!)) {
       _toast('La fecha fin no puede ser anterior a la fecha inicio.');
+      return;
+    }
+
+    // Validar que la suma de % de comisiones principales no supere 100%
+    final porcAsesor1 = _parseNumero(_porcomAsesor1Ctrl.text) ?? 0;
+    final porcAsesor2 = _parseNumero(_porcomAsesor2Ctrl.text) ?? 0;
+    final porcAsesor3 = _parseNumero(_porcomAsesor3Ctrl.text) ?? 0;
+    final porcAgencia = _parseNumero(_porcomAgenciaCtrl.text) ?? 0;
+    final totalPorcPrincipal = porcAsesor1 + porcAsesor2 + porcAsesor3 + porcAgencia;
+    if (totalPorcPrincipal > 100) {
+      _toast('La suma de % de comisiones (Asesor 1 + 2 + 3 + Agencia) es ${totalPorcPrincipal.toStringAsFixed(2)}% y supera el 100%.');
+      return;
+    }
+
+    // Validar que la suma de % adicionales no supere 100%
+    final porcAsesorad = _parseNumero(_porcomAsesoradCtrl.text) ?? 0;
+    final porcAgenciaad = _parseNumero(_porcomAgenciaadCtrl.text) ?? 0;
+    final totalPorcAdic = porcAsesorad + porcAgenciaad;
+    if (totalPorcAdic > 100) {
+      _toast('La suma de % adicionales (Asesor adic. + Agencia adic.) es ${totalPorcAdic.toStringAsFixed(2)}% y supera el 100%.');
+      return;
+    }
+
+    // Validar que Com a distrib no supere Vlr Com + Com Fija
+    final vlrCom = _parseNumero(_vlrComCtrl.text) ?? 0;
+    final comFija = _parseNumero(_vlrComFijaCtrl.text) ?? 0;
+    final comDistrib = _parseNumero(_comDistribCtrl.text) ?? 0;
+    final maxComDistrib = vlrCom + comFija;
+    if (comDistrib > maxComDistrib && maxComDistrib > 0) {
+      _toast('La Com. a distribuir ($comDistrib) no puede ser mayor a Vlr Com + Com Fija ($maxComDistrib).');
       return;
     }
 
@@ -632,13 +741,8 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       return;
     }
 
-    final prima = _parseNumero(_primaCtrl.text);
-    final valorPoliza = _parseNumero(_valorPolizaCtrl.text);
-
-    if (prima == null || valorPoliza == null) {
-      _toast('Revisa Vlr prima y Valor póliza.');
-      return;
-    }
+    final prima = _parseNumero(_primaCtrl.text) ?? 0;
+    final valorPoliza = _parseNumero(_valorPolizaCtrl.text) ?? 0;
 
     setState(() => _guardando = true);
 
@@ -672,7 +776,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         'porccom_poliza': _parseNumero(_porcComCtrl.text),
         'porcom_agencia': _parseNumero(_porcomAgenciaCtrl.text),
         'vlrcom_poliza': _parseNumero(_vlrComCtrl.text),
-        'vlrcomfija_poliza': null,
+        'vlrcomfija_poliza': _parseNumero(_vlrComFijaCtrl.text),
         'porcomadic_poliza': _parseNumero(_porcomAdicCtrl.text),
         'vlrcomadic_poliza': _parseNumero(_vlrComAdicCtrl.text),
         'porcom_asesor1': porcomAsesor,
@@ -681,25 +785,29 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         'estado_poliza_id': estadoPoliza?.id,
         'vlrprimapagada_poliza': _parseNumero(_vlrPrimaPagadaCtrl.text),
         'asesor2_id': _idValido(asesor2?.id),
-        'porcom_asesor2': asesor2 == null ? null : porcomAsesor,
+        'porcom_asesor2': _parseNumero(_porcomAsesor2Ctrl.text),
         'asesor3_id': _idValido(asesor3?.id),
-        'porcom_asesor3': null,
+        'porcom_asesor3': _parseNumero(_porcomAsesor3Ctrl.text),
         'asesorad_id': _idValido(asesorAd?.id),
-        'porcom_asesorad': null,
+        'porcom_asesorad': _parseNumero(_porcomAsesoradCtrl.text),
         'agenciaad_id': _idValido(agenciaAd?.id),
-        'porcom_agenciaad': null,
+        'porcom_agenciaad': _parseNumero(_porcomAgenciaadCtrl.text),
         'bien_asegurado':
             _bienCtrl.text.trim().isEmpty ? null : _bienCtrl.text.trim(),
         'obs_poliza':
             _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim(),
-        'formaexp_id': null,
+        'formaexp_id': _idValido(formaExp?.id),
         'aseg_id': _idValido(aseguradora?.id),
-        'usuario_id': null,
+        'usuario_id': Sesion.usuarioId,
       };
 
       if (esEdicion) {
         final originalId = widget.poliza!.id;
-        await _repoPol.actualizarPoliza(originalId, data..remove('id'));
+        // Al editar no se modifica quién la creó originalmente
+        await _repoPol.actualizarPoliza(
+          originalId,
+          data..remove('id')..remove('usuario_id'),
+        );
       } else {
         await _repoPol.crearPoliza(data);
       }
@@ -713,26 +821,105 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     }
   }
 
-  Widget fila2(Widget a, Widget b) {
-    final w = MediaQuery.of(context).size.width;
-    if (w < 780) {
-      return Column(
-        children: [a, const SizedBox(height: 12), b],
-      );
-    }
+  Widget _filaAsesor(
+    String label,
+    Asesor? value,
+    void Function(Asesor?) onChanged,
+    TextEditingController? porcCtrl,
+    TextEditingController baseCtrl, {
+    bool req = false,
+  }) {
+    final vlr = porcCtrl != null ? _vlrParticipante(porcCtrl, baseCtrl) : 0;
+    final cs = Theme.of(context).colorScheme;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: a),
-        const SizedBox(width: 16),
-        Expanded(child: b),
+        Expanded(
+          flex: 4,
+          child: BuscadorDropdown<Asesor>(
+            label: req ? '$label *' : label,
+            value: value,
+            items: asesores,
+            itemLabel: (a) => a.nombreAsesor,
+            onChanged: onChanged,
+            validator: req ? (x) => x == null ? 'Requerido' : null : (_) => null,
+          ),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 120,
+          child: porcCtrl != null
+              ? _campo('% Comisión', porcCtrl, num: true,
+                  onEditingComplete: () => _formatearNum(porcCtrl))
+              : const SizedBox.shrink(),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 150,
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Vlr comisión',
+              border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: cs.surfaceContainerHighest.withOpacity(0.4),
+            ),
+            child: Text(
+              porcCtrl != null ? _fmtMoney(vlr) : '—',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: vlr > 0 ? cs.primary : cs.onSurface,
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget fila3(Widget a, Widget b, Widget c) {
+  Widget _selectorEstado() {
+    if (estadosPoliza.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: estadosPoliza.map((e) {
+        final selected = estadoPoliza?.id == e.id;
+        return ChoiceChip(
+          label: Text(e.nombre),
+          selected: selected,
+          onSelected: (_) => setState(() => estadoPoliza = e),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _seccion(String titulo, List<Widget> campos) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              titulo,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const Divider(height: 18),
+            ...campos,
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Widget _fila3(Widget a, Widget b, Widget c) {
     final w = MediaQuery.of(context).size.width;
-    if (w < 980) {
+    if (w < 900) {
       return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           a,
           const SizedBox(height: 12),
@@ -743,6 +930,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       );
     }
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(child: a),
         const SizedBox(width: 16),
@@ -763,195 +951,205 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(esEdicion ? 'Editar póliza' : 'Crear póliza'),
+        title: Text(esEdicion ? 'Editar póliza' : 'Nueva póliza'),
         actions: [
-          TextButton.icon(
-            onPressed: _guardando ? null : _guardar,
-            icon: const Icon(Icons.save),
-            label: Text(_guardando ? 'Guardando...' : 'Guardar'),
-          ),
+          if (_guardando)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: _guardar,
+              icon: const Icon(Icons.save),
+              label: const Text('Guardar'),
+            ),
           const SizedBox(width: 8),
         ],
       ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: ListView(
-                children: [
-                  const Text(
-                    "Datos principales",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 14),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
 
-                  fila2(
-                    _campo(
-                      'Código *',
-                      _idCtrl,
-                      req: true,
-                      num: true,
-                      readOnly: esEdicion,
-                      helper: esEdicion
-                          ? 'Mismo ID de la póliza'
-                          : 'Se sugiere automáticamente, pero puedes cambiarlo',
+                // ── Fila 1: Código · Nro Póliza · Fechas ─────────────────────
+                _seccion('Identificación y vigencia', [
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SizedBox(
+                      width: 110,
+                      child: _campo('Código *', _idCtrl,
+                          req: true,
+                          num: true,
+                          readOnly: esEdicion,
+                          helper: esEdicion ? null : 'Auto'),
                     ),
-                    _campo('Num póliza', _nroCtrl),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: _campo('Número de póliza', _nroCtrl),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: _fechaCampo('F. expedición', _fExpCtrl, fExp,
+                          (d) => fExp = d),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: _fechaCampo('F. inicio', _fIniCtrl, fIni,
+                          (d) => fIni = d, autoFin: true),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: _fechaCampo(
+                          'F. fin *', _fFinCtrl, fFin, (d) => fFin = d),
+                    ),
+                  ]),
+                ]),
+
+                // ── Fila 2: Aseguradora · Ramo ────────────────────────────────
+                _seccion('Aseguradora y ramo', [
+                  // Aseguradora | Ramo | % Base Com (read-only)
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(
+                      flex: 3,
+                      child: BuscadorDropdown<Aseguradora>(
+                        label: 'Aseguradora *',
+                        value: aseguradora,
+                        items: aseguradoras,
+                        itemLabel: (a) => a.nombreAseg,
+                        onChanged: (v) async {
+                          setState(() { aseguradora = v; producto = null; });
+                          await _refrescarProductos();
+                        },
+                        validator: (x) => x == null ? 'Requerido' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: BuscadorDropdown<Ramo>(
+                        label: 'Ramo *',
+                        value: ramo,
+                        items: ramos,
+                        itemLabel: (r) => r.nombreRamo,
+                        onChanged: (v) async {
+                          setState(() {
+                            ramo = v;
+                            producto = null;
+                            if (ramo != null) _aplicarDefaultsDesdeRamo();
+                          });
+                          await _refrescarProductos();
+                        },
+                        validator: (x) => x == null ? 'Requerido' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 130,
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: '% Base Com.',
+                          border: const OutlineInputBorder(),
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                        ),
+                        child: Text(
+                          ramo != null ? ramo!.porcomBaseRamo.toString() : '—',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 12),
+                  // Producto | Forma de pago | Forma Exp
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(
+                      flex: 3,
+                      child: BuscadorDropdown<Producto>(
+                        label: 'Producto *',
+                        value: producto,
+                        items: productos,
+                        itemLabel: (p) => p.nombreProd,
+                        onChanged: (v) {
+                          setState(() {
+                            producto = v;
+                            if (producto != null) _aplicarDefaultsDesdeProducto();
+                          });
+                        },
+                        validator: (x) => x == null ? 'Requerido' : null,
+                        helperText: (ramo == null || aseguradora == null)
+                            ? 'Selecciona Aseguradora y Ramo primero'
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: BuscadorDropdown<FormaPagoLite>(
+                        label: 'Forma de pago *',
+                        value: formaPago,
+                        items: formasPago,
+                        itemLabel: (f) => f.nombre,
+                        onChanged: (v) => setState(() => formaPago = v),
+                        validator: (x) => x == null ? 'Requerido' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: BuscadorDropdown<FormaExpLite>(
+                        label: 'Forma Exp.',
+                        value: formaExp,
+                        items: formasExp,
+                        itemLabel: (f) => f.nombre,
+                        onChanged: (v) => setState(() => formaExp = v),
+                        validator: (_) => null,
+                      ),
+                    ),
+                  ]),
+                ]),
+
+                // ── Cliente ───────────────────────────────────────────────────
+                _seccion('Cliente', [
+                  BuscadorDropdown<Cliente>(
+                    label: 'Cliente *',
+                    value: cliente,
+                    items: cliente != null ? [cliente!] : [],
+                    itemLabel: (c) => c.nombreCliente,
+                    itemSubtitle: (c) {
+                      final partes = [
+                        if ((c.tipodocCliente ?? '').isNotEmpty) c.tipodocCliente!,
+                        if ((c.docCliente ?? '').isNotEmpty) c.docCliente!,
+                      ];
+                      return partes.isEmpty ? null : partes.join(' ');
+                    },
+                    itemsLoader: (q) => _repoCat.buscarClientes(q),
+                    onChanged: (v) => setState(() => cliente = v),
+                    validator: (x) => x == null ? 'Requerido' : null,
+                    onCrear: (ctx) async {
+                      final nuevoId = await Navigator.of(ctx).push<int>(
+                        MaterialPageRoute(builder: (_) => const FormCliente()),
+                      );
+                      if (nuevoId != null) return await _asegurarCliente(nuevoId);
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 12),
-
-                  fila3(
-                    _fechaCampo(
-                      'F. expedición *',
-                      _fExpCtrl,
-                      fExp,
-                      (d) => fExp = d,
-                    ),
-                    _fechaCampo(
-                      'F. inicio *',
-                      _fIniCtrl,
-                      fIni,
-                      (d) => fIni = d,
-                      autoFin: true,
-                    ),
-                    _fechaCampo(
-                      'F. fin *',
-                      _fFinCtrl,
-                      fFin,
-                      (d) => fFin = d,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  fila2(
-                    BuscadorDropdown<Cliente>(
-                      label: 'Cliente *',
-                      value: cliente,
-                      items: clientes,
-                      itemLabel: (c) => c.nombreCliente,
-                      onChanged: (v) => setState(() => cliente = v),
-                      validator: (x) => x == null ? 'Requerido' : null,
-                    ),
-                    _campo('Ident bien aseg', _bienCtrl),
-                  ),
-                  const SizedBox(height: 12),
-
-                  fila2(
-                    BuscadorDropdown<Aseguradora>(
-                      label: 'Aseguradora *',
-                      value: aseguradora,
-                      items: aseguradoras,
-                      itemLabel: (a) => a.nombreAseg,
-                      onChanged: (v) async {
-                        setState(() {
-                          aseguradora = v;
-                          producto = null;
-                        });
-                        await _refrescarProductos();
-                      },
-                      validator: (x) => x == null ? 'Requerido' : null,
-                    ),
-                    BuscadorDropdown<Ramo>(
-                      label: 'Ramo *',
-                      value: ramo,
-                      items: ramos,
-                      itemLabel: (r) => r.nombreRamo,
-                      onChanged: (v) async {
-                        setState(() {
-                          ramo = v;
-                          producto = null;
-                          if (ramo != null) _aplicarDefaultsDesdeRamo();
-                        });
-                        await _refrescarProductos();
-                      },
-                      validator: (x) => x == null ? 'Requerido' : null,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  fila2(
-                    _campo(
-                      'Vlr base com',
-                      _vlrBaseComCtrl,
-                      num: true,
-                      helper: 'Automático editable',
-                      onEditingComplete: () {
-                        _formatearMoney(_vlrBaseComCtrl);
-                        _recalcularComision();
-                      },
-                      onChanged: (_) => _recalcularComision(),
-                    ),
-                    BuscadorDropdown<Producto>(
-                      label: 'Producto *',
-                      value: producto,
-                      items: productos,
-                      itemLabel: (p) => p.nombreProd,
-                      onChanged: (v) async {
-                        setState(() {
-                          producto = v;
-                          if (producto != null) _aplicarDefaultsDesdeProducto();
-                        });
-                      },
-                      validator: (x) => x == null ? 'Requerido' : null,
-                      helperText: (ramo == null || aseguradora == null)
-                          ? 'Selecciona Aseguradora y Ramo'
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  const Text(
-                    "Valores",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 14),
-
-                  fila2(
-                    _campo(
-                      'Vlr aseg',
-                      _vlrAsegCtrl,
-                      num: true,
-                      onEditingComplete: () => _formatearMoney(_vlrAsegCtrl),
-                    ),
-                    BuscadorDropdown<FormaPagoLite>(
-                      label: 'Forma pago *',
-                      value: formaPago,
-                      items: formasPago,
-                      itemLabel: (f) => f.nombre,
-                      onChanged: (v) => setState(() => formaPago = v),
-                      validator: (x) => x == null ? 'Requerido' : null,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  fila2(
-                    _campo(
-                      'Vlr prima *',
-                      _primaCtrl,
-                      req: true,
-                      num: true,
-                      helper: 'Ej: 1.500.000,00',
-                      onEditingComplete: () {
-                        _formatearMoney(_primaCtrl);
-                        _recalcularBaseCom();
-                      },
-                      onChanged: (_) => _recalcularBaseCom(),
-                    ),
-                    _campo(
-                      'Valor póliza *',
-                      _valorPolizaCtrl,
-                      req: true,
-                      num: true,
-                      onEditingComplete: () =>
-                          _formatearMoney(_valorPolizaCtrl),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  fila2(
+                  _fila3(
+                    _campo('Bien asegurado / identificación *', _bienCtrl, req: true),
+                    _campo('Vlr asegurado', _vlrAsegCtrl, num: true,
+                        onEditingComplete: () => _formatearMoney(_vlrAsegCtrl)),
                     BuscadorDropdown<IntermediarioLite>(
                       label: 'Intermediario',
                       value: intermediario,
@@ -960,162 +1158,193 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                       onChanged: (v) => setState(() => intermediario = v),
                       validator: (_) => null,
                     ),
-                    _campo(
-                      '% comisión',
-                      _porcComCtrl,
-                      num: true,
-                      helper: 'Se llena desde producto, editable',
-                      onEditingComplete: () {
-                        _formatearNum(_porcComCtrl);
-                        _recalcularComision();
-                      },
-                      onChanged: (_) => _recalcularComision(),
-                    ),
                   ),
+                ]),
+
+                // ── Valores ───────────────────────────────────────────────────
+                _seccion('Valores', [
+                  _fila3(
+                    _campo('Vlr Prima', _primaCtrl, num: true,
+                        helper: 'Ej: 1.500.000,00',
+                        onEditingComplete: () {
+                          _formatearMoney(_primaCtrl);
+                          _recalcularBaseCom();
+                        },
+                        onChanged: (_) => _recalcularBaseCom()),
+                    _campo('Vlr Total', _valorPolizaCtrl, num: true,
+                        onEditingComplete: () => _formatearMoney(_valorPolizaCtrl)),
+                    _campo('Vlr Base Com.', _vlrBaseComCtrl, num: true,
+                        helper: 'Automático, editable',
+                        onEditingComplete: () {
+                          _formatearMoney(_vlrBaseComCtrl);
+                          _recalcularComision();
+                        },
+                        onChanged: (_) => _recalcularComision()),
+                  ),
+                ]),
+
+                // ── Comisiones ────────────────────────────────────────────────
+                _seccion('Comisiones', [
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(
+                      child: _campo('% Com.', _porcComCtrl, num: true,
+                          helper: 'Desde producto',
+                          onEditingComplete: () {
+                            _formatearNum(_porcComCtrl);
+                            _recalcularComision();
+                          },
+                          onChanged: (_) => _recalcularComision()),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _campo('Vlr Com.', _vlrComCtrl, num: true,
+                          helper: 'Automático, editable',
+                          onEditingComplete: () => _formatearMoney(_vlrComCtrl)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _campo('+ Com. Fija', _vlrComFijaCtrl, num: true,
+                          onEditingComplete: () => _formatearMoney(_vlrComFijaCtrl)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _campo('% Com. adicional', _porcomAdicCtrl, num: true,
+                          onEditingComplete: () => _formatearNum(_porcomAdicCtrl)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _campo('Vlr Com. adicional', _vlrComAdicCtrl, num: true,
+                          onEditingComplete: () => _formatearMoney(_vlrComAdicCtrl)),
+                    ),
+                  ]),
                   const SizedBox(height: 12),
+                  // Com a distrib y Com Adic a distrib
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(
+                      child: _campo(
+                        'Com. a distribuir',
+                        _comDistribCtrl,
+                        num: true,
+                        helper: 'Base para repartir entre asesores',
+                        onEditingComplete: () => _formatearMoney(_comDistribCtrl),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _campo(
+                        'Com. adic. a distribuir',
+                        _comAdicDistribCtrl,
+                        num: true,
+                        helper: 'Base para repartir com. adicional',
+                        onEditingComplete: () => _formatearMoney(_comAdicDistribCtrl),
+                      ),
+                    ),
+                  ]),
+                ]),
 
-                  fila3(
-                    _campo(
-                      '% com agencia',
-                      _porcomAgenciaCtrl,
-                      num: true,
-                      onEditingComplete: () =>
-                          _formatearNum(_porcomAgenciaCtrl),
-                    ),
-                    _campo(
-                      'Vlr com',
-                      _vlrComCtrl,
-                      num: true,
-                      helper: 'Automático editable',
-                      onEditingComplete: () => _formatearMoney(_vlrComCtrl),
-                    ),
-                    _campo(
-                      '% com adic',
-                      _porcomAdicCtrl,
-                      num: true,
-                      onEditingComplete: () => _formatearNum(_porcomAdicCtrl),
-                    ),
-                  ),
+                // ── Distribución de comisiones ────────────────────────────────
+                _seccion('Distribución de comisiones', [
+                  _filaAsesor('Asesor 1', asesor1,
+                      (v) => setState(() => asesor1 = v), _porcomAsesor1Ctrl, _comDistribCtrl, req: true),
                   const SizedBox(height: 12),
-
-                  fila2(
-                    _campo(
-                      'Vlr com adic',
-                      _vlrComAdicCtrl,
-                      num: true,
-                      onEditingComplete: () =>
-                          _formatearMoney(_vlrComAdicCtrl),
-                    ),
-                    _campo(
-                      'Vlr prima pagada',
-                      _vlrPrimaPagadaCtrl,
-                      num: true,
-                      onEditingComplete: () =>
-                          _formatearMoney(_vlrPrimaPagadaCtrl),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  const Text(
-                    "Distribución / control",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 14),
-
-                  fila2(
-                    BuscadorDropdown<Asesor>(
-                      label: 'Asesor 1',
-                      value: asesor1,
-                      items: asesores,
-                      itemLabel: (a) => a.nombreAsesor,
-                      onChanged: (v) => setState(() => asesor1 = v),
-                      validator: (_) => null,
-                    ),
-                    _campo(
-                      '% comisión asesor 1',
-                      _porcomAsesor1Ctrl,
-                      num: true,
-                      onEditingComplete: () =>
-                          _formatearNum(_porcomAsesor1Ctrl),
-                    ),
-                  ),
+                  _filaAsesor('Asesor 2', asesor2,
+                      (v) => setState(() => asesor2 = v), _porcomAsesor2Ctrl, _comDistribCtrl),
                   const SizedBox(height: 12),
-
-                  fila2(
-                    BuscadorDropdown<Asesor>(
-                      label: 'Agencia',
-                      value: agencia,
-                      items: asesores,
-                      itemLabel: (a) => a.nombreAsesor,
-                      onChanged: (v) => setState(() => agencia = v),
-                      validator: (_) => null,
-                    ),
-                    BuscadorDropdown<EstadoPolizaLite>(
-                      label: 'Estado de póliza *',
-                      value: estadoPoliza,
-                      items: estadosPoliza,
-                      itemLabel: (e) => '${e.id} - ${e.nombre}',
-                      onChanged: (v) => setState(() => estadoPoliza = v),
-                      validator: (x) => x == null ? 'Requerido' : null,
-                    ),
-                  ),
+                  _filaAsesor('Asesor 3', asesor3,
+                      (v) => setState(() => asesor3 = v), _porcomAsesor3Ctrl, _comDistribCtrl),
                   const SizedBox(height: 12),
-
-                  fila3(
-                    BuscadorDropdown<Asesor>(
-                      label: 'Asesor 2',
-                      value: asesor2,
-                      items: asesores,
-                      itemLabel: (a) => a.nombreAsesor,
-                      onChanged: (v) => setState(() => asesor2 = v),
-                      validator: (_) => null,
-                    ),
-                    BuscadorDropdown<Asesor>(
-                      label: 'Asesor 3',
-                      value: asesor3,
-                      items: asesores,
-                      itemLabel: (a) => a.nombreAsesor,
-                      onChanged: (v) => setState(() => asesor3 = v),
-                      validator: (_) => null,
-                    ),
-                    const SizedBox.shrink(),
-                  ),
+                  _filaAsesor('Agencia', agencia,
+                      (v) => setState(() => agencia = v), _porcomAgenciaCtrl, _comDistribCtrl),
+                  const SizedBox(height: 8),
+                  // Indicador total % principales
+                  Builder(builder: (_) {
+                    final total = (_parseNumero(_porcomAsesor1Ctrl.text) ?? 0)
+                        + (_parseNumero(_porcomAsesor2Ctrl.text) ?? 0)
+                        + (_parseNumero(_porcomAsesor3Ctrl.text) ?? 0)
+                        + (_parseNumero(_porcomAgenciaCtrl.text) ?? 0);
+                    final excede = total > 100;
+                    return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      Icon(excede ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                          size: 16,
+                          color: excede ? Colors.red : Colors.green),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Total: ${total.toStringAsFixed(2)}%',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: excede ? Colors.red : Colors.green,
+                        ),
+                      ),
+                    ]);
+                  }),
+                  const Divider(height: 24),
+                  _filaAsesor('Asesor adicional', asesorAd,
+                      (v) => setState(() => asesorAd = v), _porcomAsesoradCtrl, _comAdicDistribCtrl),
                   const SizedBox(height: 12),
+                  _filaAsesor('Agencia adicional', agenciaAd,
+                      (v) => setState(() => agenciaAd = v), _porcomAgenciaadCtrl, _comAdicDistribCtrl),
+                  const SizedBox(height: 8),
+                  // Indicador total % adicionales
+                  Builder(builder: (_) {
+                    final total = (_parseNumero(_porcomAsesoradCtrl.text) ?? 0)
+                        + (_parseNumero(_porcomAgenciaadCtrl.text) ?? 0);
+                    final excede = total > 100;
+                    if (total == 0) return const SizedBox.shrink();
+                    return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      Icon(excede ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                          size: 16,
+                          color: excede ? Colors.red : Colors.green),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Total adic.: ${total.toStringAsFixed(2)}%',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: excede ? Colors.red : Colors.green,
+                        ),
+                      ),
+                    ]);
+                  }),
+                ]),
 
-                  fila2(
-                    BuscadorDropdown<Asesor>(
-                      label: 'Asesor adicional',
-                      value: asesorAd,
-                      items: asesores,
-                      itemLabel: (a) => a.nombreAsesor,
-                      onChanged: (v) => setState(() => asesorAd = v),
-                      validator: (_) => null,
+                // ── Estado + Vlr Prima Pagada ─────────────────────────────────
+                _seccion('Estado y cierre', [
+                  Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                    Expanded(child: _selectorEstado()),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      width: 200,
+                      child: _campo('Vlr Prima Pagada', _vlrPrimaPagadaCtrl,
+                          num: true,
+                          onEditingComplete: () =>
+                              _formatearMoney(_vlrPrimaPagadaCtrl)),
                     ),
-                    BuscadorDropdown<Asesor>(
-                      label: 'Agencia adicional',
-                      value: agenciaAd,
-                      items: asesores,
-                      itemLabel: (a) => a.nombreAsesor,
-                      onChanged: (v) => setState(() => agenciaAd = v),
-                      validator: (_) => null,
-                    ),
+                  ]),
+                ]),
+
+                // ── Observaciones ─────────────────────────────────────────────
+                _seccion('Observaciones', [
+                  _campo('Observación', _obsCtrl, lines: 4),
+                ]),
+
+                // ── Botón guardar ─────────────────────────────────────────────
+                FilledButton.icon(
+                  onPressed: _guardando ? null : _guardar,
+                  icon: _guardando
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save),
+                  label: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(_guardando ? 'Guardando...' : 'Guardar póliza'),
                   ),
-                  const SizedBox(height: 24),
-
-                  _campo('Observación', _obsCtrl, lines: 3),
-
-                  const SizedBox(height: 30),
-
-                  FilledButton(
-                    onPressed: _guardando ? null : _guardar,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child:
-                          Text(_guardando ? "Guardando..." : "Guardar póliza"),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 16),
+              ],
             ),
           ),
         ),

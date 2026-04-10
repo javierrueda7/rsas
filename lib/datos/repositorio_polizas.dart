@@ -7,28 +7,7 @@ class RepositorioPolizas {
   static const String _tabla = 'polizas';
   static const String _vista = 'vw_polizas_busqueda';
 
-  Stream<List<Map<String, dynamic>>> escucharCambiosRaw() {
-    return _db
-        .from(_tabla)
-        .stream(primaryKey: ['id'])
-        .order('fcreado', ascending: false)
-        .map((rows) => rows.cast<Map<String, dynamic>>());
-  }
-
-  Stream<List<Poliza>> escucharCambios() {
-    return _db
-        .from(_tabla)
-        .stream(primaryKey: ['id'])
-        .order('fcreado', ascending: false)
-        .map(
-          (rows) => rows
-              .cast<Map<String, dynamic>>()
-              .map(Poliza.fromMap)
-              .toList(),
-        );
-  }
-
-  Future<List<Poliza>> listar({String busqueda = ''}) async {
+  Future<List<Poliza>> listar({String busqueda = '', int limite = 500}) async {
     final b = busqueda.trim();
 
     dynamic query = _db.from(_vista).select();
@@ -52,7 +31,7 @@ class RepositorioPolizas {
       );
     }
 
-    final res = await query.order('fcreado', ascending: false);
+    final res = await query.order('fcreado', ascending: false).limit(limite);
 
     final rows = (res as List).cast<Map<String, dynamic>>();
     return rows.map(Poliza.fromMap).toList();

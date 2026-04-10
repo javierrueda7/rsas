@@ -31,7 +31,6 @@ class _ListaAsesoresState extends State<ListaAsesores> {
   void initState() {
     super.initState();
     _cargar();
-
     _buscarCtrl.addListener(() {
       setState(() => _filtro = _buscarCtrl.text.trim().toLowerCase());
     });
@@ -49,9 +48,7 @@ class _ListaAsesoresState extends State<ListaAsesores> {
     setState(() => cargando = true);
     try {
       final res = await repo.listarAsesores(soloActivos: _soloActivos);
-
-      res.sort((a, b) => a.id.compareTo(b.id)); // 👈 orden inicial
-
+      res.sort((a, b) => a.id.compareTo(b.id));
       if (!mounted) return;
       setState(() {
         items = res;
@@ -76,11 +73,9 @@ class _ListaAsesoresState extends State<ListaAsesores> {
     setState(() {
       _sortColumnIndex = columnIndex;
       _sortAscending = ascending;
-
       items.sort((a, b) {
         final aValue = getField(a);
         final bValue = getField(b);
-
         return ascending
             ? Comparable.compare(aValue, bValue)
             : Comparable.compare(bValue, aValue);
@@ -90,11 +85,9 @@ class _ListaAsesoresState extends State<ListaAsesores> {
 
   List<Asesor> get _filtrados {
     Iterable<Asesor> data = items;
-
     if (_soloActivos) {
       data = data.where((a) => a.estadoAsesor);
     }
-
     if (_filtro.isNotEmpty) {
       data = data.where((a) {
         final id = a.id.toString();
@@ -103,7 +96,6 @@ class _ListaAsesoresState extends State<ListaAsesores> {
         final tel = (a.telAsesor ?? '').toLowerCase();
         final correo = (a.correoAsesor ?? '').toLowerCase();
         final estado = a.estadoAsesor ? 'activo' : 'inactivo';
-
         return id.contains(_filtro) ||
             nombre.contains(_filtro) ||
             doc.contains(_filtro) ||
@@ -112,7 +104,6 @@ class _ListaAsesoresState extends State<ListaAsesores> {
             estado.contains(_filtro);
       });
     }
-
     return data.toList();
   }
 
@@ -123,14 +114,22 @@ class _ListaAsesoresState extends State<ListaAsesores> {
         title: const Text('Eliminar asesor'),
         content: Text('¿Eliminar "${a.nombreAsesor}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar'),
+          ),
         ],
       ),
     );
-
     if (ok != true) return;
-
     try {
       await repo.eliminarAsesor(a.id);
       await _cargar();
@@ -139,6 +138,190 @@ class _ListaAsesoresState extends State<ListaAsesores> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
+  }
+
+  void _abrirEditar(Asesor a) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => FormAsesor(asesor: a)),
+    ).then((_) => _cargar());
+  }
+
+  Widget _chip(bool activo) {
+    final cs = Theme.of(context).colorScheme;
+    return Chip(
+      label: Text(activo ? 'Activo' : 'Inactivo'),
+      visualDensity: VisualDensity.compact,
+      backgroundColor:
+          activo ? cs.secondaryContainer : cs.surfaceContainerHighest,
+      labelStyle: TextStyle(
+        fontSize: 12,
+        color: activo ? cs.onSecondaryContainer : cs.onSurfaceVariant,
+      ),
+    );
+  }
+
+  Widget _vistaMovil(List<Asesor> data) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+      itemCount: data.length,
+      itemBuilder: (_, i) {
+        final a = data[i];
+        final docTxt =
+            '${a.tipodocAsesor ?? ''} ${a.docAsesor ?? ''}'.trim();
+        final detalles = [
+          if (docTxt.isNotEmpty) docTxt,
+          if ((a.telAsesor ?? '').isNotEmpty) a.telAsesor!,
+          if ((a.correoAsesor ?? '').isNotEmpty) a.correoAsesor!,
+          if (a.porccomAsesor != null) '% Comisión: ${a.porccomAsesor}',
+        ].join('  ·  ');
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            isThreeLine: true,
+            onTap: () => _abrirEditar(a),
+            title: Text(
+              a.nombreAsesor,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (detalles.isNotEmpty)
+                  Text(
+                    detalles,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                const SizedBox(height: 6),
+                _chip(a.estadoAsesor),
+              ],
+            ),
+            trailing: PopupMenuButton<String>(
+              onSelected: (v) {
+                if (v == 'edit') { _abrirEditar(a); } else { _eliminar(a); }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Row(children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 10),
+                    Text('Editar'),
+                  ]),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Row(children: [
+                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                    SizedBox(width: 10),
+                    Text('Eliminar', style: TextStyle(color: Colors.red)),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static const _wId = 70.0;
+  static const _wNombre = 200.0;
+  static const _wDoc = 160.0;
+  static const _wTel = 130.0;
+  static const _wCorreo = 200.0;
+  static const _wPorc = 80.0;
+  static const _wEstado = 100.0;
+  static const _wAcciones = 90.0;
+  static const _totalAncho = _wId + _wNombre + _wDoc + _wTel + _wCorreo + _wPorc + _wEstado + _wAcciones;
+
+  Widget _encabezado() {
+    final cs = Theme.of(context).colorScheme;
+    Widget col(String label, double w, VoidCallback onTap, int idx) {
+      final activo = _sortColumnIndex == idx;
+      return InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: w,
+          child: Row(children: [
+            Text(label, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: activo ? cs.primary : null)),
+            if (activo) Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward, size: 14, color: cs.primary),
+          ]),
+        ),
+      );
+    }
+    return Container(
+      color: Colors.grey.shade200,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      child: Row(children: [
+        col('ID', _wId, () => _sort<num>((a) => a.id, 0, _sortColumnIndex != 0 || !_sortAscending), 0),
+        col('Nombre', _wNombre, () => _sort<String>((a) => a.nombreAsesor.toLowerCase(), 1, _sortColumnIndex != 1 || !_sortAscending), 1),
+        col('Documento', _wDoc, () => _sort<String>((a) => (a.docAsesor ?? '').toLowerCase(), 2, _sortColumnIndex != 2 || !_sortAscending), 2),
+        col('Teléfono', _wTel, () => _sort<String>((a) => (a.telAsesor ?? '').toLowerCase(), 3, _sortColumnIndex != 3 || !_sortAscending), 3),
+        col('Correo', _wCorreo, () => _sort<String>((a) => (a.correoAsesor ?? '').toLowerCase(), 4, _sortColumnIndex != 4 || !_sortAscending), 4),
+        col('%', _wPorc, () => _sort<num>((a) => a.porccomAsesor ?? 0, 5, _sortColumnIndex != 5 || !_sortAscending), 5),
+        col('Estado', _wEstado, () => _sort<String>((a) => a.estadoAsesor ? 'activo' : 'inactivo', 6, _sortColumnIndex != 6 || !_sortAscending), 6),
+        const SizedBox(width: _wAcciones),
+      ]),
+    );
+  }
+
+  Widget _filaEscritorio(Asesor a) {
+    final docTxt = '${a.tipodocAsesor ?? ''} ${a.docAsesor ?? ''}'.trim();
+    return InkWell(
+      onTap: () => _abrirEditar(a),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE)))),
+        child: Row(children: [
+          SizedBox(width: _wId, child: Text(a.id.toString(), style: const TextStyle(fontSize: 13))),
+          SizedBox(width: _wNombre, child: Text(a.nombreAsesor, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+          SizedBox(width: _wDoc, child: Text(docTxt, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+          SizedBox(width: _wTel, child: Text(a.telAsesor ?? '', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+          SizedBox(width: _wCorreo, child: Text(a.correoAsesor ?? '', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+          SizedBox(width: _wPorc, child: Text(a.porccomAsesor?.toString() ?? '', style: const TextStyle(fontSize: 13))),
+          SizedBox(width: _wEstado, child: _chip(a.estadoAsesor)),
+          SizedBox(width: _wAcciones, child: Row(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(tooltip: 'Editar', icon: const Icon(Icons.edit, size: 18), onPressed: () => _abrirEditar(a)),
+            IconButton(tooltip: 'Eliminar', icon: const Icon(Icons.delete_outline, size: 18), onPressed: () => _eliminar(a)),
+          ])),
+        ]),
+      ),
+    );
+  }
+
+  Widget _vistaEscritorio(List<Asesor> data) {
+    return Scrollbar(
+      controller: _horizontalCtrl,
+      thumbVisibility: true,
+      notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
+      child: SingleChildScrollView(
+        controller: _horizontalCtrl,
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: _totalAncho + 16,
+          child: Column(children: [
+            _encabezado(),
+            Expanded(
+              child: Scrollbar(
+                controller: _verticalCtrl,
+                thumbVisibility: true,
+                child: ListView.builder(
+                  controller: _verticalCtrl,
+                  itemCount: data.length,
+                  itemExtent: 44,
+                  itemBuilder: (_, i) => _filaEscritorio(data[i]),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   @override
@@ -175,10 +358,17 @@ class _ListaAsesoresState extends State<ListaAsesores> {
               children: [
                 TextField(
                   controller: _buscarCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Buscar (ID, nombre, doc, tel, correo o estado)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _filtro.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Limpiar',
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => _buscarCtrl.clear(),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -190,6 +380,11 @@ class _ListaAsesoresState extends State<ListaAsesores> {
                     await _cargar();
                   },
                   title: const Text('Solo activos'),
+                  subtitle: Text(
+                    _soloActivos
+                        ? 'Mostrando solo asesores activos'
+                        : 'Mostrando todos',
+                  ),
                 ),
               ],
             ),
@@ -200,98 +395,11 @@ class _ListaAsesoresState extends State<ListaAsesores> {
                 ? const Center(child: CircularProgressIndicator())
                 : data.isEmpty
                     ? const Center(child: Text('No hay asesores.'))
-                    : Scrollbar(
-                        controller: _verticalCtrl,
-                        thumbVisibility: true,
-                        child: SingleChildScrollView(
-                          controller: _verticalCtrl,
-                          child: Scrollbar(
-                            controller: _horizontalCtrl,
-                            thumbVisibility: true,
-                            child: SingleChildScrollView(
-                              controller: _horizontalCtrl,
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                sortColumnIndex: _sortColumnIndex,
-                                sortAscending: _sortAscending,
-                                columns: [
-                                  DataColumn(
-                                    label: const Text('ID'),
-                                    onSort: (i, asc) => _sort<num>((a) => a.id, i, asc),
-                                  ),
-                                  DataColumn(
-                                    label: const Text('Nombre'),
-                                    onSort: (i, asc) =>
-                                        _sort<String>((a) => a.nombreAsesor.toLowerCase(), i, asc),
-                                  ),
-                                  DataColumn(
-                                    label: const Text('Documento'),
-                                    onSort: (i, asc) =>
-                                        _sort<String>((a) => (a.docAsesor ?? ''), i, asc),
-                                  ),
-                                  DataColumn(
-                                    label: const Text('Teléfono'),
-                                  ),
-                                  DataColumn(
-                                    label: const Text('Correo'),
-                                  ),
-                                  DataColumn(
-                                    label: const Text('%'),
-                                    onSort: (i, asc) =>
-                                        _sort<num>((a) => a.porccomAsesor ?? 0, i, asc),
-                                  ),
-                                  DataColumn(
-                                    label: const Text('Estado'),
-                                  ),
-                                  const DataColumn(label: Text('Acciones')),
-                                ],
-                                rows: data.map((a) {
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(Text(a.id.toString())),
-                                      DataCell(Text(a.nombreAsesor)),
-                                      DataCell(Text(
-                                          '${a.tipodocAsesor ?? ''} ${a.docAsesor ?? ''}')),
-                                      DataCell(Text(a.telAsesor ?? '')),
-                                      DataCell(Text(a.correoAsesor ?? '')),
-                                      DataCell(Text(a.porccomAsesor?.toString() ?? '')),
-                                      DataCell(
-                                        Chip(
-                                          label: Text(
-                                            a.estadoAsesor ? 'Activo' : 'Inactivo',
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Row(
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.edit),
-                                              onPressed: () async {
-                                                await Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        FormAsesor(asesor: a),
-                                                  ),
-                                                );
-                                                _cargar();
-                                              },
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete_outline),
-                                              onPressed: () => _eliminar(a),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          ),
-                        ),
+                    : LayoutBuilder(
+                        builder: (context, constraints) =>
+                            constraints.maxWidth < 600
+                                ? _vistaMovil(data)
+                                : _vistaEscritorio(data),
                       ),
           ),
         ],

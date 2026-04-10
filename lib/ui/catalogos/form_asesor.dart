@@ -25,11 +25,8 @@ class _FormAsesorState extends State<FormAsesor> {
   late final TextEditingController correoCtrl;
   late final TextEditingController porccomCtrl;
 
-  final List<String> tiposDoc = const ['CC', 'CE', 'NIT', 'PAS', 'OTRO'];
+  static const List<String> tiposDocNormalizados = ['CC', 'CE', 'NIT', 'PAS', 'OTRO'];
   String? tipoDocSel;
-
-  List<String> get tiposDocNormalizados =>
-      tiposDoc.map((e) => e.trim().toUpperCase()).toSet().toList();
 
   bool estadoAsesor = true;
 
@@ -57,9 +54,7 @@ class _FormAsesorState extends State<FormAsesor> {
 
     estadoAsesor = widget.asesor?.estadoAsesor ?? true;
 
-    if (docCtrl.text.trim().isEmpty) {
-      tipoDocSel = null;
-    }
+    if (docCtrl.text.trim().isEmpty) tipoDocSel = null;
 
     docCtrl.addListener(() {
       final doc = docCtrl.text.trim();
@@ -125,12 +120,10 @@ class _FormAsesorState extends State<FormAsesor> {
   num? _parseNumeroONull(String v) {
     final t = v.trim();
     if (t.isEmpty) return null;
-
     final limpio = t
         .replaceAll(RegExp(r'[^0-9,.\-]'), '')
         .replaceAll('.', '')
         .replaceAll(',', '.');
-
     return num.tryParse(limpio);
   }
 
@@ -207,218 +200,226 @@ class _FormAsesorState extends State<FormAsesor> {
     }
   }
 
+  Widget _seccion(String titulo, List<Widget> campos) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              titulo,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const Divider(height: 18),
+            ...campos,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fila2(Widget a, Widget b) {
+    final w = MediaQuery.of(context).size.width;
+    if (w < 700) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [a, const SizedBox(height: 12), b],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: a),
+        const SizedBox(width: 16),
+        Expanded(child: b),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(esEdicion ? 'Editar asesor' : 'Nuevo asesor'),
         actions: [
-          TextButton.icon(
-            onPressed: guardando ? null : _guardar,
-            icon: const Icon(Icons.save),
-            label: Text(guardando ? 'Guardando...' : 'Guardar'),
-          ),
+          if (guardando)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: cargandoId ? null : _guardar,
+              icon: const Icon(Icons.save),
+              label: const Text('Guardar'),
+            ),
           const SizedBox(width: 8),
         ],
       ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 860),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    Card(
-                      elevation: 1,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            const Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Datos principales',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: idCtrl,
-                              enabled: !esEdicion,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: esEdicion ? 'ID' : 'ID sugerido',
-                                border: const OutlineInputBorder(),
-                                suffixIcon: cargandoId
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(12),
-                                        child: SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              validator: _validarId,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: nombreCtrl,
-                              textInputAction: TextInputAction.next,
-                              autofillHints: const [AutofillHints.name],
-                              decoration: const InputDecoration(
-                                labelText: 'Nombre *',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: (v) {
-                                final limpio = _limpiarONull(v ?? '');
-                                return limpio == null ? 'Requerido' : null;
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 2,
-                                  child: DropdownButtonFormField<String>(
-                                    value: tiposDocNormalizados.contains(tipoDocSel)
-                                        ? tipoDocSel
-                                        : null,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Tipo de documento',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    items: tiposDocNormalizados
-                                        .map(
-                                          (t) => DropdownMenuItem<String>(
-                                            value: t,
-                                            child: Text(t),
-                                          ),
-                                        )
-                                        .toList(),
-                                    onChanged: (v) {
-                                      setState(() => tipoDocSel = v);
-                                      if ((v ?? '').trim().isEmpty) {
-                                        docCtrl.text = '';
-                                      }
-                                    },
-                                  ),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // ── 1. Datos principales ─────────────────────────────────────
+                _seccion('Datos principales', [
+                  _fila2(
+                    TextFormField(
+                      controller: idCtrl,
+                      enabled: !esEdicion,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: esEdicion ? 'ID' : 'ID sugerido',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: cargandoId
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  flex: 3,
-                                  child: TextFormField(
-                                    controller: docCtrl,
-                                    textInputAction: TextInputAction.next,
-                                    keyboardType: TextInputType.text,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Documento',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: porccomCtrl,
-                              textInputAction: TextInputAction.next,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(
-                                labelText: '% comisión',
-                                helperText: 'Ej: 70 o 70,5',
-                                border: OutlineInputBorder(),
-                              ),
-                              onEditingComplete: () {
-                                _formatearPorcentaje();
-                                FocusScope.of(context).nextFocus();
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Card(
-                      elevation: 1,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            const Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Contacto',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: telCtrl,
-                                    textInputAction: TextInputAction.next,
-                                    keyboardType: TextInputType.phone,
-                                    autofillHints: const [AutofillHints.telephoneNumber],
-                                    decoration: const InputDecoration(
-                                      labelText: 'Teléfono',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: correoCtrl,
-                                    textInputAction: TextInputAction.done,
-                                    keyboardType: TextInputType.emailAddress,
-                                    autofillHints: const [AutofillHints.email],
-                                    decoration: const InputDecoration(
-                                      labelText: 'Correo',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    validator: _validarCorreo,
-                                    onFieldSubmitted: (_) => guardando ? null : _guardar(),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            SwitchListTile(
-                              value: estadoAsesor,
-                              onChanged: (v) => setState(() => estadoAsesor = v),
-                              title: const Text('Asesor activo'),
-                              subtitle: Text(estadoAsesor ? 'Activo' : 'Inactivo'),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: guardando ? null : _guardar,
-                        icon: guardando
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : const Icon(Icons.save),
-                        label: Text(guardando ? 'Guardando...' : 'Guardar'),
+                            : null,
+                      ),
+                      validator: _validarId,
+                    ),
+                    TextFormField(
+                      controller: nombreCtrl,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.name],
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre *',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) {
+                        final limpio = _limpiarONull(v ?? '');
+                        return limpio == null ? 'Requerido' : null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: DropdownButtonFormField<String>(
+                          value: tiposDocNormalizados.contains(tipoDocSel)
+                              ? tipoDocSel
+                              : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Tipo de documento',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: tiposDocNormalizados
+                              .map((t) => DropdownMenuItem<String>(
+                                    value: t,
+                                    child: Text(t),
+                                  ))
+                              .toList(),
+                          onChanged: (v) {
+                            setState(() => tipoDocSel = v);
+                            if ((v ?? '').trim().isEmpty) docCtrl.text = '';
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 3,
+                        child: TextFormField(
+                          controller: docCtrl,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Documento',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: porccomCtrl,
+                    textInputAction: TextInputAction.next,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: '% Comisión',
+                      helperText: 'Ej: 70 o 70,5',
+                      border: OutlineInputBorder(),
+                    ),
+                    onEditingComplete: () {
+                      _formatearPorcentaje();
+                      FocusScope.of(context).nextFocus();
+                    },
+                  ),
+                ]),
+
+                // ── 2. Contacto ──────────────────────────────────────────────
+                _seccion('Contacto', [
+                  _fila2(
+                    TextFormField(
+                      controller: telCtrl,
+                      textInputAction: TextInputAction.next,
+                      keyboardType: TextInputType.phone,
+                      autofillHints: const [AutofillHints.telephoneNumber],
+                      decoration: const InputDecoration(
+                        labelText: 'Teléfono',
+                        border: OutlineInputBorder(),
                       ),
                     ),
-                  ],
+                    TextFormField(
+                      controller: correoCtrl,
+                      textInputAction: TextInputAction.done,
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.email],
+                      decoration: const InputDecoration(
+                        labelText: 'Correo',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: _validarCorreo,
+                      onFieldSubmitted: (_) => guardando ? null : _guardar(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    value: estadoAsesor,
+                    onChanged: (v) => setState(() => estadoAsesor = v),
+                    title: const Text('Asesor activo'),
+                    subtitle: Text(estadoAsesor ? 'Activo' : 'Inactivo'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ]),
+
+                FilledButton.icon(
+                  onPressed: (guardando || cargandoId) ? null : _guardar,
+                  icon: guardando
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save),
+                  label: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(guardando ? 'Guardando...' : 'Guardar asesor'),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),

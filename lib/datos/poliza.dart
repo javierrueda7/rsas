@@ -30,6 +30,10 @@ class Poliza {
   final num? porcomadicPoliza;
   final num? vlrcomadicPoliza;
   final num? porcomAsesor1;
+  final num? porcomAsesor2;
+  final num? porcomAsesor3;
+  final num? porcomAsesorad;
+  final num? porcomAgenciaad;
 
   final int? agenciaId;
   final int? formaPagoId;
@@ -87,6 +91,10 @@ class Poliza {
     this.porcomadicPoliza,
     this.vlrcomadicPoliza,
     this.porcomAsesor1,
+    this.porcomAsesor2,
+    this.porcomAsesor3,
+    this.porcomAsesorad,
+    this.porcomAgenciaad,
     this.agenciaId,
     this.formaPagoId,
     this.estadoPolizaId,
@@ -164,6 +172,10 @@ class Poliza {
         porcomadicPoliza: _toNum(m['porcomadic_poliza']),
         vlrcomadicPoliza: _toNum(m['vlrcomadic_poliza']),
         porcomAsesor1: _toNum(m['porcom_asesor1']),
+        porcomAsesor2: _toNum(m['porcom_asesor2']),
+        porcomAsesor3: _toNum(m['porcom_asesor3']),
+        porcomAsesorad: _toNum(m['porcom_asesorad']),
+        porcomAgenciaad: _toNum(m['porcom_agenciaad']),
         agenciaId: _toInt(m['agencia_id']),
         formaPagoId: _toInt(m['forma_pago_id']),
         estadoPolizaId: _toText(m['estado_poliza_id']),
@@ -214,6 +226,10 @@ class Poliza {
         'porcomadic_poliza': porcomadicPoliza,
         'vlrcomadic_poliza': vlrcomadicPoliza,
         'porcom_asesor1': porcomAsesor1,
+        'porcom_asesor2': porcomAsesor2,
+        'porcom_asesor3': porcomAsesor3,
+        'porcom_asesorad': porcomAsesorad,
+        'porcom_agenciaad': porcomAgenciaad,
         'agencia_id': agenciaId,
         'forma_pago_id': formaPagoId,
         'estado_poliza_id': estadoPolizaId,

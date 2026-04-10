@@ -1,3 +1,46 @@
+// ─── Helpers de conversión de tipos (compartidos por todos los modelos) ──────
+
+int _toInt(dynamic v) {
+  if (v == null) return 0;
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse(v.toString()) ?? 0;
+}
+
+int? _toIntOrNull(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse(v.toString());
+}
+
+bool _toBool(dynamic v, {bool fallback = true}) {
+  if (v == null) return fallback;
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  final s = v.toString().toLowerCase().trim();
+  return s == 'true' || s == '1' || s == 't';
+}
+
+num? _toNumOrNull(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v;
+  return num.tryParse(v.toString());
+}
+
+num _toNumWithDefault(dynamic v, {num def = 100}) {
+  if (v == null) return def;
+  if (v is num) return v;
+  return num.tryParse(v.toString()) ?? def;
+}
+
+String? _toTextOrNull(dynamic v) {
+  final s = (v ?? '').toString().trim();
+  return s.isEmpty ? null : s;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 class Cliente {
   final int id;
   final String nombreCliente;
@@ -34,28 +77,6 @@ class Cliente {
     this.estadoCliente = true,
     this.recordarCliente = false,
   });
-
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
-  static int? _toIntOrNull(dynamic v) {
-    if (v == null) return null;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString());
-  }
-
-  static bool _toBool(dynamic v, {bool fallback = false}) {
-    if (v == null) return fallback;
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    final s = v.toString().toLowerCase().trim();
-    return s == 'true' || s == '1' || s == 't';
-  }
 
   factory Cliente.fromMap(Map<String, dynamic> m) {
     final munic = m['municipio'];
@@ -130,13 +151,6 @@ class Municipio {
     required this.nombreMunic,
   });
 
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
   factory Municipio.fromMap(Map<String, dynamic> m) => Municipio(
         id: _toInt(m['id']),
         nombreMunic: (m['nombre_munic'] ?? '') as String,
@@ -164,27 +178,6 @@ class Asesor {
     this.estadoAsesor = true,
   });
 
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
-  static num? _toNum(dynamic v) {
-    if (v == null) return null;
-    if (v is num) return v;
-    return num.tryParse(v.toString());
-  }
-
-  static bool _toBool(dynamic v, {bool fallback = true}) {
-    if (v == null) return fallback;
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    final s = v.toString().toLowerCase().trim();
-    return s == 'true' || s == '1' || s == 't';
-  }
-
   factory Asesor.fromMap(Map<String, dynamic> m) => Asesor(
         id: _toInt(m['id']),
         nombreAsesor: (m['nombre_asesor'] ?? '') as String,
@@ -192,8 +185,8 @@ class Asesor {
         docAsesor: m['doc_asesor'] as String?,
         telAsesor: m['tel_asesor'] as String?,
         correoAsesor: m['correo_asesor'] as String?,
-        porccomAsesor: _toNum(m['porccom_asesor']),
-        estadoAsesor: _toBool(m['estado_asesor'], fallback: true),
+        porccomAsesor: _toNumOrNull(m['porccom_asesor']),
+        estadoAsesor: _toBool(m['estado_asesor']),
       );
 
   Map<String, dynamic> toInsertMap() => {
@@ -222,27 +215,12 @@ class Aseguradora {
     this.estadoAseg = true,
   });
 
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
-  static bool _toBool(dynamic v, {bool fallback = true}) {
-    if (v == null) return fallback;
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    final s = v.toString().toLowerCase().trim();
-    return s == 'true' || s == '1' || s == 't';
-  }
-
   factory Aseguradora.fromMap(Map<String, dynamic> m) => Aseguradora(
         id: _toInt(m['id']),
         nombreAseg: (m['nombre_aseg'] ?? '') as String,
         nitAseg: m['nit_aseg'] as String?,
         clave: m['clave'] as String?,
-        estadoAseg: _toBool(m['estado_aseg'], fallback: true),
+        estadoAseg: _toBool(m['estado_aseg']),
       );
 
   Map<String, dynamic> toInsertMap() => {
@@ -268,33 +246,12 @@ class Ramo {
     this.porcomBaseRamo = 100,
   });
 
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
-  static num _toNum(dynamic v, {num def = 100}) {
-    if (v == null) return def;
-    if (v is num) return v;
-    return num.tryParse(v.toString()) ?? def;
-  }
-
-  static bool _toBool(dynamic v, {bool fallback = true}) {
-    if (v == null) return fallback;
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    final s = v.toString().toLowerCase().trim();
-    return s == 'true' || s == '1' || s == 't';
-  }
-
   factory Ramo.fromMap(Map<String, dynamic> m) => Ramo(
         id: _toInt(m['id']),
         nombreRamo: (m['nombre_ramo'] ?? '') as String,
-        estadoRamo: _toBool(m['estado_ramo'], fallback: true),
+        estadoRamo: _toBool(m['estado_ramo']),
         obsRamo: m['obs_ramo'] as String?,
-        porcomBaseRamo: _toNum(m['porcom_base_ramo'], def: 100),
+        porcomBaseRamo: _toNumWithDefault(m['porcom_base_ramo'], def: 100),
       );
 
   Map<String, dynamic> toInsertMap() => {
@@ -332,38 +289,12 @@ class Producto {
     this.obsProd,
   });
 
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
-  static num? _toNumOrNull(dynamic v) {
-    if (v == null) return null;
-    if (v is num) return v;
-    return num.tryParse(v.toString());
-  }
-
-  static bool _toBool(dynamic v, {bool fallback = true}) {
-    if (v == null) return fallback;
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    final s = v.toString().toLowerCase().trim();
-    return s == 'true' || s == '1' || s == 't';
-  }
-
-  static String? _toTextOrNull(dynamic v) {
-    final s = (v ?? '').toString().trim();
-    return s.isEmpty ? null : s;
-  }
-
   factory Producto.fromMap(Map<String, dynamic> m) => Producto(
         id: _toInt(m['id']),
         nombreProd: (m['nombre_prod'] ?? '') as String,
         ramoId: _toInt(m['ramo_id']),
         aseguradoraId: _toInt(m['aseguradora_id']),
-        estadoProd: _toBool(m['estado_prod'], fallback: true),
+        estadoProd: _toBool(m['estado_prod']),
         comisionProd: _toNumOrNull(m['vlrfijocom_prod']),
         porcomProd: _toNumOrNull(m['porccom_prod']),
         descProd: _toTextOrNull(m['desc_prod']),
@@ -403,28 +334,6 @@ class Usuario {
     this.estadoUsuario = true,
   });
 
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
-  static int? _toIntOrNull(dynamic v) {
-    if (v == null) return null;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString());
-  }
-
-  static bool _toBool(dynamic v, {bool fallback = true}) {
-    if (v == null) return fallback;
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    final s = v.toString().toLowerCase().trim();
-    return s == 'true' || s == '1' || s == 't';
-  }
-
   factory Usuario.fromMap(Map<String, dynamic> m) => Usuario(
         id: _toInt(m['id']),
         apodoUsuario: (m['apodo_usuario'] ?? '') as String,
@@ -456,21 +365,6 @@ class Intermediario {
     this.estadoInterm = true,
   });
 
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
-  static bool _toBool(dynamic v, {bool fallback = true}) {
-    if (v == null) return fallback;
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    final s = v.toString().toLowerCase().trim();
-    return s == 'true' || s == '1' || s == 't';
-  }
-
   factory Intermediario.fromMap(Map<String, dynamic> m) => Intermediario(
         id: _toInt(m['id']),
         nombreInterm: (m['nombre_interm'] ?? '') as String,
@@ -480,6 +374,25 @@ class Intermediario {
   Map<String, dynamic> toInsertMap() => {
         'nombre_interm': nombreInterm,
         'estado_interm': estadoInterm,
+      };
+}
+
+class FormaExpedicion {
+  final int id;
+  final String nombreFormaexp;
+  final String? descFormaexp;
+
+  FormaExpedicion({required this.id, required this.nombreFormaexp, this.descFormaexp});
+
+  factory FormaExpedicion.fromMap(Map<String, dynamic> m) => FormaExpedicion(
+        id: _toInt(m['id']),
+        nombreFormaexp: (m['nombre_formaexp'] ?? '') as String,
+        descFormaexp: _toTextOrNull(m['desc_formaexp']),
+      );
+
+  Map<String, dynamic> toInsertMap() => {
+        'nombre_formaexp': nombreFormaexp,
+        'desc_formaexp': descFormaexp,
       };
 }
 
@@ -494,21 +407,6 @@ class FormaPago {
     this.estadoFormaPago = true,
   });
 
-  static int _toInt(dynamic v) {
-    if (v == null) return 0;
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
-  }
-
-  static bool _toBool(dynamic v, {bool fallback = true}) {
-    if (v == null) return fallback;
-    if (v is bool) return v;
-    if (v is num) return v != 0;
-    final s = v.toString().toLowerCase().trim();
-    return s == 'true' || s == '1' || s == 't';
-  }
-
   factory FormaPago.fromMap(Map<String, dynamic> m) => FormaPago(
         id: _toInt(m['id']),
         nombreFormaPago: (m['nombre_forma_pago'] ?? '') as String,
@@ -520,4 +418,3 @@ class FormaPago {
         'estado_forma_pago': estadoFormaPago,
       };
 }
-

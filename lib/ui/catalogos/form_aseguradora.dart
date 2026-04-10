@@ -176,129 +176,168 @@ class _FormAseguradoraState extends State<FormAseguradora> {
     }
   }
 
+  Widget _seccion(String titulo, List<Widget> campos) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              titulo,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const Divider(height: 18),
+            ...campos,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fila2(Widget a, Widget b) {
+    final w = MediaQuery.of(context).size.width;
+    if (w < 700) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [a, const SizedBox(height: 12), b],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: a),
+        const SizedBox(width: 16),
+        Expanded(child: b),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(esEdicion ? 'Editar aseguradora' : 'Nueva aseguradora'),
         actions: [
-          TextButton.icon(
-            onPressed: guardando ? null : _guardar,
-            icon: const Icon(Icons.save),
-            label: Text(guardando ? 'Guardando...' : 'Guardar'),
-          ),
+          if (guardando)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: cargandoId ? null : _guardar,
+              icon: const Icon(Icons.save),
+              label: const Text('Guardar'),
+            ),
           const SizedBox(width: 8),
         ],
       ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Card(
-                elevation: 1,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        TextFormField(
-                          controller: idCtrl,
-                          enabled: !esEdicion,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: esEdicion ? 'ID' : 'ID sugerido',
-                            border: const OutlineInputBorder(),
-                            suffixIcon: cargandoId
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                          ),
-                          validator: _validarId,
-                        ),
-                        const SizedBox(height: 12),
-
-                        TextFormField(
-                          controller: nombreCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Nombre *',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (v) {
-                            final limpio = _limpiarONull(v ?? '');
-                            return limpio == null ? 'Requerido' : null;
-                          },
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 12),
-
-                        TextFormField(
-                          controller: nitCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'NIT (opcional)',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: _validarNit,
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 12),
-
-                        TextFormField(
-                          controller: claveCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Clave (opcional)',
-                            border: OutlineInputBorder(),
-                            helperText: 'Solo letras y números (sin espacios)',
-                          ),
-                          validator: _validarClave,
-                          textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) => guardando ? null : _guardar(),
-                        ),
-                        const SizedBox(height: 12),
-
-                        SwitchListTile(
-                          value: estadoAseg,
-                          onChanged: (v) => setState(() => estadoAseg = v),
-                          title: const Text('Activa'),
-                          subtitle: const Text(
-                            'Si está inactiva, puedes ocultarla en dropdowns (si luego filtras por estado).',
-                          ),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        const SizedBox(height: 8),
-
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton.icon(
-                            onPressed: guardando ? null : _guardar,
-                            icon: guardando
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.save),
-                            label: Text(guardando ? 'Guardando...' : 'Guardar'),
-                          ),
-                        ),
-                      ],
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // ── 1. Identificación ────────────────────────────────────────
+                _seccion('Identificación', [
+                  _fila2(
+                    TextFormField(
+                      controller: idCtrl,
+                      enabled: !esEdicion,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: esEdicion ? 'ID' : 'ID sugerido',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: cargandoId
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
+                                ),
+                              )
+                            : null,
+                      ),
+                      validator: _validarId,
+                    ),
+                    TextFormField(
+                      controller: nombreCtrl,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre *',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) {
+                        final limpio = _limpiarONull(v ?? '');
+                        return limpio == null ? 'Requerido' : null;
+                      },
                     ),
                   ),
+                ]),
+
+                // ── 2. Datos adicionales ─────────────────────────────────────
+                _seccion('Datos adicionales', [
+                  _fila2(
+                    TextFormField(
+                      controller: nitCtrl,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'NIT (opcional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: _validarNit,
+                    ),
+                    TextFormField(
+                      controller: claveCtrl,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        labelText: 'Clave (opcional)',
+                        helperText: 'Solo letras y números (sin espacios)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: _validarClave,
+                      onFieldSubmitted: (_) => guardando ? null : _guardar(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    value: estadoAseg,
+                    onChanged: (v) => setState(() => estadoAseg = v),
+                    title: const Text('Activa'),
+                    subtitle: Text(estadoAseg ? 'Activa' : 'Inactiva'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ]),
+
+                FilledButton.icon(
+                  onPressed: (guardando || cargandoId) ? null : _guardar,
+                  icon: guardando
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save),
+                  label: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child:
+                        Text(guardando ? 'Guardando...' : 'Guardar aseguradora'),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
