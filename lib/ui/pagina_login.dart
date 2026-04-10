@@ -92,7 +92,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
                   children: [
                     // ── Logo / encabezado ──────────────────────────────────────
                     Image.asset(
-                      'assets/images/LogoRuedaSerranoFondoBlanco2.png',
+                      'assets/images/LogoRuedaSerranoFondoTransparente2.png',
                       height: 140,
                     ),
                     const SizedBox(height: 12),
