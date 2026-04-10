@@ -70,8 +70,7 @@ class IntermediarioLite {
 
 /// Formatea números al estilo colombiano (1.234.567,89) mientras el usuario escribe.
 class _ColMoneyInputFormatter extends TextInputFormatter {
-  final int decimales;
-  _ColMoneyInputFormatter({this.decimales = 2});
+  const _ColMoneyInputFormatter();
 
   @override
   TextEditingValue formatEditUpdate(
@@ -91,7 +90,7 @@ class _ColMoneyInputFormatter extends TextInputFormatter {
     final negativo = entera.startsWith('-');
     final enteroFmt = _formatMiles(enteroNum);
     final resultado = '${negativo ? '-' : ''}$enteroFmt'
-        '${decimal != null ? ',${decimal.substring(0, decimal.length > decimales ? decimales : decimal.length)}' : ''}';
+        '${decimal != null ? ',${decimal.substring(0, decimal.length > 2 ? 2 : decimal.length)}' : ''}';
 
     return newValue.copyWith(
       text: resultado,

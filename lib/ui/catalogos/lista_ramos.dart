@@ -19,7 +19,7 @@ class _ListaRamosState extends State<ListaRamos> {
   final TextEditingController _buscarCtrl = TextEditingController();
   String _filtro = '';
 
-  bool _soloActivos = false;
+  bool _soloActivos = true;
 
   final ScrollController _verticalCtrl = ScrollController();
   final ScrollController _horizontalCtrl = ScrollController();

@@ -7,9 +7,12 @@ class RepositorioPolizas {
   static const String _tabla = 'polizas';
   static const String _vista = 'vw_polizas_busqueda';
 
-  Future<List<Poliza>> listar({String busqueda = '', int limite = 500}) async {
+  /// Carga rápida: devuelve los [limite] registros más recientes.
+  Future<List<Poliza>> listar({
+    String busqueda = '',
+    int limite = 500,
+  }) async {
     final b = busqueda.trim();
-
     dynamic query = _db.from(_vista).select();
 
     if (b.isNotEmpty) {
@@ -32,9 +35,58 @@ class RepositorioPolizas {
     }
 
     final res = await query.order('fcreado', ascending: false).limit(limite);
-
     final rows = (res as List).cast<Map<String, dynamic>>();
     return rows.map(Poliza.fromMap).toList();
+  }
+
+  /// Carga completa: trae todas las pólizas en páginas de [_pageSize] filas.
+  /// Llama [onProgreso] después de cada página con el total acumulado.
+  static const int _pageSize = 1000;
+
+  Future<List<Poliza>> listarTodos({
+    String busqueda = '',
+    void Function(int cargados)? onProgreso,
+  }) async {
+    final b = busqueda.trim();
+    final List<Poliza> todos = [];
+    int desde = 0;
+
+    while (true) {
+      dynamic query = _db.from(_vista).select();
+
+      if (b.isNotEmpty) {
+        query = query.or(
+          'nro_poliza.ilike.%$b%,'
+          'nombre_cliente.ilike.%$b%,'
+          'doc_cliente.ilike.%$b%,'
+          'nombre_asesor.ilike.%$b%,'
+          'nombre_ramo.ilike.%$b%,'
+          'nombre_prod.ilike.%$b%,'
+          'nombre_aseg.ilike.%$b%,'
+          'nombre_interm.ilike.%$b%,'
+          'nombre_forma_pago.ilike.%$b%,'
+          'nombre_formaexp.ilike.%$b%,'
+          'nombre_usuario.ilike.%$b%,'
+          'apodo_usuario.ilike.%$b%,'
+          'bien_asegurado.ilike.%$b%,'
+          'obs_poliza.ilike.%$b%',
+        );
+      }
+
+      final res = await query
+          .order('fcreado', ascending: false)
+          .range(desde, desde + _pageSize - 1);
+
+      final rows = (res as List).cast<Map<String, dynamic>>();
+      todos.addAll(rows.map(Poliza.fromMap));
+
+      onProgreso?.call(todos.length);
+
+      if (rows.length < _pageSize) break; // última página
+      desde += _pageSize;
+    }
+
+    return todos;
   }
 
   Future<Poliza?> obtenerPoliza(int id) async {

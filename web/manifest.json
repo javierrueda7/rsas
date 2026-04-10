@@ -1,11 +1,11 @@
 {
-    "name": "seguimiento_polizas",
-    "short_name": "seguimiento_polizas",
+    "name": "SegurApp - Rueda Serrano Asesores de Seguros",
+    "short_name": "SegurApp",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Sistema de seguimiento de pólizas - Rueda Serrano Asesores de Seguros.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

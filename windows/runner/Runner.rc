@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "seguimiento_polizas" "\0"
+            VALUE "CompanyName", "Rueda Serrano Asesores de Seguros" "\0"
+            VALUE "FileDescription", "SegurApp" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "seguimiento_polizas" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "InternalName", "SegurApp" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Rueda Serrano Asesores de Seguros. All rights reserved." "\0"
             VALUE "OriginalFilename", "seguimiento_polizas.exe" "\0"
-            VALUE "ProductName", "seguimiento_polizas" "\0"
+            VALUE "ProductName", "SegurApp" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

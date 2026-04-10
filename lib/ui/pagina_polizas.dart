@@ -23,14 +23,15 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
 
   bool cargando = false;
   List<Poliza> polizas = [];
-  bool _limitado = false;
+  int _cargados = 0;            // progreso de carga total
+  bool _datosCompletos = false; // true cuando ya se cargaron todos
 
   // Columnas:
   // 0  Cód.          1  Nro Póliza    2  Bien Asegurado
   // 3  Cliente        4  Aseguradora   5  Ramo/Prod
   // 6  F. Ini.        7  F. Venc.      8  Prima
   // 9  Valor         10  F. Exp.      11  Asesor
-  // 12 Usuario       13  (acciones)
+  // 12 F. Registro   13  Usuario      14  (acciones)
   int _sortColumnIndex = 0;
   bool _sortAscending = false;
 
@@ -54,17 +55,16 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
     super.dispose();
   }
 
-  Future<void> _cargar({bool silencioso = false}) async {
-    if (!silencioso && mounted) setState(() => cargando = true);
+  /// Carga inicial rápida: 500 más recientes.
+  Future<void> _cargar() async {
+    final busqueda = ctrlBuscar.text.trim();
+    if (cargando) return;
+    if (mounted) setState(() { cargando = true; _datosCompletos = false; });
     try {
-      final busqueda = ctrlBuscar.text.trim();
-      // Sin búsqueda: 500 más recientes. Con búsqueda: hasta 2000.
-      final limite = busqueda.isEmpty ? 500 : 2000;
-      final data = await repo.listar(busqueda: busqueda, limite: limite);
+      final data = await repo.listar(busqueda: busqueda, limite: 500);
       if (mounted) {
         setState(() {
           polizas = data;
-          _limitado = busqueda.isEmpty && data.length >= 500;
           _aplicarOrden();
         });
       }
@@ -75,7 +75,37 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         );
       }
     } finally {
-      if (!silencioso && mounted) setState(() => cargando = false);
+      if (mounted) setState(() => cargando = false);
+    }
+  }
+
+  /// Carga completa paginada: trae todos los registros de a 1.000.
+  Future<void> _cargarTodo() async {
+    if (cargando) return;
+    if (mounted) setState(() { cargando = true; _cargados = 0; });
+    final busqueda = ctrlBuscar.text.trim();
+    try {
+      final data = await repo.listarTodos(
+        busqueda: busqueda,
+        onProgreso: (n) {
+          if (mounted) setState(() => _cargados = n);
+        },
+      );
+      if (mounted) {
+        setState(() {
+          polizas = data;
+          _datosCompletos = true;
+          _aplicarOrden();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error cargando pólizas: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => cargando = false);
     }
   }
 
@@ -124,6 +154,10 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
                 (b.nombreAsesor ?? '').toLowerCase(),
               );
         case 12:
+          final da = a.fcreado ?? DateTime(9999);
+          final db = b.fcreado ?? DateTime(9999);
+          cmp = da.compareTo(db);
+        case 13:
           cmp = (a.apodoUsuario ?? '').toLowerCase().compareTo(
                 (b.apodoUsuario ?? '').toLowerCase(),
               );
@@ -144,12 +178,20 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
 
   void _onBuscarChanged(String _) {
     debounce?.cancel();
-    debounce = Timer(const Duration(milliseconds: 400), _cargar);
+    debounce = Timer(
+      const Duration(milliseconds: 400),
+      () => _cargar(),
+    );
   }
 
   String _fmtFecha(DateTime? fecha) {
     if (fecha == null) return '—';
     return df.format(fecha);
+  }
+
+  String _fmtFechaHora(DateTime? fecha) {
+    if (fecha == null) return '—';
+    return DateFormat('dd/MM/yyyy HH:mm').format(fecha.toLocal());
   }
 
   String _fmtNum(num? valor) {
@@ -161,7 +203,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const PaginaFormularioPolizas()),
     );
-    _cargar();
+    _datosCompletos ? _cargarTodo() : _cargar();
   }
 
   void _abrirEditar(Poliza p) async {
@@ -170,7 +212,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         builder: (_) => PaginaFormularioPolizas(poliza: p),
       ),
     );
-    _cargar();
+    _datosCompletos ? _cargarTodo() : _cargar();
   }
 
   Widget _vistaMovil(List<Poliza> data) {
@@ -343,10 +385,11 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   static const _wFecha = 90.0;
   static const _wPrima = 100.0;
   static const _wValor = 150.0;
+  static const _wFCreado = 130.0;
   static const _wUsuario = 120.0;
   static const _wAcciones = 60.0;
   static const _totalAncho = _wCod + _wNro + _wBien + _wCliente + _wAseg +
-      _wRamo + _wAsesor + _wFecha * 3 + _wPrima + _wValor + 12 + _wUsuario + _wAcciones;
+      _wRamo + _wAsesor + _wFecha * 3 + _wPrima + _wValor + 12 + _wFCreado + _wUsuario + _wAcciones;
 
   Widget _encabezadoPolizas() {
     final cs = Theme.of(context).colorScheme;
@@ -383,7 +426,8 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         const SizedBox(width: 12),
         col('F. Exp.', _wFecha, 10),
         col('Asesor', _wAsesor, 11),
-        col('Usuario', _wUsuario, 12),
+        col('F. Registro', _wFCreado, 12),
+        col('Usuario', _wUsuario, 13),
         const SizedBox(width: _wAcciones),
       ]),
     );
@@ -424,6 +468,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
           const SizedBox(width: 12),
           SizedBox(width: _wFecha, child: Text(_fmtFecha(p.fexpPoliza), style: const TextStyle(fontSize: 12))),
           SizedBox(width: _wAsesor, child: Text(p.nombreAsesor ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+          SizedBox(width: _wFCreado, child: Text(_fmtFechaHora(p.fcreado), overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
           SizedBox(width: _wUsuario, child: Text(p.apodoUsuario ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
           SizedBox(width: _wAcciones, child: IconButton(tooltip: 'Editar', icon: const Icon(Icons.edit, size: 18), onPressed: () => _abrirEditar(p))),
         ]),
@@ -479,6 +524,11 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             onPressed: _nuevaPoliza,
           ),
           IconButton(
+            tooltip: 'Recargar lista',
+            icon: const Icon(Icons.refresh),
+            onPressed: cargando ? null : () => _datosCompletos ? _cargarTodo() : _cargar(),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Catálogos',
             onPressed: () => Navigator.push(
@@ -516,20 +566,31 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
               ],
             ),
           ),
-          if (cargando) const LinearProgressIndicator(),
-          if (_limitado && !cargando)
+          if (cargando) ...[
+            const LinearProgressIndicator(),
+            if (_cargados > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Text(
+                  'Cargando... ${_cargados.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} pólizas',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ),
+          ],
+          if (!cargando && !_datosCompletos && polizas.isNotEmpty)
             MaterialBanner(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              content: const Text(
-                'Mostrando las 500 pólizas más recientes. Usa el buscador para encontrar registros anteriores.',
+              content: Text(
+                'Mostrando las ${polizas.length} pólizas más recientes.',
+                style: const TextStyle(fontSize: 13),
               ),
               leading: const Icon(Icons.info_outline, size: 20),
-              backgroundColor:
-                  Theme.of(context).colorScheme.secondaryContainer,
+              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
               actions: [
-                TextButton(
-                  onPressed: () => setState(() => _limitado = false),
-                  child: const Text('Entendido'),
+                TextButton.icon(
+                  icon: const Icon(Icons.download_outlined, size: 16),
+                  label: const Text('Cargar todas'),
+                  onPressed: _cargarTodo,
                 ),
               ],
             ),
