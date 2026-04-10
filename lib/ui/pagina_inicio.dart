@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../datos/catalogos.dart';
-import '../datos/repositorio_catalogos.dart';
 import '../datos/sesion.dart';
 import 'pagina_login.dart';
 import 'pagina_polizas.dart';
@@ -18,52 +16,13 @@ class PaginaInicio extends StatefulWidget {
 }
 
 class _PaginaInicioState extends State<PaginaInicio> {
-  final _repo = RepositorioCatalogos();
-  List<Usuario> _usuarios = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _cargarUsuarios();
-  }
-
-  Future<void> _cargarUsuarios() async {
-    try {
-      final res = await _repo.listarUsuarios(soloActivos: true);
-      if (!mounted) return;
-      setState(() => _usuarios = res);
-    } catch (_) {
-      // Si falla la carga de usuarios, la app sigue funcionando sin sesión
-    }
-  }
-
-  Future<void> _seleccionarUsuario() async {
-    if (_usuarios.isEmpty) await _cargarUsuarios();
-
-    if (!mounted) return;
-
-    final seleccionado = await showDialog<Usuario>(
-      context: context,
-      builder: (_) => _DialogoUsuario(usuarios: _usuarios),
-    );
-
-    if (seleccionado != null) {
-      Sesion.iniciar(seleccionado);
-      setState(() {});
-    }
-  }
-
   void _cerrarSesion() {
     Sesion.cerrar();
-    if (widget.appEnv != 'prod') {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => PaginaLogin(appEnv: widget.appEnv),
-        ),
-      );
-    } else {
-      setState(() {});
-    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => PaginaLogin(appEnv: widget.appEnv),
+      ),
+    );
   }
 
   @override
@@ -169,21 +128,11 @@ class _PaginaInicioState extends State<PaginaInicio> {
                           ],
                         ),
                       ),
-                      if (usuarioActivo != null)
-                        IconButton(
-                          tooltip: 'Cerrar sesión',
-                          icon: const Icon(Icons.logout, size: 18),
-                          onPressed: _cerrarSesion,
-                        ),
-                      // En dev el cambio de usuario requiere re-autenticación
-                      if (widget.appEnv == 'prod')
-                        TextButton.icon(
-                          icon: const Icon(Icons.swap_horiz, size: 16),
-                          label: Text(
-                            usuarioActivo != null ? 'Cambiar' : 'Iniciar',
-                          ),
-                          onPressed: _seleccionarUsuario,
-                        ),
+                      IconButton(
+                        tooltip: 'Cerrar sesión',
+                        icon: const Icon(Icons.logout, size: 18),
+                        onPressed: _cerrarSesion,
+                      ),
                     ],
                   ),
                 ),
@@ -245,101 +194,6 @@ class _PaginaInicioState extends State<PaginaInicio> {
           ),
         ),
       ),
-    );
-  }
-}
-
-// ── Diálogo de selección de usuario ──────────────────────────────────────────
-
-class _DialogoUsuario extends StatefulWidget {
-  final List<Usuario> usuarios;
-
-  const _DialogoUsuario({required this.usuarios});
-
-  @override
-  State<_DialogoUsuario> createState() => _DialogoUsuarioState();
-}
-
-class _DialogoUsuarioState extends State<_DialogoUsuario> {
-  String _filtro = '';
-
-  List<Usuario> get _filtrados {
-    if (_filtro.isEmpty) return widget.usuarios;
-    final q = _filtro.toLowerCase();
-    return widget.usuarios.where((u) {
-      return u.apodoUsuario.toLowerCase().contains(q) ||
-          u.nombreUsuario.toLowerCase().contains(q);
-    }).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filtrados = _filtrados;
-
-    return AlertDialog(
-      title: const Text('Seleccionar usuario'),
-      contentPadding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
-      content: SizedBox(
-        width: 380,
-        height: 440,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: TextField(
-                autofocus: true,
-                onChanged: (v) => setState(() => _filtro = v),
-                decoration: const InputDecoration(
-                  hintText: 'Buscar...',
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-            ),
-            if (widget.usuarios.isEmpty)
-              const Expanded(
-                child: Center(child: Text('No hay usuarios activos')),
-              )
-            else if (filtrados.isEmpty)
-              const Expanded(
-                child: Center(child: Text('Sin resultados')),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  itemCount: filtrados.length,
-                  itemBuilder: (_, i) {
-                    final u = filtrados[i];
-                    final esActual = Sesion.usuarioId == u.id;
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Text(
-                          u.apodoUsuario.isNotEmpty
-                              ? u.apodoUsuario[0].toUpperCase()
-                              : '?',
-                        ),
-                      ),
-                      title: Text(u.apodoUsuario),
-                      subtitle: Text(u.nombreUsuario),
-                      trailing: esActual
-                          ? const Icon(Icons.check, color: Colors.green)
-                          : null,
-                      selected: esActual,
-                      onTap: () => Navigator.pop(context, u),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-      ],
     );
   }
 }
