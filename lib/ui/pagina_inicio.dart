@@ -5,6 +5,7 @@ import 'pagina_login.dart';
 import 'pagina_polizas.dart';
 import 'pagina_catalogos.dart';
 import 'catalogos/lista_clientes.dart'; // para digitadores
+import 'pagina_reportes.dart';
 
 class PaginaInicio extends StatefulWidget {
   final String appEnv;
@@ -177,18 +178,16 @@ class _PaginaInicioState extends State<PaginaInicio> {
                 ),
               const SizedBox(height: 10),
 
-              // ── Reportes (próximamente) ────────────────────────────────────
+              // ── Reportes ──────────────────────────────────────────────────
               _NavCard(
                 icon: Icons.analytics_outlined,
                 iconColor: cs.secondary,
                 title: 'Reportes',
-                subtitle: 'Exportar a Excel / Power BI (próximamente)',
-                disabled: true,
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Módulo en construcción')),
-                  );
-                },
+                subtitle: 'Dashboards y exportar a Excel',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PaginaReportes()),
+                ),
               ),
             ],
           ),
@@ -206,7 +205,6 @@ class _NavCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final bool disabled;
 
   const _NavCard({
     required this.icon,
@@ -214,15 +212,12 @@ class _NavCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.disabled = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final effectiveColor =
-        disabled ? iconColor.withOpacity(0.35) : iconColor;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -236,10 +231,10 @@ class _NavCard extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: effectiveColor.withOpacity(0.12),
+                  color: iconColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: effectiveColor, size: 24),
+                child: Icon(icon, color: iconColor, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -248,32 +243,17 @@ class _NavCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: tt.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: disabled
-                            ? cs.onSurface.withOpacity(0.38)
-                            : null,
-                      ),
+                      style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: tt.bodySmall?.copyWith(
-                        color: disabled
-                            ? cs.onSurface.withOpacity(0.26)
-                            : cs.onSurfaceVariant,
-                      ),
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                size: 20,
-                color: disabled
-                    ? cs.onSurface.withOpacity(0.2)
-                    : cs.onSurfaceVariant,
-              ),
+              Icon(Icons.chevron_right, size: 20, color: cs.onSurfaceVariant),
             ],
           ),
         ),
