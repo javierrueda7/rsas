@@ -1043,7 +1043,7 @@ class _PaginaReportesState extends State<PaginaReportes>
       {VoidCallback? onTap}) {
     final isClickable = onTap != null;
     return SizedBox(
-      width: 175,
+      width: 200,
       child: Card(
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -1065,9 +1065,13 @@ class _PaginaReportesState extends State<PaginaReportes>
                 ],
               ]),
               const SizedBox(height: 10),
-              Text(valor,
-                  style: TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(valor,
+                    style: TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+              ),
               const SizedBox(height: 4),
               Text(titulo,
                   style: const TextStyle(fontSize: 12)),
@@ -1177,7 +1181,7 @@ class _PaginaReportesState extends State<PaginaReportes>
               ),
             ]),
           ),
-          SizedBox(width: 130,
+          SizedBox(width: 175,
               child: Text('Prima total',
                   textAlign: TextAlign.right,
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
@@ -1273,7 +1277,7 @@ class _PaginaReportesState extends State<PaginaReportes>
                     ])),
                   ),
                   SizedBox(
-                    width: 130,
+                    width: 175,
                     child: Text(_nf.format(g.prima),
                         textAlign: TextAlign.right,
                         style: const TextStyle(fontSize: 12)),
