@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../datos/repositorio_catalogos.dart';
 import '../datos/sesion.dart';
 import 'pagina_inicio.dart';
+import 'pagina_recuperar_clave.dart';
 
 class PaginaLogin extends StatefulWidget {
   final String appEnv;
@@ -220,6 +221,20 @@ class _PaginaLoginState extends State<PaginaLogin> {
                               ],
 
                               const SizedBox(height: 20),
+
+                              // Recuperar contraseña
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const PaginaRecuperarClave(),
+                                    ),
+                                  ),
+                                  child: const Text('¿Olvidaste tu contraseña?'),
+                                ),
+                              ),
 
                               // Botón ingresar
                               FilledButton.icon(

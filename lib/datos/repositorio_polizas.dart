@@ -81,6 +81,8 @@ class RepositorioPolizas {
       todos.addAll(rows.map(Poliza.fromMap));
 
       onProgreso?.call(todos.length);
+      // Cede el hilo para que la UI pueda repintar el contador
+      await Future.delayed(Duration.zero);
 
       if (rows.length < _pageSize) break; // última página
       desde += _pageSize;

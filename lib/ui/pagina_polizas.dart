@@ -510,7 +510,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   Widget build(BuildContext context) {
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyN, control: true): _nuevaPoliza,
+        const SingleActivator(LogicalKeyboardKey.keyN, alt: true): _nuevaPoliza,
       },
       child: Focus(
         autofocus: true,
@@ -519,7 +519,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         title: const Text('Pólizas'),
         actions: [
           IconButton(
-            tooltip: 'Nueva póliza (Ctrl+N)',
+            tooltip: 'Nueva póliza (Alt+N)',
             icon: const Icon(Icons.add),
             onPressed: _nuevaPoliza,
           ),
@@ -560,7 +560,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
                 Icon(Icons.keyboard_outlined, size: 14, color: Colors.grey.shade500),
                 const SizedBox(width: 6),
                 Text(
-                  'Presiona Ctrl+N para crear una nueva póliza',
+                  'Presiona Alt+N para crear una nueva póliza',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
               ],

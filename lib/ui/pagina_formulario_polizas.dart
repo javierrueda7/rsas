@@ -70,7 +70,8 @@ class IntermediarioLite {
 
 /// Formatea números al estilo colombiano (1.234.567,89) mientras el usuario escribe.
 class _ColMoneyInputFormatter extends TextInputFormatter {
-  const _ColMoneyInputFormatter();
+  final int maxDec;
+  const _ColMoneyInputFormatter({this.maxDec = 2});
 
   @override
   TextEditingValue formatEditUpdate(
@@ -89,8 +90,10 @@ class _ColMoneyInputFormatter extends TextInputFormatter {
     final enteroNum = int.tryParse(entera.replaceAll('-', '')) ?? 0;
     final negativo = entera.startsWith('-');
     final enteroFmt = _formatMiles(enteroNum);
-    final resultado = '${negativo ? '-' : ''}$enteroFmt'
-        '${decimal != null ? ',${decimal.substring(0, decimal.length > 2 ? 2 : decimal.length)}' : ''}';
+    final decStr = decimal != null
+        ? ',${decimal.substring(0, decimal.length > maxDec ? maxDec : decimal.length)}'
+        : '';
+    final resultado = '${negativo ? '-' : ''}$enteroFmt$decStr';
 
     return newValue.copyWith(
       text: resultado,
@@ -507,10 +510,13 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         estadoPoliza =
             estadosPoliza.firstWhereOrNull((x) => x.id == p.estadoPolizaId);
       } else {
-        final now = DateTime.now();
-        fExp = now;
-        _fExpCtrl.text = _formatearFecha(now);
         estadoPoliza = estadosPoliza.firstWhereOrNull((e) => e.id == 'I');
+        formaPago = formasPago.firstWhereOrNull(
+          (f) => f.nombre.toUpperCase().contains('CONTADO'),
+        );
+        formaExp = formasExp.firstWhereOrNull(
+          (f) => f.nombre.toUpperCase().contains('STELLA'),
+        );
 
         final siguienteId = await _repoPol.obtenerSiguienteId();
         _idCtrl.text = siguienteId.toString();
@@ -579,6 +585,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     TextEditingController c, {
     bool req = false,
     bool num = false,
+    int maxDec = 2,
     int lines = 1,
     bool readOnly = false,
     String? helper,
@@ -593,7 +600,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           ? const TextInputType.numberWithOptions(decimal: true)
           : null,
       inputFormatters: (num && !readOnly && lines == 1)
-          ? [_ColMoneyInputFormatter()]
+          ? [_ColMoneyInputFormatter(maxDec: maxDec)]
           : null,
       validator: req
           ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null
@@ -699,7 +706,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     if (fFin == null) { _toast('La Fecha fin es obligatoria.'); return; }
     if (Sesion.usuarioId == null) { _toast('No hay un usuario activo en sesión.'); return; }
 
-    if (fFin!.isBefore(fIni!)) {
+    if (fIni != null && fFin!.isBefore(fIni!)) {
       _toast('La fecha fin no puede ser anterior a la fecha inicio.');
       return;
     }
@@ -848,7 +855,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         SizedBox(
           width: 120,
           child: porcCtrl != null
-              ? _campo('% Comisión', porcCtrl, num: true,
+              ? _campo('% Comisión', porcCtrl, num: true, maxDec: 5,
                   onEditingComplete: () => _formatearNum(porcCtrl))
               : const SizedBox.shrink(),
         ),
@@ -1186,7 +1193,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                 _seccion('Comisiones', [
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
-                      child: _campo('% Com.', _porcComCtrl, num: true,
+                      child: _campo('% Com.', _porcComCtrl, num: true, maxDec: 5,
                           helper: 'Desde producto',
                           onEditingComplete: () {
                             _formatearNum(_porcComCtrl);
@@ -1207,7 +1214,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _campo('% Com. adicional', _porcomAdicCtrl, num: true,
+                      child: _campo('% Com. adicional', _porcomAdicCtrl, num: true, maxDec: 5,
                           onEditingComplete: () => _formatearNum(_porcomAdicCtrl)),
                     ),
                     const SizedBox(width: 12),

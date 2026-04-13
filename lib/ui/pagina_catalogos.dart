@@ -8,6 +8,7 @@ import 'catalogos/lista_ramos.dart';
 import 'catalogos/lista_productos.dart';
 import 'catalogos/lista_usuarios.dart';
 import 'catalogos/lista_formas_expedicion.dart';
+import 'catalogos/lista_formas_pago.dart';
 
 class PaginaCatalogos extends StatelessWidget {
   const PaginaCatalogos({super.key});
@@ -60,6 +61,13 @@ class PaginaCatalogos extends StatelessWidget {
                   subtitle: 'Planes y coberturas por ramo',
                   onTap: () => Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const ListaProductos())),
+                ),
+                _CatalogoTile(
+                  icon: Icons.payment_outlined,
+                  title: 'Formas de Pago',
+                  subtitle: 'Cuotas y modalidades de pago',
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const ListaFormasPago())),
                 ),
                 _CatalogoTile(
                   icon: Icons.description_outlined,

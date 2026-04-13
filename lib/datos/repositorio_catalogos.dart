@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'catalogos.dart';
+import 'sesion.dart';
 
 class RepositorioCatalogos {
   final SupabaseClient _db = Supabase.instance.client;
@@ -125,6 +126,7 @@ Future<void> crearCliente(Cliente c) async {
     await _db.from('clientes').insert({
       'id': c.id,
       ...c.toInsertMap(),
+      'usuario_id': Sesion.usuarioId,
     });
   } on PostgrestException catch (e) {
     throw Exception(_mensajePG(
@@ -139,6 +141,7 @@ Future<void> actualizarCliente(int id, Cliente c) async {
     await _db.from('clientes').update({
       ...c.toInsertMap(),
       'fultmod': DateTime.now().toIso8601String(),
+      'usuario_id': Sesion.usuarioId,
     }).match({'id': id});
   } on PostgrestException catch (e) {
     throw Exception(_mensajePG(e));
@@ -217,6 +220,7 @@ Future<void> crearAsesor(Asesor a) async {
     await _db.from('asesores').insert({
       'id': a.id,
       ...a.toInsertMap(),
+      'usuario_id': Sesion.usuarioId,
     });
   } on PostgrestException catch (e) {
     throw Exception(
@@ -230,6 +234,7 @@ Future<void> actualizarAsesor(int id, Asesor a) async {
     await _db.from('asesores').update({
       ...a.toInsertMap(),
       'fultmod': DateTime.now().toIso8601String(),
+      'usuario_id': Sesion.usuarioId,
     }).match({'id': id});
   } on PostgrestException catch (e) {
     throw Exception(_mensajePG(e));
@@ -285,6 +290,7 @@ Future<void> crearAseguradora(Aseguradora a) async {
     await _db.from('aseguradoras').insert({
       'id': a.id,
       ...a.toInsertMap(),
+      'usuario_id': Sesion.usuarioId,
     });
   } on PostgrestException catch (e) {
     throw Exception(
@@ -298,6 +304,7 @@ Future<void> actualizarAseguradora(int id, Aseguradora a) async {
     await _db.from('aseguradoras').update({
       ...a.toInsertMap(),
       'fultmod': DateTime.now().toIso8601String(),
+      'usuario_id': Sesion.usuarioId,
     }).match({'id': id});
   } on PostgrestException catch (e) {
     throw Exception(
@@ -355,6 +362,7 @@ Future<void> crearRamo(Ramo r) async {
     await _db.from('ramos').insert({
       'id': r.id,
       ...r.toInsertMap(),
+      'usuario_id': Sesion.usuarioId,
     });
   } on PostgrestException catch (e) {
     throw Exception(
@@ -368,6 +376,7 @@ Future<void> actualizarRamo(int id, Ramo r) async {
     await _db.from('ramos').update({
       ...r.toInsertMap(),
       'fultmod': DateTime.now().toIso8601String(),
+      'usuario_id': Sesion.usuarioId,
     }).match({'id': id});
   } on PostgrestException catch (e) {
     throw Exception(_mensajePG(e));
@@ -430,6 +439,7 @@ Future<void> eliminarRamo(int id) async {
       await _db.from('productos').insert({
         'id': p.id,
         ...p.toInsertMap(),
+        'usuario_id': Sesion.usuarioId,
       });
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e));
@@ -441,6 +451,7 @@ Future<void> eliminarRamo(int id) async {
       await _db.from('productos').update({
         ...p.toInsertMap(),
         'fultmod': DateTime.now().toIso8601String(),
+        'usuario_id': Sesion.usuarioId,
       }).match({'id': id});
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e));
@@ -489,7 +500,10 @@ Future<void> eliminarRamo(int id) async {
 
   Future<void> crearUsuario(Usuario u) async {
     try {
-      await _db.from('usuarios').insert({'id': u.id, ...u.toInsertMap()});
+      await _db.from('usuarios').insert({
+        'id': u.id,
+        ...u.toInsertMap(),
+      });
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e, unico: 'Ya existe un usuario con ese apodo o ID.'));
     }
@@ -497,7 +511,9 @@ Future<void> eliminarRamo(int id) async {
 
   Future<void> actualizarUsuario(int id, Usuario u) async {
     try {
-      await _db.from('usuarios').update(u.toInsertMap()).match({'id': id});
+      await _db.from('usuarios').update({
+        ...u.toInsertMap(),
+      }).match({'id': id});
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e, unico: 'Ya existe un usuario con ese apodo.'));
     }
@@ -509,6 +525,28 @@ Future<void> eliminarRamo(int id) async {
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e));
     }
+  }
+
+  /// Verifica que el apodo y el correo coincidan con un usuario activo.
+  /// Devuelve el apodo si la verificación es exitosa, null si no.
+  Future<String?> verificarRecuperacion(String apodo, String correo) async {
+    final res = await _db
+        .from('usuarios')
+        .select('apodo_usuario')
+        .eq('apodo_usuario', apodo.trim())
+        .eq('correo_usuario', correo.trim().toLowerCase())
+        .eq('estado_usuario', true)
+        .maybeSingle();
+    if (res == null) return null;
+    return res['apodo_usuario'] as String;
+  }
+
+  /// Cambia la clave del usuario identificado por [apodo].
+  Future<void> cambiarClave(String apodo, String nuevaClave) async {
+    await _db
+        .from('usuarios')
+        .update({'clave_usuario': nuevaClave})
+        .eq('apodo_usuario', apodo.trim());
   }
 
   /// Devuelve el usuario si el apodo y la clave coinciden, null si no.
@@ -547,7 +585,11 @@ Future<void> eliminarRamo(int id) async {
 
   Future<void> crearFormaExpedicion(FormaExpedicion f) async {
     try {
-      await _db.from('formaexp').insert({'id': f.id, ...f.toInsertMap()});
+      await _db.from('formaexp').insert({
+        'id': f.id,
+        ...f.toInsertMap(),
+        'usuario_id': Sesion.usuarioId,
+      });
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e, unico: 'Ya existe una forma de expedición con ese nombre o ID.'));
     }
@@ -555,7 +597,10 @@ Future<void> eliminarRamo(int id) async {
 
   Future<void> actualizarFormaExpedicion(int id, FormaExpedicion f) async {
     try {
-      await _db.from('formaexp').update(f.toInsertMap()).match({'id': id});
+      await _db.from('formaexp').update({
+        ...f.toInsertMap(),
+        'usuario_id': Sesion.usuarioId,
+      }).match({'id': id});
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e));
     }
@@ -566,6 +611,56 @@ Future<void> eliminarRamo(int id) async {
       table: 'formaexp',
       match: {'id': id},
       mensajeFK: 'No puedes eliminar esta forma de expedición porque está en uso en pólizas.',
+    );
+  }
+
+  // ================== FORMAS DE PAGO ==================
+
+  Future<List<FormaPago>> listarFormasPago({bool soloActivas = false}) async {
+    dynamic q = _db.from('formas_pago').select();
+    if (soloActivas) q = q.eq('estado_forma_pago', true);
+    final res = await q.order('nombre_forma_pago', ascending: true).limit(50000);
+    return (res as List).cast<Map<String, dynamic>>().map(FormaPago.fromMap).toList();
+  }
+
+  Future<int> obtenerSiguienteIdFormaPago() async {
+    final res = await _db.from('formas_pago').select('id').order('id', ascending: false).limit(1);
+    return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
+  }
+
+  Future<bool> existeFormaPagoId(int id) async {
+    final res = await _db.from('formas_pago').select('id').eq('id', id).maybeSingle();
+    return res != null;
+  }
+
+  Future<void> crearFormaPago(FormaPago f) async {
+    try {
+      await _db.from('formas_pago').insert({
+        'id': f.id,
+        ...f.toInsertMap(),
+        'usuario_id': Sesion.usuarioId,
+      });
+    } on PostgrestException catch (e) {
+      throw Exception(_mensajePG(e, unico: 'Ya existe una forma de pago con ese nombre o ID.'));
+    }
+  }
+
+  Future<void> actualizarFormaPago(int id, FormaPago f) async {
+    try {
+      await _db.from('formas_pago').update({
+        ...f.toInsertMap(),
+        'usuario_id': Sesion.usuarioId,
+      }).match({'id': id});
+    } on PostgrestException catch (e) {
+      throw Exception(_mensajePG(e, unico: 'Ya existe una forma de pago con ese nombre.'));
+    }
+  }
+
+  Future<void> eliminarFormaPago(int id) async {
+    await _deleteConProteccionFK(
+      table: 'formas_pago',
+      match: {'id': id},
+      mensajeFK: 'No puedes eliminar esta forma de pago porque está en uso en pólizas.',
     );
   }
 

@@ -21,6 +21,7 @@ class _FormUsuarioState extends State<FormUsuario> {
   late final TextEditingController apodoCtrl;
   late final TextEditingController nombreCtrl;
   late final TextEditingController claveCtrl;
+  late final TextEditingController correoCtrl;
 
   String _rol = 'D';
   bool _estadoUsuario = true;
@@ -41,6 +42,7 @@ class _FormUsuarioState extends State<FormUsuario> {
     apodoCtrl = TextEditingController(text: u?.apodoUsuario ?? '');
     nombreCtrl = TextEditingController(text: u?.nombreUsuario ?? '');
     claveCtrl = TextEditingController();
+    correoCtrl = TextEditingController(text: u?.correoUsuario ?? '');
 
     _rol = u?.rol.toUpperCase() ?? 'D';
     if (!_roles.any((r) => r.$1 == _rol)) _rol = 'D';
@@ -59,6 +61,7 @@ class _FormUsuarioState extends State<FormUsuario> {
     apodoCtrl.dispose();
     nombreCtrl.dispose();
     claveCtrl.dispose();
+    correoCtrl.dispose();
     super.dispose();
   }
 
@@ -126,12 +129,14 @@ class _FormUsuarioState extends State<FormUsuario> {
         }
       }
 
+      final correo = correoCtrl.text.trim().toLowerCase();
       final u = Usuario(
         id: esEdicion ? widget.usuario!.id : idNum,
         apodoUsuario: apodo,
         nombreUsuario: nombre,
         rol: _rol,
         claveUsuario: clave.isEmpty ? widget.usuario?.claveUsuario : clave,
+        correoUsuario: correo.isEmpty ? null : correo,
         estadoUsuario: _estadoUsuario,
         asesorId: widget.usuario?.asesorId,
       );
@@ -247,6 +252,24 @@ class _FormUsuarioState extends State<FormUsuario> {
                       border: OutlineInputBorder(),
                     ),
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: correoCtrl,
+                    textInputAction: TextInputAction.next,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Correo electrónico',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email_outlined),
+                      helperText: 'Requerido para recuperar contraseña',
+                    ),
+                    validator: (v) {
+                      final s = (v ?? '').trim();
+                      if (s.isEmpty) return null; // opcional
+                      if (!s.contains('@') || !s.contains('.')) return 'Correo no válido';
+                      return null;
+                    },
                   ),
                 ]),
 
