@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:seguimiento_polizas/ui/pagina_login.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -43,6 +44,13 @@ class AppPolizas extends StatelessWidget {
           scrolledUnderElevation: 1,
         ),
       ),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('es', 'CO'), Locale('en')],
+      locale: const Locale('es', 'CO'),
       home: PaginaLogin(appEnv: appEnv),
     );
   }

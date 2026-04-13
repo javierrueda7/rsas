@@ -1,8 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../datos/poliza.dart';
@@ -38,14 +37,15 @@ class _PaginaReportesState extends State<PaginaReportes>
   bool _cargando = true;
   int _cargados = 0;
   bool _exportando = false;
+  String? _errorCarga;
 
   // ── Filtros ────────────────────────────────────────────────────────────────
-  bool _filtrosVisible = false;
+  bool _filtrosVisible = true;
   String? _filtroAseg;
   String? _filtroRamo;
   String? _filtroAsesor;
   String? _filtroProd;
-  int _filtroEstado = 0;         // 0=Todas 1=Vigentes 2=Vencidas
+  int _filtroEstado = 0;         // 0=Todas 1=Vigentes 2=Vencidas 3=Sin fecha
   DateTime? _filtroFfinDesde;    // F. Vencimiento desde
   DateTime? _filtroFfinHasta;    // F. Vencimiento hasta
   DateTime? _filtroFregDesde;    // F. Registro desde
@@ -80,19 +80,26 @@ class _PaginaReportesState extends State<PaginaReportes>
   // ── Carga ─────────────────────────────────────────────────────────────────
 
   Future<void> _cargar() async {
-    setState(() { _cargando = true; _cargados = 0; });
+    setState(() { _cargando = true; _cargados = 0; _errorCarga = null; });
     try {
       final data = await _repo.listarTodos(
         onProgreso: (n) { if (mounted) setState(() => _cargados = n); },
-      );
+      ).timeout(const Duration(minutes: 3));
       if (mounted) setState(() { _polizas = data; _cargando = false; });
     } catch (e) {
-      if (mounted) {
-        setState(() => _cargando = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      if (mounted) setState(() { _cargando = false; _errorCarga = _mensajeError(e); });
     }
+  }
+
+  String _mensajeError(Object e) {
+    final s = e.toString();
+    if (s.contains('57014') || s.contains('canceling') || s.contains('timeout') || s.contains('TimeoutException')) {
+      return 'La consulta tardó demasiado.\nIntenta de nuevo o contacta al administrador.';
+    }
+    if (s.contains('SocketException') || s.contains('network') || s.contains('connection')) {
+      return 'Sin conexión a internet.\nVerifica tu red e intenta de nuevo.';
+    }
+    return 'Error al cargar los datos.\n$s';
   }
 
   // ── Listas únicas (siempre del set completo) ──────────────────────────────
@@ -126,6 +133,7 @@ class _PaginaReportesState extends State<PaginaReportes>
           (p.ffinPoliza == null || p.ffinPoliza!.isBefore(hoy))) return false;
       if (_filtroEstado == 2 &&
           (p.ffinPoliza == null || !p.ffinPoliza!.isBefore(hoy))) return false;
+      if (_filtroEstado == 3 && p.ffinPoliza != null) return false;
       if (_filtroFfinDesde != null &&
           (p.ffinPoliza == null || p.ffinPoliza!.isBefore(_filtroFfinDesde!))) return false;
       if (_filtroFfinHasta != null &&
@@ -169,11 +177,12 @@ class _PaginaReportesState extends State<PaginaReportes>
   Future<void> _seleccionarFfin() async {
     final picked = await showDateRangePicker(
       context: context,
+      locale: const Locale('es', 'CO'),
       firstDate: DateTime(2000),
       lastDate: DateTime(2035),
       initialDateRange: (_filtroFfinDesde != null && _filtroFfinHasta != null)
           ? DateTimeRange(start: _filtroFfinDesde!, end: _filtroFfinHasta!)
-          : null,
+          : DateTimeRange(start: DateTime(_hoy.year, 1, 1), end: _hoy),
       helpText: 'Rango F. Vencimiento',
       saveText: 'Aplicar',
     );
@@ -188,11 +197,12 @@ class _PaginaReportesState extends State<PaginaReportes>
   Future<void> _seleccionarFreg() async {
     final picked = await showDateRangePicker(
       context: context,
+      locale: const Locale('es', 'CO'),
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 1)),
       initialDateRange: (_filtroFregDesde != null && _filtroFregHasta != null)
           ? DateTimeRange(start: _filtroFregDesde!, end: _filtroFregHasta!)
-          : null,
+          : DateTimeRange(start: DateTime(_hoy.year, 1, 1), end: _hoy),
       helpText: 'Rango F. Registro',
       saveText: 'Aplicar',
     );
@@ -217,11 +227,12 @@ class _PaginaReportesState extends State<PaginaReportes>
   Future<void> _seleccionarFexp() async {
     final picked = await showDateRangePicker(
       context: context,
+      locale: const Locale('es', 'CO'),
       firstDate: DateTime(2000),
       lastDate: DateTime(2035),
       initialDateRange: (_filtroFexpDesde != null && _filtroFexpHasta != null)
           ? DateTimeRange(start: _filtroFexpDesde!, end: _filtroFexpHasta!)
-          : null,
+          : DateTimeRange(start: DateTime(_hoy.year, 1, 1), end: _hoy),
       helpText: 'Rango F. Expedición',
       saveText: 'Aplicar',
     );
@@ -289,6 +300,11 @@ class _PaginaReportesState extends State<PaginaReportes>
       }).toList()
         ..sort((a, b) => a.ffinPoliza!.compareTo(b.ffinPoliza!));
 
+  List<Poliza> get _sinFfin => _filtradas
+      .where((p) => p.ffinPoliza == null)
+      .toList()
+        ..sort((a, b) => (b.fcreado ?? DateTime(0)).compareTo(a.fcreado ?? DateTime(0)));
+
   double get _primaTotal =>
       _filtradas.fold(0.0, (s, p) => s + p.primaPoliza);
 
@@ -346,7 +362,7 @@ class _PaginaReportesState extends State<PaginaReportes>
         TextCellValue('Doc. Cliente'), TextCellValue('Aseguradora'),
         TextCellValue('Ramo'), TextCellValue('Producto'),
         TextCellValue('F. Inicio'), TextCellValue('F. Vencimiento'),
-        TextCellValue('Prima'), TextCellValue('Valor Asegurado'),
+        TextCellValue('Prima'), TextCellValue('Valor Poliza'),
         TextCellValue('F. Expedición'), TextCellValue('Asesor'),
         TextCellValue('F. Registro'), TextCellValue('Usuario'),
       ]);
@@ -510,7 +526,9 @@ class _PaginaReportesState extends State<PaginaReportes>
       ),
       body: _cargando
           ? _vistaCargando()
-          : Column(
+          : _errorCarga != null
+              ? _vistaError()
+              : Column(
               children: [
                 AnimatedSize(
                   duration: const Duration(milliseconds: 220),
@@ -630,11 +648,13 @@ class _PaginaReportesState extends State<PaginaReportes>
           // ── Fila 3: estado + contador + limpiar ────────────────────────
           Row(
             children: [
-              _chipEstado(label: 'Todas',    valor: 0),
+              _chipEstado(label: 'Todas',     valor: 0),
               const SizedBox(width: 6),
-              _chipEstado(label: 'Vigentes', valor: 1),
+              _chipEstado(label: 'Vigentes',  valor: 1),
               const SizedBox(width: 6),
-              _chipEstado(label: 'Vencidas', valor: 2),
+              _chipEstado(label: 'Vencidas',  valor: 2),
+              const SizedBox(width: 6),
+              _chipEstado(label: 'Sin fecha', valor: 3),
               const Spacer(),
               Text(
                 '$nFil de $nTot pólizas',
@@ -838,6 +858,35 @@ class _PaginaReportesState extends State<PaginaReportes>
     );
   }
 
+  // ── Error de carga ────────────────────────────────────────────────────────
+
+  Widget _vistaError() {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_rounded, size: 64, color: cs.outline),
+            const SizedBox(height: 16),
+            Text(
+              _errorCarga!,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _cargar,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Cargando ──────────────────────────────────────────────────────────────
 
   Widget _vistaCargando() {
@@ -921,6 +970,7 @@ class _PaginaReportesState extends State<PaginaReportes>
     final tt = Theme.of(context).textTheme;
     final fil = _filtradas;
     final total = fil.length;
+    final sinFfin = _sinFfin.length;
     final vigentes = _vigentes;
     final vencidas = _vencidas;
     final pv30 = _porVencer(0, 30);
@@ -944,8 +994,9 @@ class _PaginaReportesState extends State<PaginaReportes>
                     Text('Resumen general',
                         style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                     Text(
-                      'Datos al ${_df.format(_hoy)} · ${_nf.format(total)} pólizas'
-                      '${_filtrosActivos > 0 ? ' (filtradas de ${_nf.format(_polizas.length)})' : ' en total'}',
+                      'Datos al ${_df.format(_hoy)} · ${_nf.format(total)} pólizas con fecha'
+                      '${sinFfin > 0 ? ' · ${_nf.format(sinFfin)} sin fecha' : ''}'
+                      '${_filtrosActivos > 0 ? ' (filtradas de ${_nf.format(_polizas.length)})' : ''}',
                       style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ],
@@ -971,6 +1022,10 @@ class _PaginaReportesState extends State<PaginaReportes>
                     }),
                 _kpi('Prima total', _nf.format(_primaTotal),
                     Icons.attach_money, cs.secondary),
+                if (sinFfin > 0)
+                  _kpi('Sin fecha venc.', _nf.format(sinFfin),
+                      Icons.event_busy_outlined, Colors.blueGrey.shade400,
+                      onTap: () => _tabCtrl.animateTo(_iVenc)),
               ]),
               const SizedBox(height: 24),
 
@@ -1306,6 +1361,7 @@ class _PaginaReportesState extends State<PaginaReportes>
       ('Vencen en 31 – 60 días',     _porVencer(31, 60), Colors.orange.shade700,  Icons.access_time_outlined),
       ('Vencen en 61 – 90 días',     _porVencer(61, 90), Colors.amber.shade700,   Icons.event_outlined),
       ('Ya vencidas (últimas 100)', _vencidas.take(100).toList(), Colors.grey.shade500, Icons.cancel_outlined),
+      ('Sin fecha de vencimiento',  _sinFfin, Colors.blueGrey.shade400, Icons.event_busy_outlined),
     ];
 
     return ListView(
@@ -1332,7 +1388,8 @@ class _PaginaReportesState extends State<PaginaReportes>
             ]),
           ),
           ...lista.map((p) {
-            final dias = p.ffinPoliza!.difference(_hoy).inDays;
+            final tieneFfin = p.ffinPoliza != null;
+            final dias = tieneFfin ? p.ffinPoliza!.difference(_hoy).inDays : null;
             final prod = p.nombreProd;
             return Card(
               margin: const EdgeInsets.only(bottom: 6),
@@ -1368,17 +1425,18 @@ class _PaginaReportesState extends State<PaginaReportes>
                       ],
                     )),
                     Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text(_df.format(p.ffinPoliza!),
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                              color: color)),
                       Text(
-                        dias < 0
-                            ? '${-dias} días vencida'
-                            : '$dias días',
-                        style: TextStyle(fontSize: 11, color: color),
+                        tieneFfin ? _df.format(p.ffinPoliza!) : 'Sin fecha',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: color),
                       ),
+                      if (dias != null)
+                        Text(
+                          dias < 0 ? '${-dias} días vencida' : '$dias días',
+                          style: TextStyle(fontSize: 11, color: color),
+                        ),
                       if ((p.nombreAsesor ?? '').isNotEmpty)
                         Text(p.nombreAsesor!,
                             style: TextStyle(
@@ -1401,7 +1459,7 @@ class _PaginaReportesState extends State<PaginaReportes>
   // Detalle de póliza en vencimientos
   void _mostrarDetalleVencimiento(BuildContext context, Poliza p, Color color) {
     final cs = Theme.of(context).colorScheme;
-    final dias = p.ffinPoliza!.difference(_hoy).inDays;
+    final dias = p.ffinPoliza != null ? p.ffinPoliza!.difference(_hoy).inDays : null;
 
     showModalBottomSheet(
       context: context,
@@ -1431,33 +1489,72 @@ class _PaginaReportesState extends State<PaginaReportes>
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
+                if (dias != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      dias < 0 ? '${-dias} días vencida' : '$dias días',
+                      style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold, color: color),
+                    ),
                   ),
-                  child: Text(
-                    dias < 0 ? '${-dias} días vencida' : '$dias días',
-                    style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.bold, color: color),
-                  ),
-                ),
               ]),
               const Divider(height: 20),
               _detRow('Cliente',      p.nombreCliente),
+              _detRowCopiable('Teléfono', p.telCliente),
               _detRow('Aseguradora',  p.nombreAseg),
               _detRow('Ramo',         p.nombreRamo),
               _detRow('Producto',     p.nombreProd),
               _detRow('Bien aseg.',   p.bienAsegurado),
               _detRow('F. Inicio',    p.finiPoliza != null ? _df.format(p.finiPoliza!) : null),
-              _detRow('F. Venc.',     _df.format(p.ffinPoliza!), color: color),
+              _detRow('F. Venc.',     p.ffinPoliza != null ? _df.format(p.ffinPoliza!) : null, color: color),
               _detRow('Prima',        _nf.format(p.primaPoliza)),
               _detRow('Asesor',       p.nombreAsesor),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _detRowCopiable(String label, String? value) {
+    if (value == null || value.isEmpty) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(children: [
+        SizedBox(
+          width: 110,
+          child: Text(label,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+        ),
+        Expanded(
+          child: SelectableText(
+            value,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          ),
+        ),
+        IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          iconSize: 16,
+          tooltip: 'Copiar',
+          icon: Icon(Icons.copy_rounded, color: cs.outline),
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: value));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$label copiado'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
+        ),
+      ]),
     );
   }
 

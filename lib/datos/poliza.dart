@@ -57,6 +57,7 @@ class Poliza {
   // Campos extra de la vista de búsqueda
   final String? nombreCliente;
   final String? docCliente;
+  final String? telCliente;
   final String? nombreAsesor;
   final String? nombreRamo;
   final String? nombreProd;
@@ -110,6 +111,7 @@ class Poliza {
     this.fultmod,
     this.nombreCliente,
     this.docCliente,
+    this.telCliente,
     this.nombreAsesor,
     this.nombreRamo,
     this.nombreProd,
@@ -191,6 +193,7 @@ class Poliza {
         fultmod: _toDate(m['fultmod']),
         nombreCliente: _toText(m['nombre_cliente']),
         docCliente: _toText(m['doc_cliente']),
+        telCliente: _toText(m['tel_cliente']),
         nombreAsesor: _toText(m['nombre_asesor']),
         nombreRamo: _toText(m['nombre_ramo']),
         nombreProd: _toText(m['nombre_prod']),
