@@ -25,6 +25,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   List<Poliza> polizas = [];
   int _cargados = 0;            // progreso de carga total
   bool _datosCompletos = false; // true cuando ya se cargaron todos
+  String? _errorCarga;          // mensaje de error persistente para mostrar retry
 
   // Columnas:
   // 0  Cód.          1  Nro Póliza    2  Bien Asegurado
@@ -59,9 +60,10 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   Future<void> _cargar() async {
     final busqueda = ctrlBuscar.text.trim();
     if (cargando) return;
-    if (mounted) setState(() { cargando = true; _datosCompletos = false; });
+    if (mounted) setState(() { cargando = true; _datosCompletos = false; _errorCarga = null; });
     try {
-      final data = await repo.listar(busqueda: busqueda, limite: 500);
+      final data = await repo.listar(busqueda: busqueda, limite: 500)
+          .timeout(const Duration(seconds: 30));
       if (mounted) {
         setState(() {
           polizas = data;
@@ -69,11 +71,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error cargando pólizas: $e')),
-        );
-      }
+      if (mounted) setState(() => _errorCarga = _mensajeError(e));
     } finally {
       if (mounted) setState(() => cargando = false);
     }
@@ -82,7 +80,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   /// Carga completa paginada: trae todos los registros de a 1.000.
   Future<void> _cargarTodo() async {
     if (cargando) return;
-    if (mounted) setState(() { cargando = true; _cargados = 0; });
+    if (mounted) setState(() { cargando = true; _cargados = 0; _errorCarga = null; });
     final busqueda = ctrlBuscar.text.trim();
     try {
       final data = await repo.listarTodos(
@@ -90,7 +88,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         onProgreso: (n) {
           if (mounted) setState(() => _cargados = n);
         },
-      );
+      ).timeout(const Duration(minutes: 3));
       if (mounted) {
         setState(() {
           polizas = data;
@@ -99,14 +97,28 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error cargando pólizas: $e')),
-        );
-      }
+      if (mounted) setState(() => _errorCarga = _mensajeError(e));
     } finally {
       if (mounted) setState(() => cargando = false);
     }
+  }
+
+  String _mensajeError(Object e) {
+    final s = e.toString();
+    if (e is TimeoutException ||
+        s.contains('57014') ||
+        s.contains('timeout') ||
+        s.contains('canceling') ||
+        s.contains('TimeoutException')) {
+      return 'La consulta tardó demasiado.\nVerifica tu conexión e intenta de nuevo.';
+    }
+    if (s.contains('network') ||
+        s.contains('connection') ||
+        s.contains('SocketException') ||
+        s.contains('Failed host')) {
+      return 'Sin conexión a internet.\nVerifica tu red e intenta de nuevo.';
+    }
+    return 'Error al cargar pólizas.\nIntenta de nuevo.';
   }
 
   void _aplicarOrden() {
@@ -181,6 +193,33 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
     debounce = Timer(
       const Duration(milliseconds: 400),
       () => _cargar(),
+    );
+  }
+
+  Widget _vistaError() {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_outlined, size: 64, color: cs.error.withOpacity(0.7)),
+            const SizedBox(height: 20),
+            Text(
+              _errorCarga!,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _cargar,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -597,9 +636,11 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
           Expanded(
             child: cargando && polizas.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : polizas.isEmpty
-                    ? const Center(child: Text('No se encontraron pólizas'))
-                    : LayoutBuilder(
+                : _errorCarga != null && polizas.isEmpty
+                    ? _vistaError()
+                    : polizas.isEmpty
+                        ? const Center(child: Text('No se encontraron pólizas'))
+                        : LayoutBuilder(
                         builder: (context, constraints) =>
                             constraints.maxWidth < 600
                                 ? _vistaMovil(polizas)
