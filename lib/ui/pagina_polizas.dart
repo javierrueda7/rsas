@@ -420,11 +420,11 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   static const _wCliente = 190.0;
   static const _wAseg = 150.0;
   static const _wRamo = 140.0;
-  static const _wAsesor = 130.0;
-  static const _wFecha = 90.0;
-  static const _wPrima = 140.0;
-  static const _wValor = 150.0;
-  static const _wFCreado = 130.0;
+  static const _wAsesor = 100.0;
+  static const _wFecha = 80.0;
+  static const _wPrima = 80.0;
+  static const _wValor = 80.0;
+  static const _wFCreado = 100.0;
   static const _wUsuario = 120.0;
   static const _wAcciones = 60.0;
   static const _totalAncho = _wCod + _wNro + _wBien + _wCliente + _wAseg +

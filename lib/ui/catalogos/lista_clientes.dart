@@ -15,6 +15,8 @@ class _ListaClientesState extends State<ListaClientes> {
   final repo = RepositorioCatalogos();
 
   bool cargando = true;
+  bool _cargandoTodo = false;
+  bool _todosLoaded = false;
   List<Cliente> items = [];
 
   final TextEditingController _buscarCtrl = TextEditingController();
@@ -51,7 +53,7 @@ class _ListaClientesState extends State<ListaClientes> {
   Map<int, String> _municNombre = {};
 
   Future<void> _cargar() async {
-    setState(() => cargando = true);
+    setState(() { cargando = true; _todosLoaded = false; });
     try {
       final q = _buscarCtrl.text.trim();
       final futures = await Future.wait([
@@ -125,6 +127,46 @@ class _ListaClientesState extends State<ListaClientes> {
   bool _esErrorRelacion(dynamic e) {
     final s = e.toString();
     return s.contains('23503') || s.toLowerCase().contains('foreign key');
+  }
+
+  Future<void> _cargarTodos() async {
+    setState(() => _cargandoTodo = true);
+    try {
+      final todos = await repo.listarTodosClientes();
+      final conMunic = todos.map((c) {
+        if (c.municId == null || c.nombreMunicipio != null) return c;
+        final nombre = _municNombre[c.municId];
+        if (nombre == null) return c;
+        return Cliente(
+          id: c.id,
+          nombreCliente: c.nombreCliente,
+          tipopersCliente: c.tipopersCliente,
+          tipodocCliente: c.tipodocCliente,
+          docCliente: c.docCliente,
+          telCliente: c.telCliente,
+          correoCliente: c.correoCliente,
+          dirCliente: c.dirCliente,
+          municId: c.municId,
+          nombreMunicipio: nombre,
+          notasCliente: c.notasCliente,
+          contactoCliente: c.contactoCliente,
+          cargocontCliente: c.cargocontCliente,
+          asesorId: c.asesorId,
+          estadoCliente: c.estadoCliente,
+          recordarCliente: c.recordarCliente,
+        );
+      }).toList();
+      if (!mounted) return;
+      setState(() {
+        items = conMunic;
+        _todosLoaded = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _cargandoTodo = false);
+    }
   }
 
   List<Cliente> get _filtrados => items;
@@ -362,7 +404,7 @@ class _ListaClientesState extends State<ListaClientes> {
           IconButton(
             tooltip: 'Refrescar',
             icon: const Icon(Icons.refresh),
-            onPressed: cargando ? null : _cargar,
+            onPressed: (cargando || _cargandoTodo) ? null : _cargar,
           ),
         ],
       ),
@@ -397,7 +439,29 @@ class _ListaClientesState extends State<ListaClientes> {
               ),
             ),
           ),
-          if (cargando) const LinearProgressIndicator(),
+          if (cargando || _cargandoTodo) const LinearProgressIndicator(),
+          if (!cargando && !_todosLoaded && items.isNotEmpty && _buscarCtrl.text.isEmpty)
+            MaterialBanner(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              content: Text(
+                'Mostrando los primeros ${items.length} clientes (A–Z).',
+                style: const TextStyle(fontSize: 13),
+              ),
+              leading: const Icon(Icons.info_outline, size: 20),
+              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+              actions: [
+                _cargandoTodo
+                    ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : TextButton.icon(
+                        icon: const Icon(Icons.download_outlined, size: 16),
+                        label: const Text('Cargar todos'),
+                        onPressed: _cargarTodos,
+                      ),
+              ],
+            ),
           Expanded(
             child: cargando && items.isEmpty
                 ? const Center(child: CircularProgressIndicator())

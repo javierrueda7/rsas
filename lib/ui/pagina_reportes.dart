@@ -1,5 +1,6 @@
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_saver/file_saver.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -56,8 +57,7 @@ class _PaginaReportesState extends State<PaginaReportes>
   // ── Ordenamiento en tabs agrupados ────────────────────────────────────────
   bool _sortByPrima = false;
 
-  final _df  = DateFormat('dd/MM/yyyy');
-  final _dfh = DateFormat('dd/MM/yyyy HH:mm');
+  final _df = DateFormat('dd/MM/yyyy');
   final _nf  = NumberFormat.decimalPattern('es_CO');
 
   static const _tabs = ['Resumen', 'Aseguradoras', 'Ramos', 'Asesores', 'Vencimientos'];
@@ -350,95 +350,20 @@ class _PaginaReportesState extends State<PaginaReportes>
 
   Future<void> _exportarExcel() async {
     setState(() => _exportando = true);
-    final lista = _filtradas;
+    // Ceder el hilo para que Flutter repinte el indicador antes de trabajar
+    await Future.delayed(const Duration(milliseconds: 80));
     try {
-      final wb = Excel.createExcel();
-
-      // Hoja 1: Pólizas
-      final sh1 = wb['Pólizas'];
-      sh1.appendRow([
-        TextCellValue('Cód'), TextCellValue('Nro Póliza'),
-        TextCellValue('Bien Asegurado'), TextCellValue('Cliente'),
-        TextCellValue('Doc. Cliente'), TextCellValue('Aseguradora'),
-        TextCellValue('Ramo'), TextCellValue('Producto'),
-        TextCellValue('F. Inicio'), TextCellValue('F. Vencimiento'),
-        TextCellValue('Prima'), TextCellValue('Valor Poliza'),
-        TextCellValue('F. Expedición'), TextCellValue('Asesor'),
-        TextCellValue('F. Registro'), TextCellValue('Usuario'),
-      ]);
-      for (final p in lista) {
-        sh1.appendRow([
-          IntCellValue(p.id),
-          TextCellValue(p.nroPoliza ?? ''),
-          TextCellValue(p.bienAsegurado ?? ''),
-          TextCellValue(p.nombreCliente ?? ''),
-          TextCellValue(p.docCliente ?? ''),
-          TextCellValue(p.nombreAseg ?? ''),
-          TextCellValue(p.nombreRamo ?? ''),
-          TextCellValue(p.nombreProd ?? ''),
-          TextCellValue(p.finiPoliza != null ? _df.format(p.finiPoliza!) : ''),
-          TextCellValue(p.ffinPoliza != null ? _df.format(p.ffinPoliza!) : ''),
-          DoubleCellValue(p.primaPoliza.toDouble()),
-          DoubleCellValue(p.valorPoliza.toDouble()),
-          TextCellValue(p.fexpPoliza != null ? _df.format(p.fexpPoliza!) : ''),
-          TextCellValue(p.nombreAsesor ?? ''),
-          TextCellValue(p.fcreado != null ? _dfh.format(p.fcreado!.toLocal()) : ''),
-          TextCellValue(p.apodoUsuario ?? ''),
-        ]);
-      }
-
-      // Hoja 2: Por Aseguradora
-      final sh2 = wb['Por Aseguradora'];
-      sh2.appendRow([TextCellValue('Aseguradora'), TextCellValue('Pólizas'), TextCellValue('Prima Total')]);
-      for (final g in _agrupar(lista, (p) => p.nombreAseg ?? 'Sin aseguradora').values) {
-        sh2.appendRow([TextCellValue(g.nombre), IntCellValue(g.cantidad), DoubleCellValue(g.prima)]);
-      }
-
-      // Hoja 3: Por Ramo
-      final sh3 = wb['Por Ramo'];
-      sh3.appendRow([TextCellValue('Ramo'), TextCellValue('Pólizas'), TextCellValue('Prima Total')]);
-      for (final g in _agrupar(lista, (p) => p.nombreRamo ?? 'Sin ramo').values) {
-        sh3.appendRow([TextCellValue(g.nombre), IntCellValue(g.cantidad), DoubleCellValue(g.prima)]);
-      }
-
-      // Hoja 4: Por Asesor
-      final sh4 = wb['Por Asesor'];
-      sh4.appendRow([TextCellValue('Asesor'), TextCellValue('Pólizas'), TextCellValue('Prima Total')]);
-      for (final g in _agrupar(lista, (p) => p.nombreAsesor ?? 'Sin asesor').values) {
-        sh4.appendRow([TextCellValue(g.nombre), IntCellValue(g.cantidad), DoubleCellValue(g.prima)]);
-      }
-
-      // Hoja 5: Vencimientos 90 días
-      final sh5 = wb['Vencimientos 90 días'];
-      sh5.appendRow([
-        TextCellValue('Cód'), TextCellValue('Nro Póliza'),
-        TextCellValue('Cliente'), TextCellValue('Aseguradora'),
-        TextCellValue('Ramo'), TextCellValue('Producto'),
-        TextCellValue('F. Vencimiento'), TextCellValue('Días restantes'),
-        TextCellValue('Prima'), TextCellValue('Asesor'),
-      ]);
-      for (final p in _porVencer(0, 90)) {
-        sh5.appendRow([
-          IntCellValue(p.id),
-          TextCellValue(p.nroPoliza ?? ''),
-          TextCellValue(p.nombreCliente ?? ''),
-          TextCellValue(p.nombreAseg ?? ''),
-          TextCellValue(p.nombreRamo ?? ''),
-          TextCellValue(p.nombreProd ?? ''),
-          TextCellValue(_df.format(p.ffinPoliza!)),
-          IntCellValue(p.ffinPoliza!.difference(_hoy).inDays),
-          DoubleCellValue(p.primaPoliza.toDouble()),
-          TextCellValue(p.nombreAsesor ?? ''),
-        ]);
-      }
-
-      wb.delete('Sheet1');
-      final bytes = wb.encode();
+      final hoy = _hoy;
+      final bytes = await compute(_buildExcelBytes, _ExcelParams(
+        polizas: _filtradas,
+        porVencer90: _porVencer(0, 90),
+        hoy: hoy,
+      ));
       if (bytes == null) throw Exception('No se pudo generar el archivo.');
 
       await FileSaver.instance.saveFile(
         name: 'polizas_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}',
-        bytes: Uint8List.fromList(bytes),
+        bytes: bytes,
         ext: 'xlsx',
         mimeType: MimeType.microsoftExcel,
       );
@@ -1579,6 +1504,118 @@ class _PaginaReportesState extends State<PaginaReportes>
       ]),
     );
   }
+}
+
+// ── Datos para generación de Excel en isolate ─────────────────────────────────
+
+class _ExcelParams {
+  final List<Poliza> polizas;
+  final List<Poliza> porVencer90;
+  final DateTime hoy;
+  const _ExcelParams({required this.polizas, required this.porVencer90, required this.hoy});
+}
+
+Uint8List? _buildExcelBytes(_ExcelParams p) {
+  final df  = DateFormat('dd/MM/yyyy');
+  final dfh = DateFormat('dd/MM/yyyy HH:mm');
+
+  Map<String, ({int cantidad, double prima})> agrupar(
+    List<Poliza> lista, String Function(Poliza) key,
+  ) {
+    final map = <String, ({int cantidad, double prima})>{};
+    for (final pol in lista) {
+      final k = key(pol);
+      final prev = map[k] ?? (cantidad: 0, prima: 0.0);
+      map[k] = (cantidad: prev.cantidad + 1, prima: prev.prima + pol.primaPoliza.toDouble());
+    }
+    final sorted = map.entries.toList()
+      ..sort((a, b) => b.value.prima.compareTo(a.value.prima));
+    return {for (final e in sorted) e.key: e.value};
+  }
+
+  final wb = Excel.createExcel();
+
+  // Hoja 1: Pólizas
+  final sh1 = wb['Pólizas'];
+  sh1.appendRow([
+    TextCellValue('Cód'), TextCellValue('Nro Póliza'),
+    TextCellValue('Bien Asegurado'), TextCellValue('Cliente'),
+    TextCellValue('Doc. Cliente'), TextCellValue('Aseguradora'),
+    TextCellValue('Ramo'), TextCellValue('Producto'),
+    TextCellValue('F. Inicio'), TextCellValue('F. Vencimiento'),
+    TextCellValue('Prima'), TextCellValue('Valor Póliza'),
+    TextCellValue('F. Expedición'), TextCellValue('Asesor'),
+    TextCellValue('F. Registro'), TextCellValue('Usuario'),
+  ]);
+  for (final pol in p.polizas) {
+    sh1.appendRow([
+      IntCellValue(pol.id),
+      TextCellValue(pol.nroPoliza ?? ''),
+      TextCellValue(pol.bienAsegurado ?? ''),
+      TextCellValue(pol.nombreCliente ?? ''),
+      TextCellValue(pol.docCliente ?? ''),
+      TextCellValue(pol.nombreAseg ?? ''),
+      TextCellValue(pol.nombreRamo ?? ''),
+      TextCellValue(pol.nombreProd ?? ''),
+      TextCellValue(pol.finiPoliza != null ? df.format(pol.finiPoliza!) : ''),
+      TextCellValue(pol.ffinPoliza != null ? df.format(pol.ffinPoliza!) : ''),
+      DoubleCellValue(pol.primaPoliza.toDouble()),
+      DoubleCellValue(pol.valorPoliza.toDouble()),
+      TextCellValue(pol.fexpPoliza != null ? df.format(pol.fexpPoliza!) : ''),
+      TextCellValue(pol.nombreAsesor ?? ''),
+      TextCellValue(pol.fcreado != null ? dfh.format(pol.fcreado!.toLocal()) : ''),
+      TextCellValue(pol.apodoUsuario ?? ''),
+    ]);
+  }
+
+  // Hoja 2: Por Aseguradora
+  final sh2 = wb['Por Aseguradora'];
+  sh2.appendRow([TextCellValue('Aseguradora'), TextCellValue('Pólizas'), TextCellValue('Prima Total')]);
+  agrupar(p.polizas, (pol) => pol.nombreAseg ?? 'Sin aseguradora').forEach((nombre, g) {
+    sh2.appendRow([TextCellValue(nombre), IntCellValue(g.cantidad), DoubleCellValue(g.prima)]);
+  });
+
+  // Hoja 3: Por Ramo
+  final sh3 = wb['Por Ramo'];
+  sh3.appendRow([TextCellValue('Ramo'), TextCellValue('Pólizas'), TextCellValue('Prima Total')]);
+  agrupar(p.polizas, (pol) => pol.nombreRamo ?? 'Sin ramo').forEach((nombre, g) {
+    sh3.appendRow([TextCellValue(nombre), IntCellValue(g.cantidad), DoubleCellValue(g.prima)]);
+  });
+
+  // Hoja 4: Por Asesor
+  final sh4 = wb['Por Asesor'];
+  sh4.appendRow([TextCellValue('Asesor'), TextCellValue('Pólizas'), TextCellValue('Prima Total')]);
+  agrupar(p.polizas, (pol) => pol.nombreAsesor ?? 'Sin asesor').forEach((nombre, g) {
+    sh4.appendRow([TextCellValue(nombre), IntCellValue(g.cantidad), DoubleCellValue(g.prima)]);
+  });
+
+  // Hoja 5: Vencimientos 90 días
+  final sh5 = wb['Vencimientos 90 días'];
+  sh5.appendRow([
+    TextCellValue('Cód'), TextCellValue('Nro Póliza'),
+    TextCellValue('Cliente'), TextCellValue('Aseguradora'),
+    TextCellValue('Ramo'), TextCellValue('Producto'),
+    TextCellValue('F. Vencimiento'), TextCellValue('Días restantes'),
+    TextCellValue('Prima'), TextCellValue('Asesor'),
+  ]);
+  for (final pol in p.porVencer90) {
+    sh5.appendRow([
+      IntCellValue(pol.id),
+      TextCellValue(pol.nroPoliza ?? ''),
+      TextCellValue(pol.nombreCliente ?? ''),
+      TextCellValue(pol.nombreAseg ?? ''),
+      TextCellValue(pol.nombreRamo ?? ''),
+      TextCellValue(pol.nombreProd ?? ''),
+      TextCellValue(df.format(pol.ffinPoliza!)),
+      IntCellValue(pol.ffinPoliza!.difference(p.hoy).inDays),
+      DoubleCellValue(pol.primaPoliza.toDouble()),
+      TextCellValue(pol.nombreAsesor ?? ''),
+    ]);
+  }
+
+  wb.delete('Sheet1');
+  final bytes = wb.encode();
+  return bytes == null ? null : Uint8List.fromList(bytes);
 }
 
 // ── Ícono animado para la pantalla de carga ───────────────────────────────────

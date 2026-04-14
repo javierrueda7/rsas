@@ -21,17 +21,40 @@ static const String _selectClienteSinJoin =
     'tel_cliente, correo_cliente, dir_cliente, munic_id, notas_cliente, '
     'contacto_cliente, cargocont_cliente, asesor_id, estado_cliente, recordar_cliente';
 
-/// Todos los clientes sin JOIN — rápido para la lista de catálogo.
-/// El nombre de municipio se resuelve en memoria con [listarMunicipios].
-Future<List<Cliente>> listarClientes() async {
+/// Carga rápida: devuelve los primeros [limite] clientes.
+Future<List<Cliente>> listarClientes({int limite = 500}) async {
   final resCli = await _db
       .from('clientes')
       .select(_selectClienteSinJoin)
       .order('nombre_cliente', ascending: true)
-      .limit(50000);
+      .limit(limite);
 
   final rows = (resCli as List).cast<Map<String, dynamic>>();
   return rows.map(Cliente.fromMap).toList();
+}
+
+/// Carga completa en páginas de [_pageSize] filas.
+static const int _pageClientes = 1000;
+
+Future<List<Cliente>> listarTodosClientes({
+  void Function(int cargados)? onProgreso,
+}) async {
+  final List<Cliente> todos = [];
+  int desde = 0;
+  while (true) {
+    final res = await _db
+        .from('clientes')
+        .select(_selectClienteSinJoin)
+        .order('nombre_cliente', ascending: true)
+        .range(desde, desde + _pageClientes - 1);
+    final rows = (res as List).cast<Map<String, dynamic>>();
+    todos.addAll(rows.map(Cliente.fromMap));
+    onProgreso?.call(todos.length);
+    await Future.delayed(Duration.zero);
+    if (rows.length < _pageClientes) break;
+    desde += _pageClientes;
+  }
+  return todos;
 }
 
 /// Búsqueda server-side sin JOIN — para la lista de catálogo.
