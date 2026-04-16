@@ -425,7 +425,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   static const _wPrima = 80.0;
   static const _wValor = 80.0;
   static const _wFCreado = 100.0;
-  static const _wUsuario = 120.0;
+  static const _wUsuario = 45.0;
   static const _wAcciones = 60.0;
   static const _totalAncho = _wCod + _wNro + _wBien + _wCliente + _wAseg +
       _wRamo + _wAsesor + _wFecha * 3 + _wPrima + _wValor + 12 + _wFCreado + _wUsuario + _wAcciones;
@@ -466,7 +466,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         col('F. Exp.', _wFecha, 10),
         col('Asesor', _wAsesor, 11),
         col('F. Registro', _wFCreado, 12),
-        col('Usuario', _wUsuario, 13),
+        col('Usuario', _wUsuario, 10),
         const SizedBox(width: _wAcciones),
       ]),
     );
@@ -488,7 +488,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(p.nombreCliente ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
               if ((p.docCliente ?? '').isNotEmpty)
-                Text(p.docCliente!, style: const TextStyle(fontSize: 10, color: Colors.grey), overflow: TextOverflow.ellipsis),
+                Text(p.docCliente!, style: const TextStyle(fontSize: 11, color: Colors.grey), overflow: TextOverflow.ellipsis),
             ]),
           ),
           SizedBox(width: _wAseg, child: Text(p.nombreAseg ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
@@ -497,7 +497,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(p.nombreRamo ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
               if ((p.nombreProd ?? '').isNotEmpty)
-                Text(p.nombreProd!, style: const TextStyle(fontSize: 10, color: Colors.grey), overflow: TextOverflow.ellipsis),
+                Text(p.nombreProd!, style: const TextStyle(fontSize: 11, color: Colors.grey), overflow: TextOverflow.ellipsis),
             ]),
           ),
           SizedBox(width: _wFecha, child: Text(_fmtFecha(p.finiPoliza), style: const TextStyle(fontSize: 12))),
