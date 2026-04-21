@@ -1544,8 +1544,9 @@ Uint8List? _buildExcelBytes(_ExcelParams p) {
     TextCellValue('Ramo'), TextCellValue('Producto'),
     TextCellValue('F. Inicio'), TextCellValue('F. Vencimiento'),
     TextCellValue('Prima'), TextCellValue('Valor Póliza'),
+    TextCellValue('Valor Asegurado'),
     TextCellValue('F. Expedición'), TextCellValue('Asesor'),
-    TextCellValue('F. Registro'), TextCellValue('Usuario'),
+    TextCellValue('F. Registro'), TextCellValue('F. Ult. Mod'), TextCellValue('Usuario'),
   ]);
   for (final pol in p.polizas) {
     sh1.appendRow([
@@ -1561,9 +1562,11 @@ Uint8List? _buildExcelBytes(_ExcelParams p) {
       TextCellValue(pol.ffinPoliza != null ? df.format(pol.ffinPoliza!) : ''),
       DoubleCellValue(pol.primaPoliza.toDouble()),
       DoubleCellValue(pol.valorPoliza.toDouble()),
+      pol.vlrasegPoliza != null ? DoubleCellValue(pol.vlrasegPoliza!.toDouble()) : TextCellValue(''),
       TextCellValue(pol.fexpPoliza != null ? df.format(pol.fexpPoliza!) : ''),
       TextCellValue(pol.nombreAsesor ?? ''),
       TextCellValue(pol.fcreado != null ? dfh.format(pol.fcreado!.toLocal()) : ''),
+      TextCellValue(pol.fultmod != null ? dfh.format(pol.fultmod!.toLocal()) : ''),
       TextCellValue(pol.apodoUsuario ?? ''),
     ]);
   }

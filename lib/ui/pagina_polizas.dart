@@ -170,9 +170,15 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
           final db = b.fcreado ?? DateTime(9999);
           cmp = da.compareTo(db);
         case 13:
+          final da = a.fultmod ?? DateTime(9999);
+          final db = b.fultmod ?? DateTime(9999);
+          cmp = da.compareTo(db);
+        case 15:
           cmp = (a.apodoUsuario ?? '').toLowerCase().compareTo(
                 (b.apodoUsuario ?? '').toLowerCase(),
               );
+        case 16:
+          cmp = (a.vlrasegPoliza ?? 0).compareTo(b.vlrasegPoliza ?? 0);
         default:
           cmp = a.id.compareTo(b.id);
       }
@@ -235,7 +241,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
 
   String _fmtNum(num? valor) {
     if (valor == null || valor == 0) return '—';
-    return nf.format(valor);
+    return '\$${nf.format(valor.round())}';
   }
 
   Future<void> _nuevaPoliza() async {
@@ -428,7 +434,8 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   static const _wUsuario = 50.0;
   static const _wAcciones = 60.0;
   static const _totalAncho = _wCod + _wNro + _wBien + _wCliente + _wAseg +
-      _wRamo + _wAsesor + _wFecha * 3 + _wPrima + _wValor + 12 + _wFCreado + _wUsuario + _wAcciones;
+      _wRamo + _wAsesor + _wFecha * 3 + _wPrima + _wValor + 12 +
+      _wFCreado + _wUsuario + _wAcciones;
 
   Widget _encabezadoPolizas() {
     final cs = Theme.of(context).colorScheme;
@@ -462,12 +469,12 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         col('Ramo / Producto', _wRamo, 5),
         col('F. Ini.', _wFecha, 6),
         col('F. Venc.', _wFecha, 7),
-        col('Prima', _wPrima, 8, num: true),
-        col('Valor', _wValor, 9, num: true),
+        col('V. Prima', _wPrima, 8, num: true),
+        col('V. Total', _wValor, 9, num: true),
         const SizedBox(width: 12),
         col('F. Exp.', _wFecha, 10),
         col('Asesor', _wAsesor, 11),
-        col('F. Registro', _wFCreado, 12),
+        col('F. Registro / Ult Mod', _wFCreado, 12),
         col('Usuario', _wUsuario, 15),
         const SizedBox(width: _wAcciones),
       ]),
@@ -484,7 +491,14 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
           SizedBox(width: _wCod, child: Text(p.id.toString(), style: const TextStyle(fontSize: 12), textAlign: TextAlign.right)),
           const SizedBox(width: 8),
           SizedBox(width: _wNro - 8, child: Text(p.nroPoliza ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
-          SizedBox(width: _wBien, child: Text(p.bienAsegurado ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+          SizedBox(
+            width: _wBien,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(p.bienAsegurado ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+              if (p.vlrasegPoliza != null && p.vlrasegPoliza! > 0)
+                Text(_fmtNum(p.vlrasegPoliza), style: const TextStyle(fontSize: 11, color: Colors.grey), overflow: TextOverflow.ellipsis),
+            ]),
+          ),
           SizedBox(
             width: _wCliente,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -509,7 +523,14 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
           const SizedBox(width: 12),
           SizedBox(width: _wFecha, child: Text(_fmtFecha(p.fexpPoliza), style: const TextStyle(fontSize: 12))),
           SizedBox(width: _wAsesor, child: Text(p.nombreAsesor ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
-          SizedBox(width: _wFCreado, child: Text(_fmtFechaHora(p.fcreado), overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+          SizedBox(
+            width: _wFCreado,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(_fmtFechaHora(p.fcreado), overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+              if (p.fultmod != null)
+                Text(_fmtFechaHora(p.fultmod), style: const TextStyle(fontSize: 11, color: Colors.grey), overflow: TextOverflow.ellipsis),
+            ]),
+          ),
           SizedBox(width: _wUsuario, child: Text(p.apodoUsuario ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
           SizedBox(width: _wAcciones, child: IconButton(tooltip: 'Editar', icon: const Icon(Icons.edit, size: 18), onPressed: () => _abrirEditar(p))),
         ]),
