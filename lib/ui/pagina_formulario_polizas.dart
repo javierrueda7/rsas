@@ -305,7 +305,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     return num.tryParse(limpio);
   }
 
-  String _fmtMoney(num? n) => n == null ? '' : Fmt.money(n, dec: 2);
+  String _fmtMoney(num? n) => n == null ? '' : Fmt.money(n, dec: 0);
   String _fmtNum(num? n) => n == null ? '' : Fmt.numCO(n, dec: 2);
 
   void _formatearMoney(TextEditingController ctrl) {
@@ -585,7 +585,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     TextEditingController c, {
     bool req = false,
     bool num = false,
-    int maxDec = 2,
+    int maxDec = 0,
     int lines = 1,
     bool readOnly = false,
     String? helper,
