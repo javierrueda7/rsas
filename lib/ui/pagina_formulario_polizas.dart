@@ -1005,12 +1005,6 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
-                      child: _fechaCampo('F. expedición', _fExpCtrl, fExp,
-                          (d) => fExp = d),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
                       child: _fechaCampo('F. inicio', _fIniCtrl, fIni,
                           (d) => fIni = d, autoFin: true),
                     ),
@@ -1019,6 +1013,12 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                       flex: 2,
                       child: _fechaCampo(
                           'F. fin *', _fFinCtrl, fFin, (d) => fFin = d),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: _fechaCampo('F. expedición', _fExpCtrl, fExp,
+                          (d) => fExp = d),
                     ),
                   ]),
                 ]),
