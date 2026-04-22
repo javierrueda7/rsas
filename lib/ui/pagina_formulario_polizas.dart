@@ -305,7 +305,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     return num.tryParse(limpio);
   }
 
-  String _fmtMoney(num? n) => n == null ? '' : Fmt.money(n, dec: 0);
+  String _fmtMoney(num? n) => n == null ? '' : Fmt.money(n, dec: 2);
   String _fmtNum(num? n) => n == null ? '' : Fmt.numCO(n, dec: 2);
 
   void _formatearMoney(TextEditingController ctrl) {
@@ -517,6 +517,9 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         formaExp = formasExp.firstWhereOrNull(
           (f) => f.nombre.toUpperCase().contains('STELLA'),
         );
+        intermediario = intermediarios.firstWhereOrNull(
+          (i) => i.nombre.toUpperCase().contains('STELLA'),
+        );
 
         final siguienteId = await _repoPol.obtenerSiguienteId();
         _idCtrl.text = siguienteId.toString();
@@ -585,7 +588,8 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     TextEditingController c, {
     bool req = false,
     bool num = false,
-    int maxDec = 0,
+    bool money = false,
+    int maxDec = 2,
     int lines = 1,
     bool readOnly = false,
     String? helper,
@@ -610,6 +614,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       decoration: InputDecoration(
         labelText: l,
         helperText: helper,
+        prefixText: money ? '\$ ' : null,
         border: const OutlineInputBorder(),
       ),
     );
@@ -864,7 +869,8 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           width: 150,
           child: InputDecorator(
             decoration: InputDecoration(
-              labelText: 'Vlr comisión',
+              labelText: 'Vlr. Comisión',
+              prefixText: '\$ ',
               border: const OutlineInputBorder(),
               filled: true,
               fillColor: cs.surfaceContainerHighest.withOpacity(0.4),
@@ -987,7 +993,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
               children: [
 
                 // ── Fila 1: Código · Nro Póliza · Fechas ─────────────────────
-                _seccion('Identificación y vigencia', [
+                _seccion('Identificación y Vigencia', [
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     SizedBox(
                       width: 110,
@@ -1000,31 +1006,31 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 3,
-                      child: _campo('Número de póliza', _nroCtrl),
+                      child: _campo('Número de Póliza', _nroCtrl),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
-                      child: _fechaCampo('F. inicio', _fIniCtrl, fIni,
+                      child: _fechaCampo('F. Inicio', _fIniCtrl, fIni,
                           (d) => fIni = d, autoFin: true),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
                       child: _fechaCampo(
-                          'F. fin *', _fFinCtrl, fFin, (d) => fFin = d),
+                          'F. Fin *', _fFinCtrl, fFin, (d) => fFin = d),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
-                      child: _fechaCampo('F. expedición', _fExpCtrl, fExp,
+                      child: _fechaCampo('F. Expedición', _fExpCtrl, fExp,
                           (d) => fExp = d),
                     ),
                   ]),
                 ]),
 
                 // ── Fila 2: Aseguradora · Ramo ────────────────────────────────
-                _seccion('Aseguradora y ramo', [
+                _seccion('Aseguradora y Ramo', [
                   // Aseguradora | Ramo | % Base Com (read-only)
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
@@ -1103,7 +1109,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                     Expanded(
                       flex: 3,
                       child: BuscadorDropdown<FormaPagoLite>(
-                        label: 'Forma de pago *',
+                        label: 'Forma de Pago *',
                         value: formaPago,
                         items: formasPago,
                         itemLabel: (f) => f.nombre,
@@ -1153,8 +1159,8 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                   ),
                   const SizedBox(height: 12),
                   _fila3(
-                    _campo('Bien asegurado / identificación *', _bienCtrl, req: true),
-                    _campo('Vlr asegurado', _vlrAsegCtrl, num: true,
+                    _campo('Bien Asegurado / Identificación *', _bienCtrl, req: true),
+                    _campo('Vlr. Asegurado', _vlrAsegCtrl, num: true, money: true,
                         onEditingComplete: () => _formatearMoney(_vlrAsegCtrl)),
                     BuscadorDropdown<IntermediarioLite>(
                       label: 'Intermediario',
@@ -1170,16 +1176,16 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                 // ── Valores ───────────────────────────────────────────────────
                 _seccion('Valores', [
                   _fila3(
-                    _campo('Vlr Prima', _primaCtrl, num: true,
+                    _campo('Vlr. Prima', _primaCtrl, num: true, money: true,
                         helper: 'Ej: 1.500.000,00',
                         onEditingComplete: () {
                           _formatearMoney(_primaCtrl);
                           _recalcularBaseCom();
                         },
                         onChanged: (_) => _recalcularBaseCom()),
-                    _campo('Vlr Total', _valorPolizaCtrl, num: true,
+                    _campo('Vlr. Total', _valorPolizaCtrl, num: true, money: true,
                         onEditingComplete: () => _formatearMoney(_valorPolizaCtrl)),
-                    _campo('Vlr Base Com.', _vlrBaseComCtrl, num: true,
+                    _campo('Vlr. Base Com.', _vlrBaseComCtrl, num: true, money: true,
                         helper: 'Automático, editable',
                         onEditingComplete: () {
                           _formatearMoney(_vlrBaseComCtrl);
@@ -1203,23 +1209,23 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _campo('Vlr Com.', _vlrComCtrl, num: true,
+                      child: _campo('Vlr. Com.', _vlrComCtrl, num: true, money: true,
                           helper: 'Automático, editable',
                           onEditingComplete: () => _formatearMoney(_vlrComCtrl)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _campo('+ Com. Fija', _vlrComFijaCtrl, num: true,
+                      child: _campo('+ Com. Fija', _vlrComFijaCtrl, num: true, money: true,
                           onEditingComplete: () => _formatearMoney(_vlrComFijaCtrl)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _campo('% Com. adicional', _porcomAdicCtrl, num: true, maxDec: 5,
+                      child: _campo('% Com. Adicional', _porcomAdicCtrl, num: true, maxDec: 5,
                           onEditingComplete: () => _formatearNum(_porcomAdicCtrl)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _campo('Vlr Com. adicional', _vlrComAdicCtrl, num: true,
+                      child: _campo('Vlr. Com. Adicional', _vlrComAdicCtrl, num: true, money: true,
                           onEditingComplete: () => _formatearMoney(_vlrComAdicCtrl)),
                     ),
                   ]),
@@ -1228,9 +1234,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
                       child: _campo(
-                        'Com. a distribuir',
+                        'Com. a Distribuir',
                         _comDistribCtrl,
                         num: true,
+                        money: true,
                         helper: 'Base para repartir entre asesores',
                         onEditingComplete: () => _formatearMoney(_comDistribCtrl),
                       ),
@@ -1238,9 +1245,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _campo(
-                        'Com. adic. a distribuir',
+                        'Com. Adic. a Distribuir',
                         _comAdicDistribCtrl,
                         num: true,
+                        money: true,
                         helper: 'Base para repartir com. adicional',
                         onEditingComplete: () => _formatearMoney(_comAdicDistribCtrl),
                       ),
@@ -1249,7 +1257,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                 ]),
 
                 // ── Distribución de comisiones ────────────────────────────────
-                _seccion('Distribución de comisiones', [
+                _seccion('Distribución de Comisiones', [
                   _filaAsesor('Asesor 1', asesor1,
                       (v) => setState(() => asesor1 = v), _porcomAsesor1Ctrl, _comDistribCtrl, req: true),
                   const SizedBox(height: 12),
@@ -1285,10 +1293,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                     ]);
                   }),
                   const Divider(height: 24),
-                  _filaAsesor('Asesor adicional', asesorAd,
+                  _filaAsesor('Asesor Adicional', asesorAd,
                       (v) => setState(() => asesorAd = v), _porcomAsesoradCtrl, _comAdicDistribCtrl),
                   const SizedBox(height: 12),
-                  _filaAsesor('Agencia adicional', agenciaAd,
+                  _filaAsesor('Agencia Adicional', agenciaAd,
                       (v) => setState(() => agenciaAd = v), _porcomAgenciaadCtrl, _comAdicDistribCtrl),
                   const SizedBox(height: 8),
                   // Indicador total % adicionales
@@ -1315,14 +1323,15 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                 ]),
 
                 // ── Estado + Vlr Prima Pagada ─────────────────────────────────
-                _seccion('Estado y cierre', [
+                _seccion('Estado y Cierre', [
                   Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                     Expanded(child: _selectorEstado()),
                     const SizedBox(width: 16),
                     SizedBox(
                       width: 200,
-                      child: _campo('Vlr Prima Pagada', _vlrPrimaPagadaCtrl,
+                      child: _campo('Vlr. Prima Pagada', _vlrPrimaPagadaCtrl,
                           num: true,
+                          money: true,
                           onEditingComplete: () =>
                               _formatearMoney(_vlrPrimaPagadaCtrl)),
                     ),

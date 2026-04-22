@@ -1384,7 +1384,7 @@ class _PaginaReportesState extends State<PaginaReportes>
   // Detalle de póliza en vencimientos
   void _mostrarDetalleVencimiento(BuildContext context, Poliza p, Color color) {
     final cs = Theme.of(context).colorScheme;
-    final dias = p.ffinPoliza != null ? p.ffinPoliza!.difference(_hoy).inDays : null;
+    final dias = p.ffinPoliza?.difference(_hoy).inDays;
 
     showModalBottomSheet(
       context: context,
