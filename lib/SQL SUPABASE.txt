@@ -186,3 +186,88 @@ CREATE TABLE public.usuarios (
   CONSTRAINT usuarios_pkey PRIMARY KEY (id),
   CONSTRAINT usuarios_asesor_id_fkey FOREIGN KEY (asesor_id) REFERENCES public.asesores(id)
 );
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- MÓDULO DE PAGOS Y COMISIONES
+-- Ejecutar en Supabase SQL Editor (en este orden)
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.reportes_pago (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  fecha_rep date NOT NULL DEFAULT CURRENT_DATE,
+  aseg_id bigint REFERENCES public.aseguradoras(id),
+  interm_id bigint REFERENCES public.intermediarios(id),
+  fini_rep date,
+  ffin_rep date,
+  vlrprima_rep numeric NOT NULL DEFAULT 0,
+  vlrsumprima_rep numeric NOT NULL DEFAULT 0,
+  vlrcom_rep numeric NOT NULL DEFAULT 0,
+  vlrsumcom_rep numeric NOT NULL DEFAULT 0,
+  estado_rep char(1) NOT NULL DEFAULT 'I' CHECK (estado_rep IN ('I','C','R','V','A')),
+  obs_rep text,
+  usuario_id bigint REFERENCES public.usuarios(id),
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT reportes_pago_pkey PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS public.abonos_poliza (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  idrep_pago bigint REFERENCES public.reportes_pago(id) ON DELETE CASCADE,
+  id_poliza bigint NOT NULL REFERENCES public.polizas(id),
+  fecha_pago date,
+  vlrprima_poliza numeric NOT NULL DEFAULT 0,
+  vlrabono_prima numeric NOT NULL DEFAULT 0,
+  porccomision numeric NOT NULL DEFAULT 0,
+  vlrcomision numeric NOT NULL DEFAULT 0,
+  porccomad numeric NOT NULL DEFAULT 0,
+  vlrcomad numeric NOT NULL DEFAULT 0,
+  idfactura bigint,
+  num_factura text,
+  estado_pago char(1) NOT NULL DEFAULT 'I' CHECK (estado_pago IN ('I','C','R','V','A')),
+  obs_pago text,
+  usuario_id bigint REFERENCES public.usuarios(id),
+  fcreado timestamp with time zone NOT NULL DEFAULT now(),
+  fultmod timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT abonos_poliza_pkey PRIMARY KEY (id)
+);
+
+CREATE OR REPLACE VIEW public.vw_abonos_detalle AS
+SELECT
+  ab.id, ab.idrep_pago, ab.id_poliza, ab.fecha_pago,
+  ab.vlrprima_poliza, ab.vlrabono_prima,
+  ab.porccomision, ab.vlrcomision,
+  ab.porccomad, ab.vlrcomad,
+  ab.idfactura, ab.num_factura,
+  ab.estado_pago, ab.obs_pago,
+  ab.usuario_id, ab.fcreado, ab.fultmod,
+  p.nro_poliza, p.prima_poliza, p.bien_asegurado,
+  p.fini_poliza, p.ffin_poliza, p.estado_poliza_id,
+  c.nombre_cliente, c.doc_cliente, c.tipodoc_cliente,
+  c.tel_cliente, c.correo_cliente, c.dir_cliente,
+  r.nombre_ramo, pr.nombre_prod, aseg.nombre_aseg,
+  u.apodo_usuario, u.nombre_usuario
+FROM public.abonos_poliza ab
+LEFT JOIN public.polizas       p    ON ab.id_poliza  = p.id
+LEFT JOIN public.clientes      c    ON p.cliente_id  = c.id
+LEFT JOIN public.ramos         r    ON p.ramo_id     = r.id
+LEFT JOIN public.productos     pr   ON p.producto_id = pr.id
+LEFT JOIN public.aseguradoras  aseg ON p.aseg_id     = aseg.id
+LEFT JOIN public.usuarios      u    ON ab.usuario_id = u.id;
+
+CREATE OR REPLACE VIEW public.vw_reportes_resumen AS
+SELECT
+  rp.id, rp.fecha_rep, rp.aseg_id, rp.interm_id,
+  rp.fini_rep, rp.ffin_rep,
+  rp.vlrprima_rep, rp.vlrsumprima_rep,
+  rp.vlrcom_rep,   rp.vlrsumcom_rep,
+  rp.estado_rep, rp.obs_rep,
+  rp.usuario_id, rp.fcreado, rp.fultmod,
+  aseg.nombre_aseg,
+  i.nombre_interm,
+  COUNT(ab.id)::INTEGER AS num_abonos
+FROM public.reportes_pago rp
+LEFT JOIN public.aseguradoras  aseg ON rp.aseg_id  = aseg.id
+LEFT JOIN public.intermediarios i   ON rp.interm_id = i.id
+LEFT JOIN public.abonos_poliza  ab  ON ab.idrep_pago = rp.id
+GROUP BY rp.id, aseg.nombre_aseg, i.nombre_interm;

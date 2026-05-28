@@ -687,6 +687,15 @@ Future<void> eliminarRamo(int id) async {
     );
   }
 
+  // ================== INTERMEDIARIOS ==================
+
+  Future<List<Intermediario>> listarIntermediarios({bool soloActivos = false}) async {
+    dynamic q = _db.from('intermediarios').select('id, nombre_interm, estado_interm');
+    if (soloActivos) q = q.eq('estado_interm', true);
+    final res = await q.order('nombre_interm', ascending: true).limit(50000);
+    return (res as List).cast<Map<String, dynamic>>().map(Intermediario.fromMap).toList();
+  }
+
   // ================== Helpers ==================
   Future<void> _deleteConProteccionFK({
     required String table,

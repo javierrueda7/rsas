@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import 'pagina_catalogos.dart';
+import 'pagina_estado_cuenta.dart';
 import '../datos/poliza.dart';
 import '../datos/repositorio_polizas.dart';
 import 'pagina_formulario_polizas.dart';
@@ -26,6 +27,32 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   int _cargados = 0;            // progreso de carga total
   bool _datosCompletos = false; // true cuando ya se cargaron todos
   String? _errorCarga;          // mensaje de error persistente para mostrar retry
+
+  String? _filtroAseg;
+  String? _filtroRamo;
+  String? _filtroProd;
+  String? _filtroAsesor;
+
+  List<String> get _opAseguradoras => polizas
+      .map((p) => p.nombreAseg ?? '').where((s) => s.isNotEmpty)
+      .toSet().toList()..sort();
+  List<String> get _opRamos => polizas
+      .map((p) => p.nombreRamo ?? '').where((s) => s.isNotEmpty)
+      .toSet().toList()..sort();
+  List<String> get _opProductos => polizas
+      .map((p) => p.nombreProd ?? '').where((s) => s.isNotEmpty)
+      .toSet().toList()..sort();
+  List<String> get _opAsesores => polizas
+      .map((p) => p.nombreAsesor ?? '').where((s) => s.isNotEmpty)
+      .toSet().toList()..sort();
+
+  List<Poliza> get _polizasFiltradas => polizas.where((p) {
+    if (_filtroAseg != null && p.nombreAseg != _filtroAseg) return false;
+    if (_filtroRamo != null && p.nombreRamo != _filtroRamo) return false;
+    if (_filtroProd != null && p.nombreProd != _filtroProd) return false;
+    if (_filtroAsesor != null && p.nombreAsesor != _filtroAsesor) return false;
+    return true;
+  }).toList();
 
   // Columnas:
   // 0  Cód.          1  Nro Póliza    2  Bien Asegurado
@@ -199,6 +226,36 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
     debounce = Timer(
       const Duration(milliseconds: 400),
       () => _cargar(),
+    );
+  }
+
+  Widget _filtroDropdown({
+    required String label,
+    required String? valor,
+    required List<String> opciones,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final safeValor = opciones.contains(valor) ? valor : null;
+    return SizedBox(
+      width: 150,
+      child: DropdownButtonFormField<String?>(
+        value: safeValor,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          border: const OutlineInputBorder(),
+        ),
+        items: [
+          const DropdownMenuItem(value: null, child: Text('Todos')),
+          ...opciones.map((o) => DropdownMenuItem(
+            value: o,
+            child: Text(o, overflow: TextOverflow.ellipsis),
+          )),
+        ],
+        onChanged: onChanged,
+      ),
     );
   }
 
@@ -432,7 +489,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   static const _wValor = 80.0;
   static const _wFCreado = 100.0;
   static const _wUsuario = 50.0;
-  static const _wAcciones = 60.0;
+  static const _wAcciones = 88.0;
   static const _totalAncho = _wCod + _wNro + _wBien + _wCliente + _wAseg +
       _wRamo + _wAsesor + _wFecha * 3 + _wPrima + _wValor + 12 +
       _wFCreado + _wUsuario + _wAcciones;
@@ -532,7 +589,27 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             ]),
           ),
           SizedBox(width: _wUsuario, child: Text(p.apodoUsuario ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
-          SizedBox(width: _wAcciones, child: IconButton(tooltip: 'Editar', icon: const Icon(Icons.edit, size: 18), onPressed: () => _abrirEditar(p))),
+          SizedBox(
+            width: _wAcciones,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                tooltip: 'Editar',
+                icon: const Icon(Icons.edit, size: 18),
+                onPressed: () => _abrirEditar(p),
+              ),
+              IconButton(
+                tooltip: 'Ver pagos',
+                icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                color: const Color(0xFF6A1B9A),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PaginaEstadoCuenta.poliza(idPoliza: p.id),
+                  ),
+                ),
+              ),
+            ]),
+          ),
         ]),
       ),
     );
@@ -609,9 +686,60 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
               onChanged: _onBuscarChanged,
               decoration: const InputDecoration(
                 labelText:
-                    'Buscar por póliza, cliente, documento, aseguradora, ramo, asesor…',
+                    'Buscar por ID, nro. póliza, cliente, documento, aseguradora, ramo, asesor…',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.search),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filtroDropdown(
+                    label: 'Aseguradora',
+                    valor: _filtroAseg,
+                    opciones: _opAseguradoras,
+                    onChanged: (v) => setState(() => _filtroAseg = v),
+                  ),
+                  const SizedBox(width: 8),
+                  _filtroDropdown(
+                    label: 'Ramo',
+                    valor: _filtroRamo,
+                    opciones: _opRamos,
+                    onChanged: (v) => setState(() => _filtroRamo = v),
+                  ),
+                  const SizedBox(width: 8),
+                  _filtroDropdown(
+                    label: 'Producto',
+                    valor: _filtroProd,
+                    opciones: _opProductos,
+                    onChanged: (v) => setState(() => _filtroProd = v),
+                  ),
+                  const SizedBox(width: 8),
+                  _filtroDropdown(
+                    label: 'Asesor',
+                    valor: _filtroAsesor,
+                    opciones: _opAsesores,
+                    onChanged: (v) => setState(() => _filtroAsesor = v),
+                  ),
+                  if (_filtroAseg != null || _filtroRamo != null ||
+                      _filtroProd != null || _filtroAsesor != null) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      icon: const Icon(Icons.clear, size: 16),
+                      label: const Text('Limpiar', style: TextStyle(fontSize: 13)),
+                      onPressed: () => setState(() {
+                        _filtroAseg = null;
+                        _filtroRamo = null;
+                        _filtroProd = null;
+                        _filtroAsesor = null;
+                      }),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -664,10 +792,17 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
                     : polizas.isEmpty
                         ? const Center(child: Text('No se encontraron pólizas'))
                         : LayoutBuilder(
-                        builder: (context, constraints) =>
-                            constraints.maxWidth < 600
-                                ? _vistaMovil(polizas)
-                                : _vistaEscritorio(polizas),
+                        builder: (context, constraints) {
+                          final data = _polizasFiltradas;
+                          if (data.isEmpty) {
+                            return const Center(
+                              child: Text('Ninguna póliza coincide con los filtros'),
+                            );
+                          }
+                          return constraints.maxWidth < 600
+                              ? _vistaMovil(data)
+                              : _vistaEscritorio(data);
+                        },
                       ),
           ),
         ],

@@ -1,0 +1,2094 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SegurApp – Manual de Usuario Completo</title>
+<style>
+  /* ─── FUENTES Y RESET ─── */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --azul:     #1565C0;
+    --azul-claro: #1976D2;
+    --azul-suave: #E3F2FD;
+    --verde:    #2E7D32;
+    --verde-suave: #E8F5E9;
+    --naranja:  #E65100;
+    --naranja-suave: #FFF3E0;
+    --gris-oscuro: #212121;
+    --gris-medio: #616161;
+    --gris-claro: #F5F5F5;
+    --borde:    #E0E0E0;
+    --blanco:   #FFFFFF;
+    --sombra:   0 2px 8px rgba(0,0,0,0.10);
+  }
+
+  body {
+    font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--gris-oscuro);
+    background: #FAFAFA;
+  }
+
+  /* ─── PÁGINA ─── */
+  .pagina {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 20mm 18mm;
+    background: var(--blanco);
+    box-shadow: var(--sombra);
+  }
+
+  /* ─── PORTADA ─── */
+  .portada {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 297mm;
+    background: linear-gradient(135deg, #0D47A1 0%, #1565C0 50%, #1E88E5 100%);
+    color: var(--blanco);
+    text-align: center;
+    padding: 30mm 20mm;
+    margin: 0 -18mm;
+    page-break-after: always;
+  }
+
+  .portada .logo-circulo {
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 4px solid rgba(255,255,255,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 56px;
+    margin: 0 auto 28px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+
+  .portada h1 {
+    font-size: 42px; font-weight: 800; letter-spacing: -1px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    margin-bottom: 8px;
+  }
+
+  .portada .subtitulo {
+    font-size: 18px; font-weight: 300; opacity: 0.9;
+    margin-bottom: 40px; letter-spacing: 1px;
+  }
+
+  .portada .divider {
+    width: 80px; height: 3px;
+    background: rgba(255,255,255,0.5); border-radius: 2px;
+    margin: 0 auto 40px;
+  }
+
+  .portada .empresa {
+    font-size: 16px; font-weight: 600;
+    background: rgba(255,255,255,0.15);
+    padding: 10px 24px; border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.3);
+    margin-bottom: 16px;
+  }
+
+  .portada .descripcion {
+    font-size: 13px; opacity: 0.75;
+    max-width: 400px; line-height: 1.6;
+    margin-bottom: 60px;
+  }
+
+  .portada .meta {
+    font-size: 12px; opacity: 0.6;
+    letter-spacing: 0.5px;
+  }
+
+  .portada .badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    padding: 4px 12px; border-radius: 12px;
+    font-size: 11px; margin: 4px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  /* ─── TABLA DE CONTENIDO ─── */
+  .toc {
+    page-break-after: always;
+  }
+
+  .toc-titulo {
+    font-size: 24px; font-weight: 700; color: var(--azul);
+    margin-bottom: 24px; padding-bottom: 12px;
+    border-bottom: 3px solid var(--azul);
+  }
+
+  .toc ul { list-style: none; }
+  .toc > ul > li { margin-bottom: 8px; }
+  .toc > ul > li > a {
+    display: flex; justify-content: space-between;
+    font-size: 14px; font-weight: 600; color: var(--gris-oscuro);
+    text-decoration: none; padding: 8px 12px;
+    border-radius: 6px; transition: background 0.2s;
+    border-left: 3px solid var(--azul);
+    margin-bottom: 2px;
+  }
+  .toc > ul > li > a:hover { background: var(--azul-suave); }
+  .toc > ul > li > a .pg { color: var(--azul); font-weight: 700; }
+
+  .toc ul ul { margin-left: 20px; margin-top: 4px; }
+  .toc ul ul li a {
+    display: flex; justify-content: space-between;
+    font-size: 12px; color: var(--gris-medio);
+    text-decoration: none; padding: 4px 12px;
+    border-radius: 4px;
+  }
+
+  /* ─── SECCIONES ─── */
+  .seccion {
+    page-break-before: always;
+    margin-bottom: 32px;
+  }
+
+  .seccion-header {
+    display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(135deg, var(--azul) 0%, var(--azul-claro) 100%);
+    color: var(--blanco);
+    padding: 16px 20px; border-radius: 10px;
+    margin-bottom: 24px;
+    box-shadow: var(--sombra);
+  }
+
+  .seccion-header .icono {
+    font-size: 28px; min-width: 36px;
+  }
+
+  .seccion-header h2 {
+    font-size: 20px; font-weight: 700; letter-spacing: -0.3px;
+  }
+
+  .seccion-header .numero {
+    font-size: 11px; opacity: 0.7; font-weight: 400;
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+
+  /* ─── SUBSECCIONES ─── */
+  h3 {
+    font-size: 15px; font-weight: 700; color: var(--azul);
+    margin: 20px 0 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  h3::before {
+    content: '';
+    display: inline-block;
+    width: 4px; height: 16px;
+    background: var(--azul); border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  h4 {
+    font-size: 13px; font-weight: 600; color: var(--gris-oscuro);
+    margin: 14px 0 6px;
+  }
+
+  p { margin-bottom: 10px; color: var(--gris-oscuro); }
+
+  /* ─── CAJAS DE INFORMACIÓN ─── */
+  .info-box {
+    border-radius: 8px; padding: 14px 16px;
+    margin: 14px 0; display: flex; gap: 12px;
+    align-items: flex-start;
+  }
+
+  .info-box .icono-box { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+  .info-box .contenido { flex: 1; }
+  .info-box .contenido strong { display: block; margin-bottom: 4px; font-size: 13px; }
+  .info-box .contenido p { margin-bottom: 0; font-size: 12px; }
+
+  .info-box.azul   { background: var(--azul-suave);    border-left: 4px solid var(--azul); }
+  .info-box.verde  { background: var(--verde-suave);   border-left: 4px solid var(--verde); }
+  .info-box.naranja{ background: var(--naranja-suave); border-left: 4px solid var(--naranja); }
+  .info-box.gris   { background: var(--gris-claro);    border-left: 4px solid #9E9E9E; }
+
+  .info-box.azul   .icono-box { color: var(--azul); }
+  .info-box.verde  .icono-box { color: var(--verde); }
+  .info-box.naranja .icono-box { color: var(--naranja); }
+
+  /* ─── PASOS NUMERADOS ─── */
+  .pasos { counter-reset: paso; margin: 14px 0; }
+  .paso {
+    display: flex; gap: 14px; margin-bottom: 12px;
+    align-items: flex-start;
+  }
+  .paso::before {
+    counter-increment: paso;
+    content: counter(paso);
+    min-width: 28px; height: 28px;
+    background: var(--azul); color: var(--blanco);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+  }
+  .paso .paso-contenido { flex: 1; padding-top: 4px; }
+  .paso .paso-contenido strong { font-size: 13px; display: block; margin-bottom: 2px; }
+  .paso .paso-contenido p { font-size: 12px; color: var(--gris-medio); margin: 0; }
+
+  /* ─── TABLAS ─── */
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 14px 0; font-size: 12px;
+    border-radius: 8px; overflow: hidden;
+    box-shadow: var(--sombra);
+  }
+  thead { background: var(--azul); color: var(--blanco); }
+  thead th {
+    padding: 10px 12px; text-align: left;
+    font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  tbody tr:nth-child(even) { background: var(--gris-claro); }
+  tbody tr:hover { background: var(--azul-suave); }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--borde); }
+  tbody td strong { color: var(--azul); }
+
+  /* ─── LISTAS ─── */
+  ul.lista, ol.lista {
+    margin: 10px 0 10px 0; padding-left: 0; list-style: none;
+  }
+  ul.lista li, ol.lista li {
+    padding: 6px 0 6px 28px; position: relative;
+    border-bottom: 1px solid var(--borde); font-size: 12px;
+  }
+  ul.lista li::before {
+    content: '✓'; position: absolute; left: 6px;
+    color: var(--verde); font-weight: 700;
+  }
+  ol.lista { counter-reset: item; }
+  ol.lista li::before {
+    counter-increment: item; content: counter(item) '.';
+    position: absolute; left: 6px;
+    color: var(--azul); font-weight: 700;
+  }
+
+  /* ─── INSIGNIAS / BADGES ─── */
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 10px; font-weight: 600; margin: 1px;
+  }
+  .tag.azul    { background: #BBDEFB; color: #0D47A1; }
+  .tag.verde   { background: #C8E6C9; color: #1B5E20; }
+  .tag.naranja { background: #FFE0B2; color: #BF360C; }
+  .tag.rojo    { background: #FFCDD2; color: #B71C1C; }
+  .tag.gris    { background: #F5F5F5; color: #424242; border: 1px solid #E0E0E0; }
+
+  /* ─── CAMPO DE FORMULARIO ─── */
+  .campo {
+    background: var(--gris-claro); border: 1px solid var(--borde);
+    border-radius: 6px; padding: 10px 14px; margin: 8px 0;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+  .campo .etiqueta {
+    min-width: 180px; font-weight: 600; font-size: 12px;
+    color: var(--azul); flex-shrink: 0;
+  }
+  .campo .descripcion { font-size: 12px; color: var(--gris-medio); flex: 1; }
+  .campo .requerido { color: #C62828; font-size: 10px; margin-left: 4px; }
+
+  /* ─── GRID DE MÓDULOS ─── */
+  .grid-modulos {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 14px; margin: 16px 0;
+  }
+  .modulo-card {
+    background: var(--gris-claro); border-radius: 10px;
+    padding: 16px; text-align: center;
+    border: 1px solid var(--borde);
+    transition: transform 0.2s;
+  }
+  .modulo-card .icono-mod { font-size: 28px; margin-bottom: 8px; }
+  .modulo-card h4 { font-size: 13px; color: var(--azul); margin: 0 0 4px; }
+  .modulo-card p { font-size: 11px; color: var(--gris-medio); margin: 0; }
+
+  /* ─── CÓDIGO ─── */
+  code {
+    background: #263238; color: #80CBC4;
+    padding: 2px 6px; border-radius: 4px;
+    font-family: 'Consolas', monospace; font-size: 11px;
+  }
+  pre {
+    background: #263238; color: #CFD8DC;
+    padding: 14px 16px; border-radius: 8px;
+    font-family: 'Consolas', monospace; font-size: 11px;
+    line-height: 1.6; overflow-x: auto; margin: 10px 0;
+  }
+  pre .comentario { color: #546E7A; }
+  pre .clave { color: #80CBC4; }
+  pre .valor { color: #A5D6A7; }
+
+  /* ─── SEPARADORES ─── */
+  hr { border: none; border-top: 1px solid var(--borde); margin: 20px 0; }
+
+  /* ─── ENCABEZADO DE PÁGINA ─── */
+  .encabezado-pagina {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-bottom: 10px; border-bottom: 2px solid var(--azul);
+    margin-bottom: 20px; font-size: 11px; color: var(--gris-medio);
+  }
+  .encabezado-pagina .nombre-app { font-weight: 700; color: var(--azul); font-size: 13px; }
+
+  /* ─── PIE DE PÁGINA ─── */
+  .pie-pagina {
+    text-align: center; font-size: 10px; color: var(--gris-medio);
+    margin-top: 30px; padding-top: 12px; border-top: 1px solid var(--borde);
+  }
+
+  /* ─── FLUJO / PROCESO ─── */
+  .flujo {
+    display: flex; flex-direction: column; gap: 0; margin: 14px 0;
+  }
+  .flujo-paso {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding-bottom: 16px; position: relative;
+  }
+  .flujo-paso:not(:last-child)::after {
+    content: '';
+    position: absolute; left: 19px; top: 40px;
+    width: 2px; height: calc(100% - 24px);
+    background: var(--azul); opacity: 0.3;
+  }
+  .flujo-icono {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--azul); color: var(--blanco);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0; z-index: 1;
+  }
+  .flujo-contenido { flex: 1; padding-top: 8px; }
+  .flujo-contenido h4 { color: var(--azul); margin-bottom: 4px; }
+  .flujo-contenido p { font-size: 12px; color: var(--gris-medio); margin: 0; }
+
+  /* ─── RESUMEN CAMPO ─── */
+  .resumen-campo {
+    background: var(--blanco); border: 1px solid var(--borde);
+    border-radius: 8px; padding: 12px; margin: 6px 0;
+    display: grid; grid-template-columns: 160px 1fr auto;
+    gap: 8px; align-items: center; font-size: 12px;
+  }
+  .resumen-campo .nombre { font-weight: 600; }
+  .resumen-campo .desc { color: var(--gris-medio); }
+
+  /* ─── IMPRESIÓN ─── */
+  @media print {
+    body { background: white; }
+    .pagina { box-shadow: none; margin: 0; }
+    .seccion { page-break-before: always; }
+    .portada { page-break-after: always; }
+    .toc { page-break-after: always; }
+    @page { margin: 15mm 15mm; size: A4; }
+    a { color: inherit; text-decoration: none; }
+    .modulo-card, .campo, .info-box { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  PORTADA                                                    -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="portada">
+  <div class="logo-circulo">🛡️</div>
+  <h1>SegurApp</h1>
+  <p class="subtitulo">Manual de Usuario Completo</p>
+  <div class="divider"></div>
+  <div class="empresa">Rueda Serrano Asesores de Seguros</div>
+  <p class="descripcion">
+    Sistema de Gestión y Seguimiento de Pólizas de Seguros.<br>
+    Guía completa en español, explicada paso a paso.
+  </p>
+  <div>
+    <span class="badge">📱 Web</span>
+    <span class="badge">📲 Móvil</span>
+    <span class="badge">🖥️ Escritorio</span>
+  </div>
+  <br>
+  <div class="meta">
+    Versión 1.0 &nbsp;•&nbsp; Abril 2026 &nbsp;•&nbsp; Documento para usuarios
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  TABLA DE CONTENIDO                                         -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Manual de Usuario</span>
+</div>
+
+<div class="toc">
+  <div class="toc-titulo">📋 Tabla de Contenido</div>
+  <ul>
+    <li><a href="#sec1">1. ¿Qué es SegurApp? <span class="pg">→ 3</span></a></li>
+    <li><a href="#sec2">2. ¿Cómo acceder al sistema? <span class="pg">→ 4</span></a></li>
+    <li><a href="#sec3">3. Pantalla de inicio y menú principal <span class="pg">→ 5</span></a></li>
+    <li><a href="#sec4">4. Módulo de Pólizas <span class="pg">→ 6</span></a>
+      <ul>
+        <li><a href="#sec4a">4.1 Ver la lista de pólizas</a></li>
+        <li><a href="#sec4b">4.2 Buscar pólizas</a></li>
+        <li><a href="#sec4c">4.3 Crear una nueva póliza</a></li>
+        <li><a href="#sec4d">4.4 Editar una póliza</a></li>
+        <li><a href="#sec4e">4.5 Exportar a Excel</a></li>
+      </ul>
+    </li>
+    <li><a href="#sec5">5. Formulario de Póliza – Todos los Campos <span class="pg">→ 9</span></a></li>
+    <li><a href="#sec6">6. Módulo de Catálogos <span class="pg">→ 13</span></a>
+      <ul>
+        <li><a href="#sec6a">6.1 Clientes</a></li>
+        <li><a href="#sec6b">6.2 Asesores</a></li>
+        <li><a href="#sec6c">6.3 Aseguradoras</a></li>
+        <li><a href="#sec6d">6.4 Ramos</a></li>
+        <li><a href="#sec6e">6.5 Productos</a></li>
+        <li><a href="#sec6f">6.6 Formas de Pago y Expedición</a></li>
+        <li><a href="#sec6g">6.7 Usuarios del sistema</a></li>
+      </ul>
+    </li>
+    <li><a href="#sec7">7. Módulo de Reportes <span class="pg">→ 17</span></a></li>
+    <li><a href="#sec8">8. Roles de Usuario <span class="pg">→ 20</span></a></li>
+    <li><a href="#sec9">9. Preguntas Frecuentes <span class="pg">→ 21</span></a></li>
+    <li><a href="#sec10">10. Referencia Rápida <span class="pg">→ 22</span></a></li>
+  </ul>
+</div>
+
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 1: ¿QUÉ ES SEGURAPP?                              -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 1 – ¿Qué es SegurApp?</span>
+</div>
+
+<div id="sec1" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">🛡️</div>
+    <div>
+      <div class="numero">Capítulo 1</div>
+      <h2>¿Qué es SegurApp?</h2>
+    </div>
+  </div>
+
+  <p>
+    <strong>SegurApp</strong> es el sistema de gestión de pólizas de seguros diseñado exclusivamente para
+    <strong>Rueda Serrano Asesores de Seguros</strong>. Es la herramienta digital que reemplaza el trabajo
+    manual en hojas de cálculo o papeles, y te permite tener toda la información de tus clientes y pólizas
+    organizada en un solo lugar, accesible desde cualquier dispositivo.
+  </p>
+
+  <div class="info-box verde">
+    <div class="icono-box">💡</div>
+    <div class="contenido">
+      <strong>En palabras simples…</strong>
+      <p>SegurApp es como un archivador digital inteligente donde puedes guardar, buscar y consultar
+      todas las pólizas de seguros de tus clientes, ver quién las vendió, cuándo vencen, cuánto valen,
+      y generar reportes en segundos.</p>
+    </div>
+  </div>
+
+  <h3>¿Para qué sirve?</h3>
+  <ul class="lista">
+    <li>Registrar y consultar todas las pólizas de seguros (automóviles, vida, hogar, empresarial, etc.)</li>
+    <li>Controlar las fechas de vencimiento para renovar a tiempo</li>
+    <li>Gestionar los datos de clientes, asesores y aseguradoras</li>
+    <li>Calcular automáticamente las comisiones de los asesores</li>
+    <li>Generar reportes y estadísticas del negocio</li>
+    <li>Exportar información a Excel para análisis adicional</li>
+    <li>Controlar el acceso de cada usuario según su rol</li>
+  </ul>
+
+  <h3>¿Desde dónde puedo usarlo?</h3>
+
+  <div class="grid-modulos">
+    <div class="modulo-card">
+      <div class="icono-mod">🌐</div>
+      <h4>Navegador Web</h4>
+      <p>Desde Chrome, Edge o Firefox en cualquier computador</p>
+    </div>
+    <div class="modulo-card">
+      <div class="icono-mod">📱</div>
+      <h4>Teléfono Móvil</h4>
+      <p>Android e iOS — se adapta a la pantalla automáticamente</p>
+    </div>
+    <div class="modulo-card">
+      <div class="icono-mod">🖥️</div>
+      <h4>Escritorio Windows</h4>
+      <p>Aplicación instalable en computadores con Windows</p>
+    </div>
+  </div>
+
+  <h3>¿Qué módulos tiene?</h3>
+
+  <div class="grid-modulos">
+    <div class="modulo-card">
+      <div class="icono-mod">📄</div>
+      <h4>Pólizas</h4>
+      <p>El corazón del sistema. Aquí van todos los seguros</p>
+    </div>
+    <div class="modulo-card">
+      <div class="icono-mod">📚</div>
+      <h4>Catálogos</h4>
+      <p>Clientes, asesores, aseguradoras y más</p>
+    </div>
+    <div class="modulo-card">
+      <div class="icono-mod">📊</div>
+      <h4>Reportes</h4>
+      <p>Estadísticas y análisis del negocio</p>
+    </div>
+  </div>
+
+  <h3>¿Quién puede usar el sistema?</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Tipo de usuario</th>
+        <th>¿Qué puede hacer?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Administrador</strong></td>
+        <td>Todo: pólizas, catálogos, reportes y gestión de usuarios</td>
+      </tr>
+      <tr>
+        <td><strong>Digitador</strong></td>
+        <td>Ingresar y editar pólizas. No puede gestionar catálogos ni usuarios</td>
+      </tr>
+      <tr>
+        <td><strong>Supervisor</strong></td>
+        <td>Solo consultar pólizas y ver reportes. No puede modificar datos</td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 2: CÓMO ACCEDER                                   -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 2 – Cómo acceder al sistema</span>
+</div>
+
+<div id="sec2" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">🔐</div>
+    <div>
+      <div class="numero">Capítulo 2</div>
+      <h2>¿Cómo acceder al sistema?</h2>
+    </div>
+  </div>
+
+  <p>Para ingresar a SegurApp necesitas un <strong>usuario</strong> y una <strong>contraseña</strong>
+  que te entrega el administrador del sistema. Sigue estos pasos:</p>
+
+  <h3>Paso a paso para ingresar</h3>
+
+  <div class="pasos">
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Abre el navegador de internet</strong>
+        <p>Usa Google Chrome, Microsoft Edge o Mozilla Firefox. Escribe la dirección web que te indica
+        tu administrador (por ejemplo: <em>https://ruedaSerrano.github.io/SegurAppRSAS</em>).</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Verás la pantalla de inicio de sesión</strong>
+        <p>Aparece un formulario con dos campos: <em>Usuario</em> y <em>Contraseña</em>.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Escribe tu nombre de usuario</strong>
+        <p>El nombre de usuario es el "apodo" que el administrador registró para ti.
+        Generalmente es algo como <em>juanp</em> o <em>mariag</em>.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Escribe tu contraseña</strong>
+        <p>La contraseña distingue mayúsculas de minúsculas. Si el administrador
+        te dio una contraseña temporal, cámbiala después.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic en "Ingresar"</strong>
+        <p>Si los datos son correctos, el sistema te llevará a la pantalla principal.
+        Si muestra un error, verifica que el usuario y contraseña sean los correctos.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box naranja">
+    <div class="icono-box">⚠️</div>
+    <div class="contenido">
+      <strong>Si olvidaste tu contraseña</strong>
+      <p>Haz clic en el enlace <em>"¿Olvidaste tu contraseña?"</em> en la pantalla de inicio de sesión.
+      El sistema enviará instrucciones a tu correo electrónico registrado. Si no tienes correo registrado,
+      contacta al administrador para que te restablezca la contraseña.</p>
+    </div>
+  </div>
+
+  <h3>Cerrar sesión de forma segura</h3>
+  <p>Cuando termines de trabajar, es importante cerrar sesión para proteger la información:</p>
+
+  <div class="pasos">
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Busca el botón "Cerrar sesión"</strong>
+        <p>Está en el menú principal, generalmente con un ícono de salida (🚪).</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Confirma que quieres salir</strong>
+        <p>El sistema puede pedirte confirmación. Haz clic en "Sí".</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Cierra el navegador</strong>
+        <p>Especialmente si usas un computador compartido o público.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box azul">
+    <div class="icono-box">ℹ️</div>
+    <div class="contenido">
+      <strong>Dato importante sobre la sesión</strong>
+      <p>El sistema recuerda que estás conectado mientras no cierres el navegador.
+      Si cierras y vuelves a abrir el navegador, necesitarás iniciar sesión nuevamente.</p>
+    </div>
+  </div>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 3: PANTALLA DE INICIO                             -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 3 – Pantalla de inicio</span>
+</div>
+
+<div id="sec3" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">🏠</div>
+    <div>
+      <div class="numero">Capítulo 3</div>
+      <h2>Pantalla de inicio y menú principal</h2>
+    </div>
+  </div>
+
+  <p>Una vez que ingresas, ves la <strong>pantalla de inicio</strong> (también llamada <em>dashboard</em>
+  o tablero principal). Desde aquí puedes ir a cualquier parte del sistema.</p>
+
+  <h3>¿Qué muestra la pantalla de inicio?</h3>
+
+  <div class="campo">
+    <div class="etiqueta">👤 Tu nombre de usuario</div>
+    <div class="descripcion">Aparece en la parte superior para confirmar que entraste con tu cuenta correcta.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">📄 Botón: Pólizas</div>
+    <div class="descripcion">Lleva al listado completo de pólizas registradas en el sistema.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">📚 Botón: Catálogos</div>
+    <div class="descripcion">Solo visible para Administradores. Gestiona clientes, asesores, aseguradoras, etc.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">📊 Botón: Reportes</div>
+    <div class="descripcion">Accede a los reportes estadísticos del negocio y vencimientos.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">🚪 Botón: Cerrar sesión</div>
+    <div class="descripcion">Sale del sistema de forma segura.</div>
+  </div>
+
+  <h3>Navegación general del sistema</h3>
+  <p>El sistema funciona con <strong>páginas o pantallas</strong>. Cada vez que haces clic en una opción,
+  el sistema te lleva a esa pantalla. Para volver a la pantalla anterior, busca el botón
+  <em>"Atrás"</em> o el ícono de flecha ← que aparece en la parte superior.</p>
+
+  <div class="info-box verde">
+    <div class="icono-box">✅</div>
+    <div class="contenido">
+      <strong>Consejo</strong>
+      <p>Si en algún momento no sabes cómo volver al menú principal, busca el logo de SegurApp
+      en la parte superior o el botón "Inicio". Siempre te llevará al punto de partida.</p>
+    </div>
+  </div>
+
+  <h3>Flujo general del sistema</h3>
+
+  <div class="flujo">
+    <div class="flujo-paso">
+      <div class="flujo-icono">🔐</div>
+      <div class="flujo-contenido">
+        <h4>Inicio de sesión</h4>
+        <p>Ingresas con tu usuario y contraseña</p>
+      </div>
+    </div>
+    <div class="flujo-paso">
+      <div class="flujo-icono">🏠</div>
+      <div class="flujo-contenido">
+        <h4>Menú Principal</h4>
+        <p>Eliges el módulo que necesitas: Pólizas, Catálogos o Reportes</p>
+      </div>
+    </div>
+    <div class="flujo-paso">
+      <div class="flujo-icono">📄</div>
+      <div class="flujo-contenido">
+        <h4>Trabajas en el módulo</h4>
+        <p>Buscas, creas, editas o consultas la información</p>
+      </div>
+    </div>
+    <div class="flujo-paso">
+      <div class="flujo-icono">💾</div>
+      <div class="flujo-contenido">
+        <h4>Guardas los cambios</h4>
+        <p>Haces clic en "Guardar" para que la información quede registrada</p>
+      </div>
+    </div>
+    <div class="flujo-paso">
+      <div class="flujo-icono">🚪</div>
+      <div class="flujo-contenido">
+        <h4>Cierras sesión</h4>
+        <p>Al terminar, sales del sistema de forma segura</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 4: MÓDULO DE PÓLIZAS                              -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 4 – Módulo de Pólizas</span>
+</div>
+
+<div id="sec4" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">📄</div>
+    <div>
+      <div class="numero">Capítulo 4</div>
+      <h2>Módulo de Pólizas</h2>
+    </div>
+  </div>
+
+  <p>
+    El módulo de <strong>Pólizas</strong> es el más importante del sistema. Aquí se registra, consulta
+    y gestiona cada póliza de seguro que maneja la empresa. Piénsalo como el gran archivador digital
+    donde está toda la cartera de seguros.
+  </p>
+
+  <div id="sec4a">
+  <h3>4.1 Ver la lista de pólizas</h3>
+
+  <p>Al entrar al módulo de pólizas, verás una <strong>tabla</strong> con todas las pólizas registradas.
+  Cada fila es una póliza diferente. Las columnas muestran la información más relevante:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Columna</th>
+        <th>¿Qué muestra?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>ID</strong></td><td>Número único interno de la póliza en el sistema</td></tr>
+      <tr><td><strong>N° Póliza</strong></td><td>Número de póliza que asigna la aseguradora</td></tr>
+      <tr><td><strong>Cliente</strong></td><td>Nombre de la persona o empresa asegurada</td></tr>
+      <tr><td><strong>Asesor</strong></td><td>Asesor o agente que gestionó la póliza</td></tr>
+      <tr><td><strong>Ramo</strong></td><td>Tipo de seguro (automóvil, vida, hogar, etc.)</td></tr>
+      <tr><td><strong>Producto</strong></td><td>Plan específico dentro del ramo</td></tr>
+      <tr><td><strong>Aseguradora</strong></td><td>Compañía de seguros que emite la póliza</td></tr>
+      <tr><td><strong>Fecha Inicio</strong></td><td>Desde cuándo está vigente la póliza</td></tr>
+      <tr><td><strong>Fecha Fin</strong></td><td>Hasta cuándo está vigente (fecha de vencimiento)</td></tr>
+      <tr><td><strong>Prima</strong></td><td>Valor que paga el cliente por el seguro</td></tr>
+      <tr><td><strong>Estado</strong></td><td>Vigente, vencida, inicial, etc.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Cargar las pólizas</h4>
+  <p>El sistema tiene dos modos de carga para no demorar la pantalla:</p>
+  <ul class="lista">
+    <li><strong>Carga rápida:</strong> Muestra las 500 pólizas más recientes. Ideal para el trabajo diario.</li>
+    <li><strong>Cargar todas:</strong> Trae todas las pólizas del sistema, incluso si son miles. Puede tardar unos segundos — una barra de progreso te indica cuánto falta.</li>
+  </ul>
+  </div>
+
+  <div id="sec4b">
+  <h3>4.2 Buscar pólizas</h3>
+
+  <p>Hay un <strong>campo de búsqueda</strong> en la parte superior de la tabla. Puedes escribir
+  cualquier palabra y el sistema busca automáticamente en:</p>
+
+  <div class="grid-modulos" style="grid-template-columns: repeat(4,1fr);">
+    <div class="modulo-card"><div class="icono-mod">🔢</div><h4>N° Póliza</h4></div>
+    <div class="modulo-card"><div class="icono-mod">👤</div><h4>Nombre cliente</h4></div>
+    <div class="modulo-card"><div class="icono-mod">🪪</div><h4>Documento</h4></div>
+    <div class="modulo-card"><div class="icono-mod">🤝</div><h4>Asesor</h4></div>
+    <div class="modulo-card"><div class="icono-mod">📂</div><h4>Ramo</h4></div>
+    <div class="modulo-card"><div class="icono-mod">📦</div><h4>Producto</h4></div>
+    <div class="modulo-card"><div class="icono-mod">🏢</div><h4>Aseguradora</h4></div>
+    <div class="modulo-card"><div class="icono-mod">🔍</div><h4>Bien asegurado</h4></div>
+  </div>
+
+  <div class="info-box verde">
+    <div class="icono-box">💡</div>
+    <div class="contenido">
+      <strong>Consejo de búsqueda</strong>
+      <p>No necesitas escribir la palabra completa. Si escribes <em>"gomez"</em>, el sistema
+      encuentra todos los Gómez del sistema, sin importar mayúsculas o tildes.
+      La búsqueda espera 0.4 segundos después de que dejas de escribir para no saturar el servidor.</p>
+    </div>
+  </div>
+
+  <h4>Filtros por fecha</h4>
+  <p>También puedes filtrar las pólizas por un rango de fechas (por ejemplo, todas las que vencen
+  entre el 1 y el 31 de mayo). Usa los campos de <em>Fecha desde</em> y <em>Fecha hasta</em>.</p>
+
+  <h4>Ordenar la tabla</h4>
+  <p>Haz clic en el encabezado de cualquier columna para ordenar la tabla por ese campo.
+  Un clic ordena de menor a mayor (A→Z o fecha más antigua primero). Otro clic cambia el orden
+  (Z→A o fecha más reciente primero).</p>
+  </div>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ─── SECCIÓN 4 continuación ─── -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 4 – Módulo de Pólizas (continuación)</span>
+</div>
+
+  <div id="sec4c">
+  <h3>4.3 Crear una nueva póliza</h3>
+
+  <p>Para registrar una nueva póliza de seguro sigue estos pasos:</p>
+
+  <div class="pasos">
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic en el botón "Nueva póliza"</strong>
+        <p>Generalmente es un botón con un símbolo + o con el texto "Nueva". Está en la parte superior
+        de la pantalla de pólizas.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Se abre el formulario de póliza</strong>
+        <p>Verás un formulario con muchos campos divididos en secciones. El sistema pre-llena
+        automáticamente el número de ID.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Completa los datos de la póliza</strong>
+        <p>Llena los campos obligatorios (marcados con un asterisco *) y los opcionales que
+        tengas disponibles. El capítulo 5 explica cada campo en detalle.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Selecciona el cliente, asesor y ramo</strong>
+        <p>Estos campos son listas desplegables con búsqueda. Empieza a escribir el nombre
+        y el sistema muestra las opciones que coinciden.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Ingresa las fechas y valores</strong>
+        <p>Usa el selector de fechas para elegir las fechas de inicio y vencimiento.
+        Los valores monetarios se formatean automáticamente con puntos de miles.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic en "Guardar"</strong>
+        <p>El sistema valida los datos y guarda la póliza. Si todo está correcto, verás un
+        mensaje de confirmación y volverás a la lista de pólizas.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box naranja">
+    <div class="icono-box">⚠️</div>
+    <div class="contenido">
+      <strong>Antes de crear una póliza, verifica que existan:</strong>
+      <p>El cliente, el asesor, el ramo, el producto y la aseguradora deben estar registrados
+      en los catálogos. Si alguno no existe, primero créalo en el módulo de Catálogos y luego
+      regresa a crear la póliza.</p>
+    </div>
+  </div>
+  </div>
+
+  <div id="sec4d">
+  <h3>4.4 Editar una póliza existente</h3>
+
+  <div class="pasos">
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Busca la póliza que quieres modificar</strong>
+        <p>Usa el campo de búsqueda para encontrarla rápidamente.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic sobre la fila de la póliza</strong>
+        <p>Esto abre el formulario con todos los datos actuales de esa póliza.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Modifica los campos que necesites</strong>
+        <p>Cambia solo los datos que quieres actualizar. Los demás quedan igual.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic en "Guardar" o "Actualizar"</strong>
+        <p>El sistema guarda los cambios. Podrás ver la fecha de última modificación actualizada.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box azul">
+    <div class="icono-box">ℹ️</div>
+    <div class="contenido">
+      <strong>¿Se pueden eliminar pólizas?</strong>
+      <p>Sí, pero solo los usuarios con rol Administrador pueden eliminar pólizas.
+      Antes de eliminar, el sistema pedirá confirmación para evitar borrados accidentales.
+      Se recomienda cambiar el estado a "Cancelada" en lugar de eliminar, para conservar el historial.</p>
+    </div>
+  </div>
+  </div>
+
+  <div id="sec4e">
+  <h3>4.5 Exportar a Excel</h3>
+
+  <p>Puedes descargar toda la lista de pólizas (con los filtros activos) en un archivo Excel:</p>
+
+  <div class="pasos">
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Aplica los filtros que desees</strong>
+        <p>Por ejemplo, busca por asesor o filtra por rango de fechas.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic en el botón "Exportar a Excel" o ícono de descarga</strong>
+        <p>El sistema genera el archivo automáticamente con estilos y formato profesional.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Guarda el archivo en tu computador</strong>
+        <p>El navegador te pregunta dónde guardar el archivo. Elige una carpeta y haz clic en "Guardar".</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box verde">
+    <div class="icono-box">💡</div>
+    <div class="contenido">
+      <strong>Para exportar TODAS las pólizas</strong>
+      <p>Primero haz clic en "Cargar todas las pólizas" (espera a que cargue completamente),
+      y luego exporta. Así el Excel incluirá toda la cartera, no solo las 500 más recientes.</p>
+    </div>
+  </div>
+  </div>
+
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 5: FORMULARIO DE PÓLIZA                           -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 5 – Formulario de Póliza</span>
+</div>
+
+<div id="sec5" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">📋</div>
+    <div>
+      <div class="numero">Capítulo 5</div>
+      <h2>Formulario de Póliza – Todos los Campos</h2>
+    </div>
+  </div>
+
+  <p>El formulario de póliza tiene más de 40 campos organizados en secciones temáticas.
+  A continuación se explica cada uno en lenguaje sencillo:</p>
+
+  <h3>Sección 1: Identificación</h3>
+
+  <div class="campo">
+    <div class="etiqueta">ID de póliza</div>
+    <div class="descripcion">Número único que el sistema asigna automáticamente. No lo cambies.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">N° Póliza <span class="requerido">*</span></div>
+    <div class="descripcion">El número que aparece en el documento de la póliza emitido por la aseguradora.
+    Por ejemplo: <em>POL-2024-001234</em>. No puede repetirse en el sistema.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Estado</div>
+    <div class="descripcion">
+      Situación actual de la póliza:
+      <span class="tag azul">I – Inicial</span>
+      <span class="tag verde">V – Vigente</span>
+      <span class="tag naranja">Vencida</span>
+      <span class="tag rojo">Cancelada</span>
+    </div>
+  </div>
+
+  <h3>Sección 2: Personas y empresas vinculadas</h3>
+
+  <div class="campo">
+    <div class="etiqueta">Cliente <span class="requerido">*</span></div>
+    <div class="descripcion">La persona o empresa que contrató el seguro (el asegurado).
+    Escribe parte del nombre para buscar. Si no existe, debes crearlo primero en Catálogos → Clientes.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Asesor principal <span class="requerido">*</span></div>
+    <div class="descripcion">El asesor o agente que gestionó la venta. Debe existir en Catálogos → Asesores.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Asesor 2</div>
+    <div class="descripcion">Segundo asesor vinculado a la póliza (si la comisión se divide entre varios).</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Asesor 3</div>
+    <div class="descripcion">Tercer asesor vinculado a la póliza.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Asesor adicional</div>
+    <div class="descripcion">Asesor adicional con comisión separada.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Intermediario</div>
+    <div class="descripcion">Si la póliza fue colocada a través de un intermediario externo.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Agencia</div>
+    <div class="descripcion">Agencia a la que pertenece la póliza (si aplica).</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Agencia adicional</div>
+    <div class="descripcion">Segunda agencia vinculada (si la comisión se divide).</div>
+  </div>
+
+  <h3>Sección 3: Tipo de seguro</h3>
+
+  <div class="campo">
+    <div class="etiqueta">Aseguradora <span class="requerido">*</span></div>
+    <div class="descripcion">La compañía que emite y respalda el seguro. Ej: Sura, Bolívar, Allianz, etc.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Ramo <span class="requerido">*</span></div>
+    <div class="descripcion">La línea o categoría del seguro. Ejemplos: Automóviles, Vida, SOAT, Cumplimiento, Hogar.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Producto</div>
+    <div class="descripcion">El plan específico dentro del ramo. Por ejemplo, dentro del ramo "Automóvil"
+    puede haber productos como "Todo riesgo" o "Pérdida total".</div>
+  </div>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ─── SECCIÓN 5 cont. ─── -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 5 – Formulario de Póliza (continuación)</span>
+</div>
+
+  <h3>Sección 4: Fechas</h3>
+
+  <div class="campo">
+    <div class="etiqueta">Fecha de expedición</div>
+    <div class="descripcion">Fecha en que la aseguradora emitió el documento de la póliza.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Fecha de inicio</div>
+    <div class="descripcion">Desde qué día comienza a tener cobertura el seguro.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Fecha de vencimiento</div>
+    <div class="descripcion">Hasta qué día tiene cobertura. Después de esta fecha, la póliza queda vencida y
+    el cliente no está cubierto. ¡Muy importante para las renovaciones!</div>
+  </div>
+
+  <div class="info-box naranja">
+    <div class="icono-box">📅</div>
+    <div class="contenido">
+      <strong>¿Cómo ingreso las fechas?</strong>
+      <p>Haz clic en el campo de fecha. Aparecerá un calendario para que selecciones el día,
+      mes y año. También puedes escribirlas directamente en formato <em>DD/MM/AAAA</em>
+      (por ejemplo: 31/12/2025).</p>
+    </div>
+  </div>
+
+  <h3>Sección 5: Valores monetarios</h3>
+
+  <div class="campo">
+    <div class="etiqueta">Prima <span class="requerido">*</span></div>
+    <div class="descripcion">El valor total que paga el cliente por el seguro durante toda la vigencia.
+    Se ingresa sin puntos ni comas (el sistema los agrega automáticamente).
+    Ejemplo: escribe <em>2500000</em> y se muestra como <em>2.500.000</em>.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Valor de la póliza</div>
+    <div class="descripcion">Valor total cubierto por la póliza (el monto máximo de indemnización).</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Valor asegurado</div>
+    <div class="descripcion">El valor del bien o vida asegurado. Por ejemplo, en un seguro de auto,
+    es el valor comercial del vehículo.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Prima pagada</div>
+    <div class="descripcion">Cuánto ha pagado el cliente hasta ahora (si paga en cuotas).</div>
+  </div>
+
+  <h3>Sección 6: Comisiones</h3>
+
+  <p>Las comisiones son el ingreso que recibe la agencia por colocar el seguro.
+  El sistema calcula automáticamente los valores cuando ingresas los porcentajes.</p>
+
+  <div class="campo">
+    <div class="etiqueta">% Comisión</div>
+    <div class="descripcion">Porcentaje de comisión que aplica sobre la prima. Ejemplo: 15 significa 15%.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Valor base comisión</div>
+    <div class="descripcion">Monto sobre el que se calcula la comisión (generalmente es la prima).</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Valor comisión</div>
+    <div class="descripcion">El valor en pesos de la comisión. Si ingresaste el % y la base, el sistema lo calcula solo.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Comisión fija</div>
+    <div class="descripcion">Un monto fijo de comisión que no depende de porcentaje.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">% Comisión adicional</div>
+    <div class="descripcion">Porcentaje de comisión extra (bonos, incentivos de la aseguradora).</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">% Comisión asesor 1, 2, 3</div>
+    <div class="descripcion">Cómo se distribuye la comisión entre los asesores (si hay varios). La suma debe dar el 100%.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">% Comisión agencia</div>
+    <div class="descripcion">Porcentaje que le corresponde a la agencia.</div>
+  </div>
+
+  <h3>Sección 7: Otros datos</h3>
+
+  <div class="campo">
+    <div class="etiqueta">Bien asegurado</div>
+    <div class="descripcion">Descripción del objeto o persona asegurada. Ej: <em>"Toyota Fortuner 2023, placa ABC123"</em>
+    o <em>"Bodega Calle 5 N°12-34"</em>.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Forma de expedición</div>
+    <div class="descripcion">Cómo se emitió la póliza: digital, física, endoso, etc.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Forma de pago</div>
+    <div class="descripcion">Cómo paga el cliente: contado, mensual, trimestral, semestral, anual, etc.</div>
+  </div>
+  <div class="campo">
+    <div class="etiqueta">Observaciones</div>
+    <div class="descripcion">Campo libre para notas adicionales sobre la póliza. Ej: "Cliente pide renovación automática".</div>
+  </div>
+
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 6: MÓDULO DE CATÁLOGOS                            -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 6 – Módulo de Catálogos</span>
+</div>
+
+<div id="sec6" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">📚</div>
+    <div>
+      <div class="numero">Capítulo 6</div>
+      <h2>Módulo de Catálogos</h2>
+    </div>
+  </div>
+
+  <p>
+    Los <strong>catálogos</strong> son las listas maestras del sistema. Son la "base de datos de referencia"
+    que se usa al registrar pólizas. Antes de crear una póliza, las personas, empresas y productos
+    relacionados deben existir en los catálogos.
+  </p>
+
+  <div class="info-box azul">
+    <div class="icono-box">🔐</div>
+    <div class="contenido">
+      <strong>Acceso restringido</strong>
+      <p>El módulo de Catálogos solo está disponible para usuarios con rol <strong>Administrador</strong>.
+      Los Digitadores y Supervisores no pueden ver ni modificar los catálogos.</p>
+    </div>
+  </div>
+
+  <h3>¿Cómo funciona cada catálogo?</h3>
+  <p>Todos los catálogos funcionan igual. Tienen:</p>
+  <ul class="lista">
+    <li><strong>Lista:</strong> Muestra todos los registros con un buscador</li>
+    <li><strong>Crear:</strong> Botón "+" o "Nuevo" para agregar un registro</li>
+    <li><strong>Editar:</strong> Clic sobre el registro para modificarlo</li>
+    <li><strong>Eliminar:</strong> Botón de eliminar (solo si el registro no está siendo usado en pólizas)</li>
+  </ul>
+
+  <div id="sec6a">
+  <h3>6.1 Catálogo de Clientes</h3>
+
+  <p>Registra aquí a cada persona o empresa que tiene o ha tenido pólizas con Rueda Serrano.</p>
+
+  <table>
+    <thead><tr><th>Campo</th><th>¿Qué es?</th><th>Obligatorio</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nombre</strong></td><td>Nombre completo de la persona o razón social de la empresa</td><td>✅ Sí</td></tr>
+      <tr><td><strong>Tipo de persona</strong></td><td>Natural (persona física) o Jurídica (empresa)</td><td>✅ Sí</td></tr>
+      <tr><td><strong>Tipo de documento</strong></td><td>CC, NIT, CE, Pasaporte, etc.</td><td>No</td></tr>
+      <tr><td><strong>Documento</strong></td><td>Número de cédula, NIT u otro documento</td><td>No</td></tr>
+      <tr><td><strong>Teléfono</strong></td><td>Número de contacto del cliente</td><td>No</td></tr>
+      <tr><td><strong>Correo</strong></td><td>Email del cliente</td><td>No</td></tr>
+      <tr><td><strong>Dirección</strong></td><td>Dirección física del cliente</td><td>No</td></tr>
+      <tr><td><strong>Municipio</strong></td><td>Ciudad o municipio (lista de Colombia)</td><td>No</td></tr>
+      <tr><td><strong>Contacto</strong></td><td>Nombre de la persona de contacto (para empresas)</td><td>No</td></tr>
+      <tr><td><strong>Cargo del contacto</strong></td><td>Cargo de esa persona en la empresa</td><td>No</td></tr>
+      <tr><td><strong>Asesor de referencia</strong></td><td>Asesor que trajo este cliente</td><td>No</td></tr>
+      <tr><td><strong>Notas</strong></td><td>Comentarios adicionales sobre el cliente</td><td>No</td></tr>
+      <tr><td><strong>Estado</strong></td><td>Activo o Inactivo</td><td>✅ Sí</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div id="sec6b">
+  <h3>6.2 Catálogo de Asesores</h3>
+
+  <p>Registra a todos los asesores, agentes y corredores que gestionan pólizas.</p>
+
+  <table>
+    <thead><tr><th>Campo</th><th>¿Qué es?</th><th>Obligatorio</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nombre</strong></td><td>Nombre completo del asesor o nombre de la agencia</td><td>✅ Sí</td></tr>
+      <tr><td><strong>Tipo de documento</strong></td><td>CC, NIT, etc.</td><td>No</td></tr>
+      <tr><td><strong>Documento</strong></td><td>Número de identificación</td><td>No</td></tr>
+      <tr><td><strong>Teléfono</strong></td><td>Número de contacto</td><td>No</td></tr>
+      <tr><td><strong>Correo</strong></td><td>Email del asesor</td><td>No</td></tr>
+      <tr><td><strong>% Comisión base</strong></td><td>Porcentaje de comisión que gana por defecto este asesor</td><td>No</td></tr>
+      <tr><td><strong>Estado</strong></td><td>Activo o Inactivo</td><td>✅ Sí</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ─── SECCIÓN 6 continuación ─── -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 6 – Módulo de Catálogos (continuación)</span>
+</div>
+
+  <div id="sec6c">
+  <h3>6.3 Catálogo de Aseguradoras</h3>
+  <p>Lista de las compañías de seguros con las que trabaja Rueda Serrano.</p>
+
+  <table>
+    <thead><tr><th>Campo</th><th>¿Qué es?</th><th>Obligatorio</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nombre</strong></td><td>Nombre de la compañía. Ej: Seguros Sura, Bolívar Seguros</td><td>✅ Sí</td></tr>
+      <tr><td><strong>NIT</strong></td><td>Número de identificación tributaria de la aseguradora</td><td>No</td></tr>
+      <tr><td><strong>Clave</strong></td><td>Código interno de referencia para la aseguradora</td><td>No</td></tr>
+      <tr><td><strong>Estado</strong></td><td>Activa o Inactiva</td><td>✅ Sí</td></tr>
+    </tbody>
+  </table>
+
+  <div id="sec6d">
+  <h3>6.4 Catálogo de Ramos</h3>
+  <p>Los ramos son las <strong>categorías o líneas de negocio</strong> de los seguros.
+  Ejemplos típicos: Automóviles, Vida, SOAT, Hogar, Empresarial, Cumplimiento, Salud.</p>
+
+  <table>
+    <thead><tr><th>Campo</th><th>¿Qué es?</th><th>Obligatorio</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nombre del ramo</strong></td><td>Nombre de la categoría. Ej: "Automóviles"</td><td>✅ Sí</td></tr>
+      <tr><td><strong>% Comisión base del ramo</strong></td><td>Porcentaje de comisión que aplica por defecto para este ramo</td><td>No</td></tr>
+      <tr><td><strong>Observaciones</strong></td><td>Notas adicionales sobre el ramo</td><td>No</td></tr>
+      <tr><td><strong>Estado</strong></td><td>Activo o Inactivo</td><td>✅ Sí</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div id="sec6e">
+  <h3>6.5 Catálogo de Productos</h3>
+  <p>Los productos son los <strong>planes específicos</strong> dentro de un ramo y aseguradora.
+  Por ejemplo: dentro del ramo "Automóvil" de la aseguradora "Sura", puede haber productos como
+  "Todo Riesgo", "Pérdida Total" o "SOAT Sura".</p>
+
+  <table>
+    <thead><tr><th>Campo</th><th>¿Qué es?</th><th>Obligatorio</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nombre del producto</strong></td><td>Nombre comercial del plan. Ej: "Todo Riesgo Plus"</td><td>✅ Sí</td></tr>
+      <tr><td><strong>Ramo</strong></td><td>A qué categoría pertenece este producto</td><td>✅ Sí</td></tr>
+      <tr><td><strong>Aseguradora</strong></td><td>Qué compañía ofrece este producto</td><td>✅ Sí</td></tr>
+      <tr><td><strong>% Comisión del producto</strong></td><td>Comisión específica de este producto (puede diferir del ramo)</td><td>No</td></tr>
+      <tr><td><strong>Comisión fija</strong></td><td>Monto fijo de comisión en lugar de porcentaje</td><td>No</td></tr>
+      <tr><td><strong>% Adicional</strong></td><td>Porcentaje de comisión adicional (bonos de la aseguradora)</td><td>No</td></tr>
+      <tr><td><strong>Descripción</strong></td><td>Descripción del producto y sus coberturas principales</td><td>No</td></tr>
+      <tr><td><strong>Estado</strong></td><td>Activo o Inactivo</td><td>✅ Sí</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div id="sec6f">
+  <h3>6.6 Formas de Pago y Formas de Expedición</h3>
+
+  <h4>Formas de Pago</h4>
+  <p>Define cómo paga el cliente la prima del seguro:</p>
+  <ul class="lista">
+    <li>Contado (pago único)</li>
+    <li>Mensual (12 cuotas)</li>
+    <li>Trimestral (4 cuotas)</li>
+    <li>Semestral (2 cuotas)</li>
+    <li>Anual (1 pago al año)</li>
+  </ul>
+
+  <h4>Formas de Expedición</h4>
+  <p>Define cómo se emitió o tramitó la póliza:</p>
+  <ul class="lista">
+    <li>Digital (correo electrónico)</li>
+    <li>Física (documento impreso)</li>
+    <li>Endoso (modificación a póliza existente)</li>
+    <li>Renovación</li>
+  </ul>
+  </div>
+
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ─── SECCIÓN 6 – Usuarios ─── -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 6 – Usuarios del sistema</span>
+</div>
+
+  <div id="sec6g">
+  <h3>6.7 Usuarios del sistema</h3>
+
+  <p>Desde aquí el administrador puede <strong>crear, editar y gestionar las cuentas de acceso</strong>
+  de cada persona que usa SegurApp. Solo el Administrador puede acceder a este catálogo.</p>
+
+  <table>
+    <thead><tr><th>Campo</th><th>¿Qué es?</th><th>Obligatorio</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nombre de usuario (apodo)</strong></td><td>El nombre con el que la persona inicia sesión. Ej: <em>juanp</em></td><td>✅ Sí</td></tr>
+      <tr><td><strong>Nombre completo</strong></td><td>El nombre real de la persona para identificarla</td><td>✅ Sí</td></tr>
+      <tr><td><strong>Rol</strong></td><td>
+        <span class="tag azul">A – Administrador</span>
+        <span class="tag verde">D – Digitador</span>
+        <span class="tag naranja">S – Supervisor</span>
+      </td><td>✅ Sí</td></tr>
+      <tr><td><strong>Asesor vinculado</strong></td><td>Si este usuario también es un asesor, vincularlo aquí para reportes</td><td>No</td></tr>
+      <tr><td><strong>Correo</strong></td><td>Email para recuperación de contraseña</td><td>No</td></tr>
+      <tr><td><strong>Contraseña</strong></td><td>La contraseña de acceso al sistema</td><td>✅ Sí</td></tr>
+      <tr><td><strong>Estado</strong></td><td>Activo (puede ingresar) o Inactivo (bloqueado)</td><td>✅ Sí</td></tr>
+    </tbody>
+  </table>
+
+  <div class="info-box naranja">
+    <div class="icono-box">🔐</div>
+    <div class="contenido">
+      <strong>Buenas prácticas de seguridad</strong>
+      <p>Cada persona debe tener su propio usuario — no compartan contraseñas. Cuando un empleado
+      deja la empresa, cambia su estado a "Inactivo" para bloquear el acceso sin perder el historial.
+      Las contraseñas deben ser difíciles de adivinar (combina letras, números y símbolos).</p>
+    </div>
+  </div>
+
+  <h3>Cómo crear un nuevo usuario</h3>
+
+  <div class="pasos">
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Ve a Catálogos → Usuarios</strong>
+        <p>Solo disponible para administradores.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic en "Nuevo usuario"</strong>
+        <p>Se abre el formulario de creación.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Completa el nombre de usuario, nombre completo, rol y contraseña</strong>
+        <p>El nombre de usuario no debe tener espacios. Se usa en minúsculas.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Asigna el rol correcto</strong>
+        <p>Piensa bien qué nivel de acceso necesita la persona antes de asignar el rol.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic en "Guardar"</strong>
+        <p>El usuario ya puede ingresar al sistema con las credenciales que creaste.</p>
+      </div>
+    </div>
+  </div>
+
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 7: MÓDULO DE REPORTES                             -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 7 – Módulo de Reportes</span>
+</div>
+
+<div id="sec7" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">📊</div>
+    <div>
+      <div class="numero">Capítulo 7</div>
+      <h2>Módulo de Reportes</h2>
+    </div>
+  </div>
+
+  <p>El módulo de <strong>Reportes</strong> te da una visión general del negocio en números.
+  Puedes ver cuántas pólizas hay, cuánto dinero representan, cuáles vencen pronto y cómo
+  está el desempeño de cada asesor. Es la herramienta de análisis y toma de decisiones.</p>
+
+  <div class="info-box verde">
+    <div class="icono-box">💡</div>
+    <div class="contenido">
+      <strong>¿Cuándo usar los reportes?</strong>
+      <p>Úsalos para reuniones de seguimiento, para planificar estrategias de renovación,
+      para revisar el desempeño de los asesores o para presentar resultados a la gerencia.</p>
+    </div>
+  </div>
+
+  <h3>Cómo cargar los reportes</h3>
+
+  <div class="pasos">
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Ingresa al módulo de Reportes desde el menú principal</strong>
+        <p>Verás 5 pestañas en la parte superior.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic en "Cargar datos"</strong>
+        <p>El sistema carga todas las pólizas para generar los reportes. Puede tardar unos segundos
+        si la cartera es grande. Una barra de progreso te indica el avance.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Aplica filtros si los necesitas</strong>
+        <p>Puedes filtrar por aseguradora, ramo, asesor, producto, estado y rangos de fechas.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Navega entre las pestañas</strong>
+        <p>Cada pestaña muestra un análisis diferente. Los filtros aplicados afectan todas las pestañas.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Pestaña 1: Resumen General</h3>
+
+  <p>Muestra el panorama completo de toda la cartera:</p>
+
+  <table>
+    <thead><tr><th>Indicador</th><th>¿Qué significa?</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Total de pólizas</strong></td><td>Cuántas pólizas hay registradas en el sistema</td></tr>
+      <tr><td><strong>Pólizas vigentes</strong></td><td>Cuántas están actualmente en vigor</td></tr>
+      <tr><td><strong>Pólizas vencidas</strong></td><td>Cuántas ya expiraron y no se han renovado</td></tr>
+      <tr><td><strong>Prima total</strong></td><td>La suma de todas las primas: el valor total de la cartera</td></tr>
+      <tr><td><strong>Valor asegurado total</strong></td><td>El monto total asegurado en todas las pólizas</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Pestaña 2: Por Aseguradora</h3>
+  <p>Muestra cuántas pólizas y cuánta prima tiene cada compañía aseguradora.
+  Útil para ver con qué compañías se trabaja más.</p>
+
+  <table>
+    <thead><tr><th>Columna</th><th>¿Qué muestra?</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Aseguradora</strong></td><td>Nombre de la compañía</td></tr>
+      <tr><td><strong>N° pólizas</strong></td><td>Cuántas pólizas tiene esa aseguradora</td></tr>
+      <tr><td><strong>Prima total</strong></td><td>Suma de todas las primas de esa aseguradora</td></tr>
+      <tr><td><strong>% del total</strong></td><td>Qué porcentaje del negocio total representa</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Pestaña 3: Por Ramo</h3>
+  <p>Muestra la distribución del negocio por línea de seguro (automóvil, vida, hogar, etc.).
+  Permite identificar cuáles ramos son los más fuertes.</p>
+
+  <h3>Pestaña 4: Por Asesor</h3>
+  <p>Muestra la <strong>producción de cada asesor</strong>: cuántas pólizas colocó y cuánta prima generó.
+  Ideal para evaluar el rendimiento del equipo comercial.</p>
+
+  <table>
+    <thead><tr><th>Columna</th><th>¿Qué muestra?</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Asesor</strong></td><td>Nombre del asesor o agencia</td></tr>
+      <tr><td><strong>N° pólizas</strong></td><td>Cuántas pólizas tiene a su cargo</td></tr>
+      <tr><td><strong>Prima total</strong></td><td>Total de prima generada por ese asesor</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Pestaña 5: Vencimientos</h3>
+  <p>Muestra las pólizas que están próximas a vencer. Es la herramienta de <strong>control de renovaciones</strong>.</p>
+
+  <div class="info-box naranja">
+    <div class="icono-box">📅</div>
+    <div class="contenido">
+      <strong>¡Usa los vencimientos cada semana!</strong>
+      <p>Revisa semanalmente las pólizas que vencen en los próximos 30 días para contactar a los clientes
+      a tiempo y ofrecerles la renovación. Un cliente que no renueva a tiempo es un cliente que puede ir a
+      otra aseguradora.</p>
+    </div>
+  </div>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ─── SECCIÓN 7 – Filtros y Export ─── -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 7 – Reportes: Filtros y Exportación</span>
+</div>
+
+  <h3>Filtros disponibles en Reportes</h3>
+
+  <p>Los filtros te permiten analizar solo una parte de la cartera. Por ejemplo,
+  ver solo las pólizas de un asesor específico o solo las de un ramo determinado.</p>
+
+  <table>
+    <thead><tr><th>Filtro</th><th>¿Qué hace?</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Aseguradora</strong></td><td>Muestra solo pólizas de esa compañía</td></tr>
+      <tr><td><strong>Ramo</strong></td><td>Muestra solo ese tipo de seguro</td></tr>
+      <tr><td><strong>Asesor</strong></td><td>Muestra solo las pólizas de ese asesor</td></tr>
+      <tr><td><strong>Producto</strong></td><td>Muestra solo ese plan específico</td></tr>
+      <tr><td><strong>Estado</strong></td>
+        <td><span class="tag verde">Vigentes</span> <span class="tag rojo">Vencidas</span> <span class="tag gris">Todas</span> <span class="tag gris">Sin fecha</span></td>
+      </tr>
+      <tr><td><strong>Fecha vencimiento desde/hasta</strong></td><td>Pólizas que vencen en ese rango</td></tr>
+      <tr><td><strong>Fecha de registro desde/hasta</strong></td><td>Pólizas que se ingresaron en ese período</td></tr>
+      <tr><td><strong>Fecha de expedición desde/hasta</strong></td><td>Pólizas emitidas en ese período</td></tr>
+    </tbody>
+  </table>
+
+  <div class="info-box azul">
+    <div class="icono-box">💡</div>
+    <div class="contenido">
+      <strong>Combinar filtros</strong>
+      <p>Puedes aplicar varios filtros al mismo tiempo. Por ejemplo: "Asesor = Juan Pérez" +
+      "Estado = Vigentes" + "Vencimiento = próximos 30 días" para ver qué renovaciones debe
+      gestionar Juan en el mes.</p>
+    </div>
+  </div>
+
+  <h3>Exportar reportes a Excel</h3>
+
+  <p>Desde cualquier pestaña de reportes puedes exportar la información a Excel:</p>
+
+  <div class="pasos">
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Aplica los filtros deseados</strong>
+        <p>El Excel exportará solo los datos que ves en pantalla (con los filtros activos).</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Selecciona la pestaña que quieres exportar</strong>
+        <p>Por ejemplo, si estás en "Por Asesor", el Excel tendrá el detalle por asesor.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Haz clic en el botón de exportar (ícono de Excel o descarga)</strong>
+        <p>El sistema genera el archivo automáticamente.</p>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-contenido">
+        <strong>Guarda el archivo en tu computador</strong>
+        <p>El archivo se descarga con un nombre descriptivo que incluye la fecha.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>¿Cómo entiende el sistema si una póliza está vigente o vencida?</h3>
+  <p>El sistema compara la <strong>fecha de vencimiento</strong> de cada póliza con la
+  <strong>fecha de hoy</strong>:</p>
+  <ul class="lista">
+    <li>Si la fecha de vencimiento es <strong>mayor</strong> a hoy → la póliza está <span class="tag verde">Vigente</span></li>
+    <li>Si la fecha de vencimiento es <strong>menor o igual</strong> a hoy → la póliza está <span class="tag rojo">Vencida</span></li>
+    <li>Si la póliza no tiene fecha de vencimiento → aparece en la categoría <span class="tag gris">Sin fecha</span></li>
+  </ul>
+
+  <div class="info-box verde">
+    <div class="icono-box">✅</div>
+    <div class="contenido">
+      <strong>El estado se calcula automáticamente</strong>
+      <p>No necesitas actualizar manualmente el estado de cada póliza cada día.
+      El sistema lo calcula en tiempo real comparando las fechas.</p>
+    </div>
+  </div>
+
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 8: ROLES                                           -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 8 – Roles de Usuario</span>
+</div>
+
+<div id="sec8" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">👥</div>
+    <div>
+      <div class="numero">Capítulo 8</div>
+      <h2>Roles de Usuario – ¿Quién puede hacer qué?</h2>
+    </div>
+  </div>
+
+  <p>SegurApp tiene <strong>3 tipos de usuarios</strong>, cada uno con permisos diferentes.
+  Esto permite que cada persona solo acceda a lo que necesita para su trabajo.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Funcionalidad</th>
+        <th style="text-align:center">🔴 Admin</th>
+        <th style="text-align:center">🟡 Digitador</th>
+        <th style="text-align:center">🔵 Supervisor</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Ver lista de pólizas</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+      </tr>
+      <tr>
+        <td>Buscar pólizas</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+      </tr>
+      <tr>
+        <td>Exportar pólizas a Excel</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+      </tr>
+      <tr>
+        <td>Crear nueva póliza</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+      </tr>
+      <tr>
+        <td>Editar póliza existente</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+      </tr>
+      <tr>
+        <td>Eliminar póliza</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+      </tr>
+      <tr>
+        <td>Ver módulo de Catálogos</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+      </tr>
+      <tr>
+        <td>Crear/Editar clientes</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+      </tr>
+      <tr>
+        <td>Crear/Editar asesores</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+      </tr>
+      <tr>
+        <td>Gestionar usuarios</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+        <td style="text-align:center; color:#B71C1C">❌</td>
+      </tr>
+      <tr>
+        <td>Ver módulo de Reportes</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+        <td style="text-align:center; color:#2E7D32">✅</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Descripción de cada rol</h3>
+
+  <div class="campo">
+    <div class="etiqueta">🔴 Administrador (A)</div>
+    <div class="descripcion">Tiene acceso completo a todo el sistema. Puede crear y gestionar usuarios,
+    catálogos, pólizas y reportes. Debe ser una persona de confianza con conocimiento del sistema.</div>
+  </div>
+
+  <div class="campo">
+    <div class="etiqueta">🟡 Digitador (D)</div>
+    <div class="descripcion">Puede ingresar y modificar pólizas, pero no puede gestionar catálogos ni usuarios.
+    Ideal para asistentes administrativos que ingresan la información de pólizas.</div>
+  </div>
+
+  <div class="campo">
+    <div class="etiqueta">🔵 Supervisor (S)</div>
+    <div class="descripcion">Solo puede consultar información y ver reportes. No puede modificar nada.
+    Ideal para gerentes que necesitan ver el estado del negocio sin riesgo de cambiar datos.</div>
+  </div>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 9: PREGUNTAS FRECUENTES                           -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 9 – Preguntas Frecuentes</span>
+</div>
+
+<div id="sec9" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">❓</div>
+    <div>
+      <div class="numero">Capítulo 9</div>
+      <h2>Preguntas Frecuentes</h2>
+    </div>
+  </div>
+
+  <h3>Sobre el acceso</h3>
+
+  <div class="info-box gris">
+    <div class="icono-box">❓</div>
+    <div class="contenido">
+      <strong>No puedo ingresar — dice que el usuario o contraseña son incorrectos</strong>
+      <p>Verifica que el teclado no tenga activado el "Bloq Mayús". Si sigue sin funcionar,
+      usa el enlace "¿Olvidaste tu contraseña?" o contacta al administrador para que la restablezca.</p>
+    </div>
+  </div>
+
+  <div class="info-box gris">
+    <div class="icono-box">❓</div>
+    <div class="contenido">
+      <strong>El sistema se ve muy pequeño o muy grande</strong>
+      <p>Ajusta el zoom del navegador con Ctrl + (para agrandar) o Ctrl - (para reducir).
+      El 100% suele ser el tamaño correcto.</p>
+    </div>
+  </div>
+
+  <h3>Sobre las pólizas</h3>
+
+  <div class="info-box gris">
+    <div class="icono-box">❓</div>
+    <div class="contenido">
+      <strong>Ingresé un dato mal en una póliza. ¿Cómo lo corrijo?</strong>
+      <p>Busca la póliza en la lista, haz clic sobre ella para abrirla, corrige el campo
+      y guarda. El sistema actualiza el registro inmediatamente.</p>
+    </div>
+  </div>
+
+  <div class="info-box gris">
+    <div class="icono-box">❓</div>
+    <div class="contenido">
+      <strong>No encuentro al cliente en el formulario de póliza</strong>
+      <p>El cliente debe existir en el catálogo. Ve a Catálogos → Clientes, créalo allí y
+      luego regresa al formulario de póliza. Ahora aparecerá en la búsqueda.</p>
+    </div>
+  </div>
+
+  <div class="info-box gris">
+    <div class="icono-box">❓</div>
+    <div class="contenido">
+      <strong>El número de póliza ya existe — el sistema no me deja guardarlo</strong>
+      <p>El número de póliza (N° Póliza) debe ser único. Si la aseguradora repite números,
+      agrega algún prefijo como el año o la aseguradora para diferenciarlos. Ej: <em>SURA-2024-001234</em>.</p>
+    </div>
+  </div>
+
+  <div class="info-box gris">
+    <div class="icono-box">❓</div>
+    <div class="contenido">
+      <strong>La tabla de pólizas tarda mucho en cargar</strong>
+      <p>La "carga rápida" muestra las 500 más recientes casi instantáneamente. Si usas
+      "Cargar todas", puede tardar más dependiendo del volumen de datos y la conexión a internet.
+      Esto es normal.</p>
+    </div>
+  </div>
+
+  <h3>Sobre los reportes</h3>
+
+  <div class="info-box gris">
+    <div class="icono-box">❓</div>
+    <div class="contenido">
+      <strong>Los reportes no muestran todas las pólizas</strong>
+      <p>Verifica si tienes algún filtro activo. Revisa los campos de filtro y borra los que
+      no necesites. También asegúrate de haber hecho clic en "Cargar datos" antes de aplicar filtros.</p>
+    </div>
+  </div>
+
+  <div class="info-box gris">
+    <div class="icono-box">❓</div>
+    <div class="contenido">
+      <strong>El archivo Excel no descarga</strong>
+      <p>Verifica que el navegador no esté bloqueando las descargas. En Chrome, mira la barra
+      inferior o la esquina superior derecha para ver si hay una descarga bloqueada.
+      Haz clic en "Permitir" si aparece esa opción.</p>
+    </div>
+  </div>
+
+  <h3>Sobre los catálogos</h3>
+
+  <div class="info-box gris">
+    <div class="icono-box">❓</div>
+    <div class="contenido">
+      <strong>No puedo eliminar un cliente — dice que tiene pólizas asociadas</strong>
+      <p>El sistema protege los registros que están siendo usados. Si el cliente tiene pólizas
+      registradas, no se puede eliminar. En su lugar, cambia su estado a "Inactivo" para ocultarlo
+      de las búsquedas sin perder el historial.</p>
+    </div>
+  </div>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  SECCIÓN 10: REFERENCIA RÁPIDA                             -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="pagina">
+<div class="encabezado-pagina">
+  <span class="nombre-app">🛡️ SegurApp</span>
+  <span>Capítulo 10 – Referencia Rápida</span>
+</div>
+
+<div id="sec10" class="seccion" style="page-break-before:avoid">
+  <div class="seccion-header">
+    <div class="icono">⚡</div>
+    <div>
+      <div class="numero">Capítulo 10</div>
+      <h2>Referencia Rápida</h2>
+    </div>
+  </div>
+
+  <h3>Acciones más comunes — paso a paso resumido</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Tarea</th>
+        <th>Cómo hacerlo</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Ingresar al sistema</strong></td>
+        <td>Abrir la URL → Escribir usuario y contraseña → Clic en Ingresar</td>
+      </tr>
+      <tr>
+        <td><strong>Buscar una póliza</strong></td>
+        <td>Módulo Pólizas → Campo de búsqueda → Escribir nombre/número → Esperar resultados</td>
+      </tr>
+      <tr>
+        <td><strong>Crear póliza nueva</strong></td>
+        <td>Módulo Pólizas → Botón "Nueva" → Completar formulario → Guardar</td>
+      </tr>
+      <tr>
+        <td><strong>Editar una póliza</strong></td>
+        <td>Módulo Pólizas → Buscar la póliza → Clic en la fila → Modificar → Guardar</td>
+      </tr>
+      <tr>
+        <td><strong>Exportar a Excel</strong></td>
+        <td>Módulo Pólizas → (Aplicar filtros) → Botón Exportar → Guardar archivo</td>
+      </tr>
+      <tr>
+        <td><strong>Ver pólizas por vencer</strong></td>
+        <td>Módulo Reportes → Cargar datos → Pestaña Vencimientos → Aplicar filtro de fechas</td>
+      </tr>
+      <tr>
+        <td><strong>Crear un cliente nuevo</strong></td>
+        <td>Catálogos → Clientes → Botón "Nuevo" → Completar datos → Guardar</td>
+      </tr>
+      <tr>
+        <td><strong>Agregar un asesor</strong></td>
+        <td>Catálogos → Asesores → Botón "Nuevo" → Completar datos → Guardar</td>
+      </tr>
+      <tr>
+        <td><strong>Crear usuario del sistema</strong></td>
+        <td>Catálogos → Usuarios → Botón "Nuevo" → Completar datos → Asignar rol → Guardar</td>
+      </tr>
+      <tr>
+        <td><strong>Ver producción por asesor</strong></td>
+        <td>Reportes → Cargar datos → Pestaña "Por Asesor"</td>
+      </tr>
+      <tr>
+        <td><strong>Cambiar contraseña</strong></td>
+        <td>Contactar al administrador para que la actualice en Catálogos → Usuarios</td>
+      </tr>
+      <tr>
+        <td><strong>Cerrar sesión</strong></td>
+        <td>Menú principal → Botón "Cerrar sesión" → Confirmar</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Glosario de términos</h3>
+
+  <table>
+    <thead><tr><th>Término</th><th>¿Qué significa?</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Póliza</strong></td><td>Contrato de seguro entre el cliente y la aseguradora</td></tr>
+      <tr><td><strong>Prima</strong></td><td>El dinero que paga el cliente por el seguro</td></tr>
+      <tr><td><strong>Ramo</strong></td><td>Categoría del seguro (automóvil, vida, hogar, etc.)</td></tr>
+      <tr><td><strong>Producto</strong></td><td>Plan específico dentro de un ramo</td></tr>
+      <tr><td><strong>Aseguradora</strong></td><td>Compañía que emite y respalda el seguro</td></tr>
+      <tr><td><strong>Asesor</strong></td><td>Persona que vende y gestiona los seguros</td></tr>
+      <tr><td><strong>Intermediario</strong></td><td>Persona o empresa que hace de puente entre asesor y aseguradora</td></tr>
+      <tr><td><strong>Comisión</strong></td><td>Porcentaje o valor que gana el asesor por cada póliza vendida</td></tr>
+      <tr><td><strong>Vigente</strong></td><td>Póliza que aún tiene cobertura (no ha vencido)</td></tr>
+      <tr><td><strong>Vencida</strong></td><td>Póliza que ya expiró y no da cobertura</td></tr>
+      <tr><td><strong>Endoso</strong></td><td>Modificación o corrección a una póliza existente</td></tr>
+      <tr><td><strong>Renovación</strong></td><td>Extender la vigencia de una póliza por un período adicional</td></tr>
+      <tr><td><strong>Catálogo</strong></td><td>Lista maestra de elementos del sistema (clientes, asesores, etc.)</td></tr>
+      <tr><td><strong>Rol</strong></td><td>Nivel de permisos de un usuario en el sistema</td></tr>
+      <tr><td><strong>ID</strong></td><td>Número único de identificación de un registro en el sistema</td></tr>
+      <tr><td><strong>Exportar a Excel</strong></td><td>Descargar los datos en formato de hoja de cálculo</td></tr>
+    </tbody>
+  </table>
+
+</div>
+<div class="pie-pagina">SegurApp – Manual de Usuario v1.0 · Rueda Serrano Asesores de Seguros · 2026</div>
+</div>
+
+<!-- ─── CONTRAPORTADA ─── -->
+<div class="pagina">
+<div style="
+  min-height: 297mm;
+  background: linear-gradient(135deg, #0D47A1 0%, #1565C0 50%, #1E88E5 100%);
+  margin: 0 -18mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  text-align: center;
+  padding: 40mm 20mm;
+">
+  <div style="font-size:60px; margin-bottom:24px;">🛡️</div>
+  <h2 style="font-size:28px; font-weight:800; margin-bottom:12px;">¿Necesitas ayuda?</h2>
+  <p style="font-size:15px; opacity:0.85; max-width:380px; margin-bottom:40px; line-height:1.6;">
+    Si tienes dudas adicionales o encuentras algún problema con el sistema,
+    contacta al administrador de SegurApp o al equipo de soporte técnico.
+  </p>
+  <div style="background:rgba(255,255,255,0.15); border-radius:16px; padding:24px 40px; border:1px solid rgba(255,255,255,0.25); margin-bottom:40px;">
+    <div style="font-size:13px; opacity:0.7; margin-bottom:8px; letter-spacing:1px; text-transform:uppercase;">Desarrollado para</div>
+    <div style="font-size:20px; font-weight:700;">Rueda Serrano Asesores de Seguros</div>
+  </div>
+  <div style="font-size:11px; opacity:0.55;">
+    SegurApp v1.0 &nbsp;·&nbsp; Manual de Usuario &nbsp;·&nbsp; Abril 2026<br>
+    Documento confidencial – Solo para uso interno
+  </div>
+</div>
+</div>
+
+</body>
+</html>

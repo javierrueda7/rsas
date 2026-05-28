@@ -16,7 +16,10 @@ class RepositorioPolizas {
     dynamic query = _db.from(_vista).select();
 
     if (b.isNotEmpty) {
+      final intId = int.tryParse(b);
+      final idClause = intId != null ? 'id.eq.$intId,' : '';
       query = query.or(
+        '$idClause'
         'nro_poliza.ilike.%$b%,'
         'nombre_cliente.ilike.%$b%,'
         'doc_cliente.ilike.%$b%,'
@@ -55,7 +58,10 @@ class RepositorioPolizas {
       dynamic query = _db.from(_vista).select();
 
       if (b.isNotEmpty) {
+        final intId = int.tryParse(b);
+        final idClause = intId != null ? 'id.eq.$intId,' : '';
         query = query.or(
+          '$idClause'
           'nro_poliza.ilike.%$b%,'
           'nombre_cliente.ilike.%$b%,'
           'doc_cliente.ilike.%$b%,'

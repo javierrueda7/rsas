@@ -34,6 +34,9 @@ class _PaginaReportesState extends State<PaginaReportes>
   late final TabController _tabCtrl;
   final _repo = RepositorioPolizas();
 
+  final _ctrlBuscar = TextEditingController();
+  String _busqueda = '';
+
   List<Poliza> _polizas = [];
   bool _cargando = true;
   int _cargados = 0;
@@ -73,6 +76,7 @@ class _PaginaReportesState extends State<PaginaReportes>
 
   @override
   void dispose() {
+    _ctrlBuscar.dispose();
     _tabCtrl.dispose();
     super.dispose();
   }
@@ -124,7 +128,21 @@ class _PaginaReportesState extends State<PaginaReportes>
 
   List<Poliza> get _filtradas {
     final hoy = _hoy;
+    final q = _busqueda.toLowerCase();
+    final intId = q.isNotEmpty ? int.tryParse(_busqueda) : null;
     return _polizas.where((p) {
+      if (q.isNotEmpty) {
+        final coincide = (intId != null && p.id == intId) ||
+            (p.nroPoliza ?? '').toLowerCase().contains(q) ||
+            (p.nombreCliente ?? '').toLowerCase().contains(q) ||
+            (p.docCliente ?? '').toLowerCase().contains(q) ||
+            (p.nombreAseg ?? '').toLowerCase().contains(q) ||
+            (p.nombreRamo ?? '').toLowerCase().contains(q) ||
+            (p.nombreProd ?? '').toLowerCase().contains(q) ||
+            (p.nombreAsesor ?? '').toLowerCase().contains(q) ||
+            (p.bienAsegurado ?? '').toLowerCase().contains(q);
+        if (!coincide) return false;
+      }
       if (_filtroAseg   != null && (p.nombreAseg   ?? '') != _filtroAseg)   return false;
       if (_filtroRamo   != null && (p.nombreRamo   ?? '') != _filtroRamo)   return false;
       if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
@@ -162,15 +180,20 @@ class _PaginaReportesState extends State<PaginaReportes>
       (_filtroEstado != 0 ? 1 : 0) +
       ((_filtroFfinDesde != null || _filtroFfinHasta != null) ? 1 : 0) +
       ((_filtroFregDesde != null || _filtroFregHasta != null) ? 1 : 0) +
-      ((_filtroFexpDesde != null || _filtroFexpHasta != null) ? 1 : 0);
+      ((_filtroFexpDesde != null || _filtroFexpHasta != null) ? 1 : 0) +
+      (_busqueda.isNotEmpty ? 1 : 0);
 
-  void _limpiarFiltros() => setState(() {
-        _filtroAseg = _filtroRamo = _filtroAsesor = _filtroProd = null;
-        _filtroEstado = 0;
-        _filtroFfinDesde = _filtroFfinHasta = null;
-        _filtroFregDesde = _filtroFregHasta = null;
-        _filtroFexpDesde = _filtroFexpHasta = null;
-      });
+  void _limpiarFiltros() {
+    _ctrlBuscar.clear();
+    setState(() {
+      _busqueda = '';
+      _filtroAseg = _filtroRamo = _filtroAsesor = _filtroProd = null;
+      _filtroEstado = 0;
+      _filtroFfinDesde = _filtroFfinHasta = null;
+      _filtroFregDesde = _filtroFregHasta = null;
+      _filtroFexpDesde = _filtroFexpHasta = null;
+    });
+  }
 
   // ── Selectores de fechas ──────────────────────────────────────────────────
 
@@ -455,6 +478,28 @@ class _PaginaReportesState extends State<PaginaReportes>
               ? _vistaError()
               : Column(
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: TextField(
+                    controller: _ctrlBuscar,
+                    onChanged: (v) => setState(() => _busqueda = v.trim()),
+                    decoration: InputDecoration(
+                      labelText: 'Buscar por ID, póliza, cliente, documento, aseguradora, ramo, asesor…',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.search),
+                      isDense: true,
+                      suffixIcon: _busqueda.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _ctrlBuscar.clear();
+                                setState(() => _busqueda = '');
+                              },
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
                 AnimatedSize(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeInOut,
