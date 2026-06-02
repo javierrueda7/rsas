@@ -32,27 +32,69 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   String? _filtroRamo;
   String? _filtroProd;
   String? _filtroAsesor;
+  String? _filtroCliente;
+  int _clienteResetKey = 0;
 
-  List<String> get _opAseguradoras => polizas
-      .map((p) => p.nombreAseg ?? '').where((s) => s.isNotEmpty)
-      .toSet().toList()..sort();
-  List<String> get _opRamos => polizas
-      .map((p) => p.nombreRamo ?? '').where((s) => s.isNotEmpty)
-      .toSet().toList()..sort();
-  List<String> get _opProductos => polizas
-      .map((p) => p.nombreProd ?? '').where((s) => s.isNotEmpty)
-      .toSet().toList()..sort();
-  List<String> get _opAsesores => polizas
-      .map((p) => p.nombreAsesor ?? '').where((s) => s.isNotEmpty)
-      .toSet().toList()..sort();
+  bool _matchCliente(Poliza p, String q) =>
+      (p.nombreCliente ?? '').toLowerCase().contains(q) ||
+      (p.docCliente ?? '').toLowerCase().contains(q);
+
+  List<String> get _opAseguradoras => polizas.where((p) {
+    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
+    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+    if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
+    return true;
+  }).map((p) => p.nombreAseg ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+
+  List<String> get _opRamos => polizas.where((p) {
+    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
+    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+    if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
+    return true;
+  }).map((p) => p.nombreRamo ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+
+  List<String> get _opProductos => polizas.where((p) {
+    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
+    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
+    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+    if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
+    return true;
+  }).map((p) => p.nombreProd ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+
+  List<String> get _opAsesores => polizas.where((p) {
+    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
+    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
+    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+    if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
+    return true;
+  }).map((p) => p.nombreAsesor ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+
+  List<String> get _opClientes => polizas.where((p) {
+    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
+    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
+    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+    return true;
+  }).map((p) => p.nombreCliente ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
 
   List<Poliza> get _polizasFiltradas => polizas.where((p) {
-    if (_filtroAseg != null && p.nombreAseg != _filtroAseg) return false;
-    if (_filtroRamo != null && p.nombreRamo != _filtroRamo) return false;
-    if (_filtroProd != null && p.nombreProd != _filtroProd) return false;
-    if (_filtroAsesor != null && p.nombreAsesor != _filtroAsesor) return false;
+    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
+    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
+    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+    if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
   }).toList();
+
+  void _setFiltro(void Function() setter) {
+    setState(setter);
+    final hayFiltro = _filtroAseg != null || _filtroRamo != null ||
+        _filtroProd != null || _filtroAsesor != null ||
+        (_filtroCliente != null && _filtroCliente!.isNotEmpty);
+    if (hayFiltro && !_datosCompletos && !cargando) _cargarTodo();
+  }
 
   // Columnas:
   // 0  Cód.          1  Nro Póliza    2  Bien Asegurado
@@ -229,32 +271,84 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
     );
   }
 
-  Widget _filtroDropdown({
+  Widget _filtroAuto({
     required String label,
-    required String? valor,
+    required String? value,
     required List<String> opciones,
     required ValueChanged<String?> onChanged,
+    bool textSearch = false,
+    int resetKey = 0,
   }) {
-    final safeValor = opciones.contains(valor) ? valor : null;
+    final cs = Theme.of(context).colorScheme;
+    // textSearch: clave estable durante escritura, solo cambia al limpiar (resetKey)
+    // exacto: ObjectKey(value) recrea el widget cuando el valor cambia externamente
+    final key = textSearch ? ValueKey('$label-$resetKey') : ObjectKey(value);
     return SizedBox(
-      width: 150,
-      child: DropdownButtonFormField<String?>(
-        value: safeValor,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: label,
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          border: const OutlineInputBorder(),
+      width: 210,
+      child: Autocomplete<String>(
+        key: key,
+        initialValue: TextEditingValue(text: value ?? ''),
+        optionsBuilder: (tv) {
+          final q = tv.text.toLowerCase().trim();
+          if (q.isEmpty) return opciones;
+          return opciones.where((o) => o.toLowerCase().contains(q));
+        },
+        optionsViewBuilder: (ctx, onSelected, options) => Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 260, maxWidth: 280),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (_, i) {
+                  final o = options.elementAt(i);
+                  return ListTile(
+                    dense: true,
+                    selected: o == value,
+                    title: Text(o, style: const TextStyle(fontSize: 13)),
+                    onTap: () => onSelected(o),
+                  );
+                },
+              ),
+            ),
+          ),
         ),
-        items: [
-          const DropdownMenuItem(value: null, child: Text('Todos')),
-          ...opciones.map((o) => DropdownMenuItem(
-            value: o,
-            child: Text(o, overflow: TextOverflow.ellipsis),
-          )),
-        ],
-        onChanged: onChanged,
+        onSelected: (sel) => onChanged(sel.isEmpty ? null : sel),
+        fieldViewBuilder: (ctx, ctrl, focusNode, _) => TextFormField(
+          controller: ctrl,
+          focusNode: focusNode,
+          style: const TextStyle(fontSize: 13),
+          onChanged: (t) {
+            if (textSearch) {
+              onChanged(t.isNotEmpty ? t : null);
+            } else {
+              if (t.isEmpty && value != null) onChanged(null);
+            }
+          },
+          decoration: InputDecoration(
+            labelText: label,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            filled: true,
+            fillColor: cs.surface,
+            prefixIcon: const Icon(Icons.search, size: 16),
+            suffixIcon: value != null
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 16),
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      ctrl.clear();
+                      setState(() => onChanged(null));
+                    },
+                  )
+                : null,
+          ),
+        ),
       ),
     );
   }
@@ -693,54 +787,60 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _filtroDropdown(
-                    label: 'Aseguradora',
-                    valor: _filtroAseg,
-                    opciones: _opAseguradoras,
-                    onChanged: (v) => setState(() => _filtroAseg = v),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _filtroAuto(
+                  label: 'Cliente',
+                  value: _filtroCliente,
+                  opciones: _opClientes,
+                  textSearch: true,
+                  resetKey: _clienteResetKey,
+                  onChanged: (v) => _setFiltro(() => _filtroCliente = v),
+                ),
+                _filtroAuto(
+                  label: 'Aseguradora',
+                  value: _filtroAseg,
+                  opciones: _opAseguradoras,
+                  onChanged: (v) => _setFiltro(() => _filtroAseg = v),
+                ),
+                _filtroAuto(
+                  label: 'Ramo',
+                  value: _filtroRamo,
+                  opciones: _opRamos,
+                  onChanged: (v) => _setFiltro(() => _filtroRamo = v),
+                ),
+                _filtroAuto(
+                  label: 'Producto',
+                  value: _filtroProd,
+                  opciones: _opProductos,
+                  onChanged: (v) => _setFiltro(() => _filtroProd = v),
+                ),
+                _filtroAuto(
+                  label: 'Asesor',
+                  value: _filtroAsesor,
+                  opciones: _opAsesores,
+                  onChanged: (v) => _setFiltro(() => _filtroAsesor = v),
+                ),
+                if (_filtroAseg != null || _filtroRamo != null ||
+                    _filtroProd != null || _filtroAsesor != null ||
+                    _filtroCliente != null)
+                  TextButton.icon(
+                    icon: const Icon(Icons.clear, size: 16),
+                    label: const Text('Limpiar', style: TextStyle(fontSize: 13)),
+                    onPressed: () => setState(() {
+                      _filtroAseg = null;
+                      _filtroRamo = null;
+                      _filtroProd = null;
+                      _filtroAsesor = null;
+                      _filtroCliente = null;
+                      _clienteResetKey++;
+                    }),
                   ),
-                  const SizedBox(width: 8),
-                  _filtroDropdown(
-                    label: 'Ramo',
-                    valor: _filtroRamo,
-                    opciones: _opRamos,
-                    onChanged: (v) => setState(() => _filtroRamo = v),
-                  ),
-                  const SizedBox(width: 8),
-                  _filtroDropdown(
-                    label: 'Producto',
-                    valor: _filtroProd,
-                    opciones: _opProductos,
-                    onChanged: (v) => setState(() => _filtroProd = v),
-                  ),
-                  const SizedBox(width: 8),
-                  _filtroDropdown(
-                    label: 'Asesor',
-                    valor: _filtroAsesor,
-                    opciones: _opAsesores,
-                    onChanged: (v) => setState(() => _filtroAsesor = v),
-                  ),
-                  if (_filtroAseg != null || _filtroRamo != null ||
-                      _filtroProd != null || _filtroAsesor != null) ...[
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      icon: const Icon(Icons.clear, size: 16),
-                      label: const Text('Limpiar', style: TextStyle(fontSize: 13)),
-                      onPressed: () => setState(() {
-                        _filtroAseg = null;
-                        _filtroRamo = null;
-                        _filtroProd = null;
-                        _filtroAsesor = null;
-                      }),
-                    ),
-                  ],
-                ],
-              ),
+              ],
             ),
           ),
           Padding(

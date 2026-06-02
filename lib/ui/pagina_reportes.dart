@@ -49,6 +49,8 @@ class _PaginaReportesState extends State<PaginaReportes>
   String? _filtroRamo;
   String? _filtroAsesor;
   String? _filtroProd;
+  String? _filtroCliente;
+  int _clienteResetKey = 0;
   int _filtroEstado = 0;         // 0=Todas 1=Vigentes 2=Vencidas 3=Sin fecha
   DateTime? _filtroFfinDesde;    // F. Vencimiento desde
   DateTime? _filtroFfinHasta;    // F. Vencimiento hasta
@@ -106,23 +108,55 @@ class _PaginaReportesState extends State<PaginaReportes>
     return 'Error al cargar los datos.\n$s';
   }
 
-  // ── Listas únicas (siempre del set completo) ──────────────────────────────
+  // ── Listas dinámicas (cada una considera los demás filtros activos) ──────────
 
-  List<String> get _listaAseg => _polizas
-      .map((p) => p.nombreAseg ?? '').where((s) => s.isNotEmpty)
-      .toSet().toList()..sort();
+  bool _matchCliente(Poliza p, String q) =>
+      (p.nombreCliente ?? '').toLowerCase().contains(q) ||
+      (p.docCliente ?? '').toLowerCase().contains(q);
 
-  List<String> get _listaRamos => _polizas
-      .map((p) => p.nombreRamo ?? '').where((s) => s.isNotEmpty)
-      .toSet().toList()..sort();
+  List<String> get _listaAseg => _polizas.where((p) {
+    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
+    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+    if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
+        !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
+    return true;
+  }).map((p) => p.nombreAseg ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
 
-  List<String> get _listaAsesores => _polizas
-      .map((p) => p.nombreAsesor ?? '').where((s) => s.isNotEmpty)
-      .toSet().toList()..sort();
+  List<String> get _listaRamos => _polizas.where((p) {
+    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
+    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+    if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
+        !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
+    return true;
+  }).map((p) => p.nombreRamo ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
 
-  List<String> get _listaProductos => _polizas
-      .map((p) => p.nombreProd ?? '').where((s) => s.isNotEmpty)
-      .toSet().toList()..sort();
+  List<String> get _listaAsesores => _polizas.where((p) {
+    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
+    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
+    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+    if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
+        !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
+    return true;
+  }).map((p) => p.nombreAsesor ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+
+  List<String> get _listaProductos => _polizas.where((p) {
+    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
+    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
+    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+    if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
+        !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
+    return true;
+  }).map((p) => p.nombreProd ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+
+  List<String> get _listaClientes => _polizas.where((p) {
+    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
+    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
+    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+    return true;
+  }).map((p) => p.nombreCliente ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
 
   // ── Filtrado ──────────────────────────────────────────────────────────────
 
@@ -147,6 +181,8 @@ class _PaginaReportesState extends State<PaginaReportes>
       if (_filtroRamo   != null && (p.nombreRamo   ?? '') != _filtroRamo)   return false;
       if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
       if (_filtroProd   != null && (p.nombreProd   ?? '') != _filtroProd)   return false;
+      if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
+          !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
       if (_filtroEstado == 1 &&
           (p.ffinPoliza == null || p.ffinPoliza!.isBefore(hoy))) return false;
       if (_filtroEstado == 2 &&
@@ -181,12 +217,15 @@ class _PaginaReportesState extends State<PaginaReportes>
       ((_filtroFfinDesde != null || _filtroFfinHasta != null) ? 1 : 0) +
       ((_filtroFregDesde != null || _filtroFregHasta != null) ? 1 : 0) +
       ((_filtroFexpDesde != null || _filtroFexpHasta != null) ? 1 : 0) +
-      (_busqueda.isNotEmpty ? 1 : 0);
+      (_busqueda.isNotEmpty ? 1 : 0) +
+      (_filtroCliente != null && _filtroCliente!.isNotEmpty ? 1 : 0);
 
   void _limpiarFiltros() {
     _ctrlBuscar.clear();
     setState(() {
       _busqueda = '';
+      _filtroCliente = null;
+      _clienteResetKey++;
       _filtroAseg = _filtroRamo = _filtroAsesor = _filtroProd = null;
       _filtroEstado = 0;
       _filtroFfinDesde = _filtroFfinHasta = null;
@@ -546,6 +585,14 @@ class _PaginaReportesState extends State<PaginaReportes>
           // ── Fila 1: dropdowns ──────────────────────────────────────────
           Wrap(spacing: 10, runSpacing: 8, children: [
             _filtroAuto(
+              label: 'Cliente',
+              value: _filtroCliente,
+              opciones: _listaClientes,
+              textSearch: true,
+              resetKey: _clienteResetKey,
+              onChanged: (v) => setState(() => _filtroCliente = v),
+            ),
+            _filtroAuto(
               label: 'Aseguradora',
               value: _filtroAseg,
               opciones: _listaAseg,
@@ -657,13 +704,15 @@ class _PaginaReportesState extends State<PaginaReportes>
     required String? value,
     required List<String> opciones,
     required ValueChanged<String?> onChanged,
+    bool textSearch = false,
+    int resetKey = 0,
   }) {
     final cs = Theme.of(context).colorScheme;
+    final key = textSearch ? ValueKey('$label-$resetKey') : ObjectKey(value);
     return SizedBox(
       width: 210,
       child: Autocomplete<String>(
-        // ObjectKey fuerza reinicio cuando el valor cambia externamente (limpiar filtros)
-        key: ObjectKey(value),
+        key: key,
         initialValue: TextEditingValue(text: value ?? ''),
         optionsBuilder: (TextEditingValue tv) {
           final q = tv.text.toLowerCase().trim();
@@ -695,14 +744,17 @@ class _PaginaReportesState extends State<PaginaReportes>
             ),
           ),
         ),
-        onSelected: (sel) => setState(() => onChanged(sel)),
+        onSelected: (sel) => setState(() => onChanged(sel.isEmpty ? null : sel)),
         fieldViewBuilder: (ctx, ctrl, focusNode, _) => TextFormField(
           controller: ctrl,
           focusNode: focusNode,
           style: const TextStyle(fontSize: 13),
           onChanged: (t) {
-            // Si el usuario borra el campo manualmente, limpia el filtro
-            if (t.isEmpty && value != null) setState(() => onChanged(null));
+            if (textSearch) {
+              setState(() => onChanged(t.isNotEmpty ? t : null));
+            } else {
+              if (t.isEmpty && value != null) setState(() => onChanged(null));
+            }
           },
           decoration: InputDecoration(
             labelText: label,
