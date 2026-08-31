@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_theme.dart';
 import 'form_cliente.dart';
 
 class ListaClientes extends StatefulWidget {
@@ -91,6 +92,8 @@ class _ListaClientesState extends State<ListaClientes> {
           recordarCliente: c.recordarCliente,
         );
       }).toList();
+
+      conMunic.sort((a, b) => a.id.compareTo(b.id));
 
       if (!mounted) return;
       setState(() {
@@ -215,7 +218,7 @@ class _ListaClientesState extends State<ListaClientes> {
 
   Widget _vistaMovil(List<Cliente> data) {
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
       itemCount: data.length,
       itemBuilder: (_, i) {
         final c = data[i];
@@ -265,9 +268,9 @@ class _ListaClientesState extends State<ListaClientes> {
                 PopupMenuItem(
                   value: 'delete',
                   child: Row(children: [
-                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                    Icon(Icons.delete_outline, size: 18, color: AppTheme.danger),
                     SizedBox(width: 10),
-                    Text('Eliminar', style: TextStyle(color: Colors.red)),
+                    Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
                   ]),
                 ),
               ],
@@ -313,7 +316,7 @@ class _ListaClientesState extends State<ListaClientes> {
     }
 
     return Container(
-      color: Colors.grey.shade200,
+      color: cs.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       child: Row(children: [
         col('ID', _wId, () => _sort<num>((c) => c.id, 0, _sortColumnIndex != 0 || !_sortAscending), 0),
@@ -338,7 +341,7 @@ class _ListaClientesState extends State<ListaClientes> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+          border: Border(bottom: BorderSide(color: AppTheme.outlineVariant)),
         ),
         child: Row(children: [
           SizedBox(width: _wId, child: Text(c.id.toString(), style: const TextStyle(fontSize: 13))),
@@ -422,7 +425,7 @@ class _ListaClientesState extends State<ListaClientes> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: TextField(
               controller: _buscarCtrl,
               decoration: InputDecoration(

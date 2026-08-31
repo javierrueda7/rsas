@@ -139,18 +139,14 @@ Future<int> obtenerSiguienteIdCliente() async {
   return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
 }
 
-Future<bool> existeClienteId(int id) async {
-  final res = await _db.from('clientes').select('id').eq('id', id).maybeSingle();
-  return res != null;
-}
-
-Future<void> crearCliente(Cliente c) async {
+/// Crea el cliente y devuelve el ID real asignado por la base.
+Future<int> crearCliente(Cliente c) async {
   try {
-    await _db.from('clientes').insert({
-      'id': c.id,
+    final res = await _db.from('clientes').insert({
       ...c.toInsertMap(),
       'usuario_id': Sesion.usuarioId,
-    });
+    }).select('id').single();
+    return (res['id'] as num).toInt();
   } on PostgrestException catch (e) {
     throw Exception(_mensajePG(
       e,
@@ -191,17 +187,6 @@ Future<void> eliminarCliente(int id) async {
     return rows.map(Municipio.fromMap).toList();
   }
 
-  Future<Municipio?> obtenerMunicipio(int id) async {
-    final res = await _db
-        .from('municipio')
-        .select()
-        .eq('id', id)
-        .maybeSingle();
-
-    if (res == null) return null;
-    return Municipio.fromMap(res as Map<String, dynamic>);
-  }
-
   // ================== ASESORES ==================
 Future<List<Asesor>> listarAsesores({bool soloActivos = false}) async {
   dynamic q = _db.from('asesores').select();
@@ -228,26 +213,15 @@ Future<int> obtenerSiguienteIdAsesor() async {
   return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
 }
 
-Future<bool> existeAsesorId(int id) async {
-  final res = await _db
-      .from('asesores')
-      .select('id')
-      .eq('id', id)
-      .maybeSingle();
-
-  return res != null;
-}
-
 Future<void> crearAsesor(Asesor a) async {
   try {
     await _db.from('asesores').insert({
-      'id': a.id,
       ...a.toInsertMap(),
       'usuario_id': Sesion.usuarioId,
     });
   } on PostgrestException catch (e) {
     throw Exception(
-      _mensajePG(e, unico: 'Ya existe un asesor con esa información o ID.'),
+      _mensajePG(e, unico: 'Ya existe un asesor con esa información.'),
     );
   }
 }
@@ -298,26 +272,15 @@ Future<int> obtenerSiguienteIdAseguradora() async {
   return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
 }
 
-Future<bool> existeAseguradoraId(int id) async {
-  final res = await _db
-      .from('aseguradoras')
-      .select('id')
-      .eq('id', id)
-      .maybeSingle();
-
-  return res != null;
-}
-
 Future<void> crearAseguradora(Aseguradora a) async {
   try {
     await _db.from('aseguradoras').insert({
-      'id': a.id,
       ...a.toInsertMap(),
       'usuario_id': Sesion.usuarioId,
     });
   } on PostgrestException catch (e) {
     throw Exception(
-      _mensajePG(e, unico: 'Ya existe una aseguradora con ese nombre o ID.'),
+      _mensajePG(e, unico: 'Ya existe una aseguradora con ese nombre.'),
     );
   }
 }
@@ -370,26 +333,16 @@ Future<int> obtenerSiguienteIdRamo() async {
   return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
 }
 
-Future<bool> existeRamoId(int id) async {
-  final res = await _db
-      .from('ramos')
-      .select('id')
-      .eq('id', id)
-      .maybeSingle();
-
-  return res != null;
-}
 
 Future<void> crearRamo(Ramo r) async {
   try {
     await _db.from('ramos').insert({
-      'id': r.id,
       ...r.toInsertMap(),
       'usuario_id': Sesion.usuarioId,
     });
   } on PostgrestException catch (e) {
     throw Exception(
-      _mensajePG(e, unico: 'Ya existe un ramo con ese nombre o ID.'),
+      _mensajePG(e, unico: 'Ya existe un ramo con ese nombre.'),
     );
   }
 }
@@ -447,20 +400,10 @@ Future<void> eliminarRamo(int id) async {
     return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
   }
 
-  Future<bool> existeProductoId(int id) async {
-    final res = await _db
-        .from('productos')
-        .select('id')
-        .eq('id', id)
-        .maybeSingle();
-
-    return res != null;
-  }
 
   Future<void> crearProducto(Producto p) async {
     try {
       await _db.from('productos').insert({
-        'id': p.id,
         ...p.toInsertMap(),
         'usuario_id': Sesion.usuarioId,
       });
@@ -508,11 +451,6 @@ Future<void> eliminarRamo(int id) async {
     return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
   }
 
-  Future<bool> existeUsuarioId(int id) async {
-    final res = await _db.from('usuarios').select('id').eq('id', id).maybeSingle();
-    return res != null;
-  }
-
   Future<bool> existeApodoUsuario(String apodo, {int? excludeId}) async {
     dynamic q = _db.from('usuarios').select('id').eq('apodo_usuario', apodo.trim());
     final res = await q.limit(50000);
@@ -524,11 +462,10 @@ Future<void> eliminarRamo(int id) async {
   Future<void> crearUsuario(Usuario u) async {
     try {
       await _db.from('usuarios').insert({
-        'id': u.id,
         ...u.toInsertMap(),
       });
     } on PostgrestException catch (e) {
-      throw Exception(_mensajePG(e, unico: 'Ya existe un usuario con ese apodo o ID.'));
+      throw Exception(_mensajePG(e, unico: 'Ya existe un usuario con ese apodo.'));
     }
   }
 
@@ -573,17 +510,17 @@ Future<void> eliminarRamo(int id) async {
   }
 
   /// Devuelve el usuario si el apodo y la clave coinciden, null si no.
+  /// La verificación ocurre en la base (función `autenticar_usuario`, ver
+  /// migracion_hash_claves.sql) para no comparar ni exponer el hash acá.
   Future<Usuario?> autenticar(String apodo, String clave) async {
-    final res = await _db
-        .from('usuarios')
-        .select()
-        .eq('apodo_usuario', apodo.trim())
-        .eq('clave_usuario', clave)
-        .eq('estado_usuario', true)
-        .maybeSingle();
+    final res = await _db.rpc('autenticar_usuario', params: {
+      'p_apodo': apodo.trim(),
+      'p_clave': clave,
+    });
 
-    if (res == null) return null;
-    return Usuario.fromMap(res as Map<String, dynamic>);
+    final rows = (res as List).cast<Map<String, dynamic>>();
+    if (rows.isEmpty) return null;
+    return Usuario.fromMap(rows.first);
   }
 
   // ================== FORMAS DE EXPEDICIÓN ==================
@@ -601,20 +538,14 @@ Future<void> eliminarRamo(int id) async {
     return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
   }
 
-  Future<bool> existeFormaExpId(int id) async {
-    final res = await _db.from('formaexp').select('id').eq('id', id).maybeSingle();
-    return res != null;
-  }
-
   Future<void> crearFormaExpedicion(FormaExpedicion f) async {
     try {
       await _db.from('formaexp').insert({
-        'id': f.id,
         ...f.toInsertMap(),
         'usuario_id': Sesion.usuarioId,
       });
     } on PostgrestException catch (e) {
-      throw Exception(_mensajePG(e, unico: 'Ya existe una forma de expedición con ese nombre o ID.'));
+      throw Exception(_mensajePG(e, unico: 'Ya existe una forma de expedición con ese nombre.'));
     }
   }
 
@@ -651,20 +582,14 @@ Future<void> eliminarRamo(int id) async {
     return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
   }
 
-  Future<bool> existeFormaPagoId(int id) async {
-    final res = await _db.from('formas_pago').select('id').eq('id', id).maybeSingle();
-    return res != null;
-  }
-
   Future<void> crearFormaPago(FormaPago f) async {
     try {
       await _db.from('formas_pago').insert({
-        'id': f.id,
         ...f.toInsertMap(),
         'usuario_id': Sesion.usuarioId,
       });
     } on PostgrestException catch (e) {
-      throw Exception(_mensajePG(e, unico: 'Ya existe una forma de pago con ese nombre o ID.'));
+      throw Exception(_mensajePG(e, unico: 'Ya existe una forma de pago con ese nombre.'));
     }
   }
 

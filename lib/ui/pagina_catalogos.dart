@@ -9,6 +9,7 @@ import 'catalogos/lista_productos.dart';
 import 'catalogos/lista_usuarios.dart';
 import 'catalogos/lista_formas_expedicion.dart';
 import 'catalogos/lista_formas_pago.dart';
+import 'theme/app_layout.dart';
 
 class PaginaCatalogos extends StatelessWidget {
   const PaginaCatalogos({super.key});
@@ -24,7 +25,7 @@ class PaginaCatalogos extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            padding: AppLayout.pagePadding,
             children: [
               _CatalogoTile(
                 icon: Icons.people_outline,

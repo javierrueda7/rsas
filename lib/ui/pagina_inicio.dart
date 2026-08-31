@@ -6,6 +6,9 @@ import 'pagina_polizas.dart';
 import 'pagina_catalogos.dart';
 import 'catalogos/lista_clientes.dart'; // para digitadores
 import 'pagina_reportes.dart';
+import 'pagina_reportes_pago.dart';
+import 'theme/app_layout.dart';
+import 'theme/app_theme.dart';
 
 class PaginaInicio extends StatefulWidget {
   final String appEnv;
@@ -44,7 +47,7 @@ class _PaginaInicioState extends State<PaginaInicio> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+            padding: AppLayout.pagePadding,
             children: [
               // ── Encabezado ─────────────────────────────────────────────────
               Card(
@@ -74,7 +77,7 @@ class _PaginaInicioState extends State<PaginaInicio> {
                             Text(
                               'Rueda Serrano Asesores de Seguros',
                               style: tt.bodySmall?.copyWith(
-                                color: const Color(0xFF2E7D32),
+                                color: AppTheme.green,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -189,6 +192,21 @@ class _PaginaInicioState extends State<PaginaInicio> {
                   MaterialPageRoute(builder: (_) => const PaginaReportes()),
                 ),
               ),
+
+              // ── Reportes de comisiones (no visible para digitadores) ────────
+              if (usuarioActivo?.rol.toUpperCase() != 'D') ...[
+                const SizedBox(height: 10),
+                _NavCard(
+                  icon: Icons.request_quote_outlined,
+                  iconColor: cs.primary,
+                  title: 'Reportes de Comisiones',
+                  subtitle: 'Registrar abonos y pagos de comisiones',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PaginaReportesPago()),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

@@ -9,6 +9,8 @@ import '../datos/repositorio_pagos.dart';
 import '../utils/formatters.dart';
 import 'pagina_formulario_reporte.dart';
 import 'pagina_estado_cuenta.dart';
+import 'theme/app_layout.dart';
+import 'theme/app_theme.dart';
 
 class PaginaReportesPago extends StatefulWidget {
   const PaginaReportesPago({super.key});
@@ -72,7 +74,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
   void _snack(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: error ? Colors.red[700] : null,
+      backgroundColor: error ? AppTheme.danger : null,
     ));
   }
 
@@ -99,7 +101,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red[700]),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Eliminar'),
           ),
@@ -145,11 +147,11 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
         label: const Text('Nuevo reporte'),
         onPressed: () => _abrirFormulario(),
       ),
-      body: Column(
+      body: AppLayout.centered(Column(
         children: [
           // ── Buscador ────────────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
             child: TextField(
               controller: _ctrlBuscar,
               onChanged: _onBuscar,
@@ -170,7 +172,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
           // ── Filtros de estado ────────────────────────────────────────────
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             child: Row(
               children: _estados.map((e) {
                 final selected = _filtroEstado == e;
@@ -187,7 +189,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
           ),
           // ── Contador ────────────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+            padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -259,13 +261,13 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
                                   ),
                                   DataCell(Text(
                                     '\$ ${Fmt.money(r.vlrsumprimaRep)}',
-                                    style: const TextStyle(
-                                        fontFamily: 'monospace', fontSize: 12),
+                                    style: TextStyle(
+                                        fontFamily: AppTheme.monoFamily, fontSize: 12),
                                   )),
                                   DataCell(Text(
                                     '\$ ${Fmt.money(r.vlrsumcomRep)}',
-                                    style: const TextStyle(
-                                        fontFamily: 'monospace', fontSize: 12),
+                                    style: TextStyle(
+                                        fontFamily: AppTheme.monoFamily, fontSize: 12),
                                   )),
                                   DataCell(_ChipEstado(r.estadoRep)),
                                   DataCell(Row(
@@ -297,7 +299,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
                                         icon: const Icon(
                                             Icons.delete_outline, size: 18),
                                         tooltip: 'Eliminar',
-                                        color: Colors.red[700],
+                                        color: AppTheme.danger,
                                         onPressed: () =>
                                             _confirmarEliminar(r),
                                       ),
@@ -313,7 +315,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
                   ),
           ),
         ],
-      ),
+      )),
     );
   }
 }
@@ -351,13 +353,13 @@ class _ChipEstado extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final (bg, fg) = switch (estado) {
-      'C' => (const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
-      'R' => (const Color(0xFFE3F2FD), const Color(0xFF1565C0)),
-      'I' => (const Color(0xFFFFF3E0), const Color(0xFFE65100)),
-      'V' => (const Color(0xFFFFEBEE), const Color(0xFFB71C1C)),
-      'A' => (const Color(0xFFF5F5F5), const Color(0xFF616161)),
-      _   => (const Color(0xFFF5F5F5), const Color(0xFF616161)),
+      'C' => (cs.secondaryContainer, cs.onSecondaryContainer),
+      'R' => (cs.primaryContainer, cs.onPrimaryContainer),
+      'I' => (AppTheme.warningContainer, AppTheme.onWarningContainer),
+      'V' => (cs.errorContainer, cs.onErrorContainer),
+      _   => (cs.surfaceContainerHighest, cs.onSurfaceVariant),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_layout.dart';
+import '../widgets/section_card.dart';
 
 class FormCliente extends StatefulWidget {
   final Cliente? cliente;
@@ -203,13 +205,6 @@ class _FormClienteState extends State<FormCliente> {
         if (!mounted) return;
         Navigator.pop(context, widget.cliente!.id);
       } else {
-        final existe = await repo.existeClienteId(idNum);
-        if (existe) {
-          if (!mounted) return;
-          setState(() => guardando = false);
-          _toast('Ya existe un cliente con ese ID. Cambia el ID e intenta de nuevo.');
-          return;
-        }
         final cNuevo = Cliente(
           id: idNum,
           nombreCliente: nombreCtrl.text.trim(),
@@ -227,9 +222,9 @@ class _FormClienteState extends State<FormCliente> {
           estadoCliente: estadoCliente,
           recordarCliente: recordarCliente,
         );
-        await repo.crearCliente(cNuevo);
+        final nuevoId = await repo.crearCliente(cNuevo);
         if (!mounted) return;
-        Navigator.pop(context, idNum);
+        Navigator.pop(context, nuevoId);
       }
     } catch (e) {
       _toast('Error guardando: $e');
@@ -239,24 +234,7 @@ class _FormClienteState extends State<FormCliente> {
   }
 
   Widget _seccion(String titulo, List<Widget> campos) {
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titulo,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            const Divider(height: 18),
-            ...campos,
-          ],
-        ),
-      ),
-    );
+    return SectionCard(titulo: titulo, children: campos);
   }
 
   Widget _fila2(Widget a, Widget b) {
@@ -309,7 +287,7 @@ class _FormClienteState extends State<FormCliente> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.pagePadding,
               children: [
                 // ── 1. Datos principales ─────────────────────────────────────
                 _seccion('Datos principales', [

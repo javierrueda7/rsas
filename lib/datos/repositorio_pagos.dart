@@ -118,20 +118,4 @@ class RepositorioPagos {
   Future<void> eliminarAbono(int id) async {
     await _db.from(_tablaAbonos).delete().eq('id', id);
   }
-
-  /// Resumen de pagos para una póliza (estado de cuenta).
-  Future<Map<String, dynamic>> resumenPorPoliza(int idPoliza) async {
-    final abonos = await listarAbonosPorPoliza(idPoliza);
-    final totalAbonado  = abonos.fold<num>(0, (s, a) => s + a.vlrabonoprima);
-    final totalComision = abonos.fold<num>(0, (s, a) => s + a.vlrcomision + a.vlrcomad);
-    final prima = abonos.isNotEmpty ? (abonos.first.primaPoliza ?? 0) : 0;
-    return {
-      'abonos': abonos,
-      'totalAbonado': totalAbonado,
-      'totalComision': totalComision,
-      'primaPoliza': prima,
-      'saldo': prima - totalAbonado,
-      'porcPagado': prima > 0 ? (totalAbonado / prima * 100) : 0.0,
-    };
-  }
 }

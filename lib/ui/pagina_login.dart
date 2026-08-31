@@ -4,6 +4,7 @@ import '../datos/repositorio_catalogos.dart';
 import '../datos/sesion.dart';
 import 'pagina_inicio.dart';
 import 'pagina_recuperar_clave.dart';
+import 'theme/app_theme.dart';
 
 class PaginaLogin extends StatefulWidget {
   final String appEnv;
@@ -110,7 +111,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
                       'RUEDA SERRANO ASESORES DE SEGUROS',
                       style: tt.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF2E7D32),
+                        color: AppTheme.green,
                         letterSpacing: 2,
                       ),
                       textAlign: TextAlign.center,

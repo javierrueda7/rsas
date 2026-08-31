@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_theme.dart';
 import 'form_producto.dart';
 
 class ListaProductos extends StatefulWidget {
@@ -199,7 +200,7 @@ class _ListaProductosState extends State<ListaProductos> {
 
   Widget _vistaMovil(List<Producto> data) {
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
       itemCount: data.length,
       itemBuilder: (_, i) {
         final p = data[i];
@@ -220,7 +221,7 @@ class _ListaProductosState extends State<ListaProductos> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(ramo, style: const TextStyle(fontSize: 12)),
-                Text(aseg, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(aseg, style: const TextStyle(fontSize: 12, color: AppTheme.inkSoft)),
                 const SizedBox(height: 6),
                 _chip(p.estadoProd),
               ],
@@ -241,9 +242,9 @@ class _ListaProductosState extends State<ListaProductos> {
                 PopupMenuItem(
                   value: 'delete',
                   child: Row(children: [
-                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                    Icon(Icons.delete_outline, size: 18, color: AppTheme.danger),
                     SizedBox(width: 10),
-                    Text('Eliminar', style: TextStyle(color: Colors.red)),
+                    Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
                   ]),
                 ),
               ],
@@ -283,7 +284,7 @@ class _ListaProductosState extends State<ListaProductos> {
       );
     }
     return Container(
-      color: Colors.grey.shade200,
+      color: cs.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       child: Row(children: [
         col('ID', _wId, () => _sort<num>((p) => p.id, 0, _sortColumnIndex != 0 || !_sortAscending), 0),
@@ -306,7 +307,7 @@ class _ListaProductosState extends State<ListaProductos> {
       onTap: () => _abrirEditar(p),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE)))),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppTheme.outlineVariant))),
         child: Row(children: [
           SizedBox(width: _wId, child: Text(p.id.toString(), style: const TextStyle(fontSize: 13))),
           SizedBox(width: _wNombre, child: Text(p.nombreProd, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
@@ -386,7 +387,7 @@ class _ListaProductosState extends State<ListaProductos> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: TextField(
               controller: _buscarCtrl,
               decoration: InputDecoration(

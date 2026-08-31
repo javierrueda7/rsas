@@ -116,21 +116,6 @@ class ReportePago {
         nombreInterm: _toTextOrNull(m['nombre_interm']),
         numAbonos: _toInt(m['num_abonos']),
       );
-
-  Map<String, dynamic> toInsertMap() => {
-        'fecha_rep': fechaRep.toIso8601String().substring(0, 10),
-        'aseg_id': asegId,
-        'interm_id': intermId,
-        'fini_rep': finiRep?.toIso8601String().substring(0, 10),
-        'ffin_rep': ffinRep?.toIso8601String().substring(0, 10),
-        'vlrprima_rep': vlrprimaRep,
-        'vlrsumprima_rep': vlrsumprimaRep,
-        'vlrcom_rep': vlrcomRep,
-        'vlrsumcom_rep': vlrsumcomRep,
-        'estado_rep': estadoRep,
-        'obs_rep': obsRep,
-        'usuario_id': usuarioId,
-      };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -247,21 +232,4 @@ class AbonoPoliza {
         apodoUsuario: _toTextOrNull(m['apodo_usuario']),
         nombreUsuario: _toTextOrNull(m['nombre_usuario']),
       );
-
-  Map<String, dynamic> toInsertMap() => {
-        'idrep_pago': idrepPago,
-        'id_poliza': idPoliza,
-        'fecha_pago': fechaPago?.toIso8601String().substring(0, 10),
-        'vlrprima_poliza': vlrprimaPoliza,
-        'vlrabono_prima': vlrabonoprima,
-        'porccomision': porccomision,
-        'vlrcomision': vlrcomision,
-        'porccomad': porccomad,
-        'vlrcomad': vlrcomad,
-        'idfactura': idfactura,
-        'num_factura': numFactura,
-        'estado_pago': estadoPago,
-        'obs_pago': obsPago,
-        'usuario_id': usuarioId,
-      };
 }

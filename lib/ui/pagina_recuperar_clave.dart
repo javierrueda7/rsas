@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../datos/repositorio_catalogos.dart';
+import 'theme/app_theme.dart';
 
 /// Flujo de 3 pasos:
 ///  1. Ingresa tu usuario (apodo)
@@ -114,7 +115,7 @@ class _PaginaRecuperarClaveState extends State<PaginaRecuperarClave> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 48),
+        icon: const Icon(Icons.check_circle_outline, color: AppTheme.green, size: 48),
         title: const Text('¡Contraseña actualizada!'),
         content: const Text(
           'Tu contraseña se cambió correctamente. Ahora puedes iniciar sesión con la nueva contraseña.',

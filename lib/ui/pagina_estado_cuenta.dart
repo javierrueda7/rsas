@@ -8,6 +8,9 @@ import '../datos/abono_poliza.dart';
 import '../datos/repositorio_pagos.dart';
 import '../utils/formatters.dart';
 import '../utils/generador_pdf.dart';
+import 'theme/app_layout.dart';
+import 'theme/app_theme.dart';
+import 'widgets/stat_card.dart';
 
 /// Pantalla de estado de cuenta.
 /// Modos:
@@ -85,7 +88,7 @@ class _PaginaEstadoCuentaState extends State<PaginaEstadoCuenta> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error al cargar: $e'), backgroundColor: AppTheme.danger),
         );
       }
     } finally {
@@ -127,7 +130,7 @@ class _PaginaEstadoCuentaState extends State<PaginaEstadoCuenta> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al generar PDF: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error al generar PDF: $e'), backgroundColor: AppTheme.danger),
         );
       }
     } finally {
@@ -174,7 +177,7 @@ class _PaginaEstadoCuentaState extends State<PaginaEstadoCuenta> {
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
           : _abonos.isEmpty
-              ? Center(
+              ? AppLayout.centered(Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -185,11 +188,11 @@ class _PaginaEstadoCuentaState extends State<PaginaEstadoCuenta> {
                           style: TextStyle(color: cs.onSurfaceVariant)),
                     ],
                   ),
-                )
-              : CustomScrollView(
+                ))
+              : AppLayout.centered(CustomScrollView(
                   slivers: [
                     SliverPadding(
-                      padding: const EdgeInsets.all(16),
+                      padding: AppLayout.pagePadding,
                       sliver: SliverList(
                         delegate: SliverChildListDelegate([
                           // ── Encabezado informativo ───────────────────────
@@ -262,7 +265,7 @@ class _PaginaEstadoCuentaState extends State<PaginaEstadoCuenta> {
                       ),
                     ),
                   ],
-                ),
+                )),
     );
   }
 }
@@ -379,13 +382,13 @@ class _ResumenCards extends StatelessWidget {
     final items = <(String, String, IconData, Color)>[
       if (primaPoliza != null)
         ('Prima total', '\$ ${Fmt.money(primaPoliza)}',
-            Icons.monetization_on_outlined, const Color(0xFF1565C0)),
+            Icons.monetization_on_outlined, AppTheme.navy),
       ('Total abonado', '\$ ${Fmt.money(totalAbonado)}',
-          Icons.payments_outlined, const Color(0xFF2E7D32)),
+          Icons.payments_outlined, AppTheme.green),
       if (saldo != null)
         ('Saldo pendiente', '\$ ${Fmt.money(saldo)}',
             Icons.pending_actions_outlined,
-            saldo! > 0 ? const Color(0xFFE65100) : const Color(0xFF2E7D32)),
+            saldo! > 0 ? AppTheme.warning : AppTheme.green),
       ('Total comisión', '\$ ${Fmt.money(totalComision)}',
           Icons.percent, const Color(0xFF6A1B9A)),
       if (porcPagado != null)
@@ -393,8 +396,8 @@ class _ResumenCards extends StatelessWidget {
             '${porcPagado!.toStringAsFixed(1)}%',
             Icons.pie_chart_outline,
             porcPagado! >= 100
-                ? const Color(0xFF2E7D32)
-                : const Color(0xFFE65100)),
+                ? AppTheme.green
+                : AppTheme.warning),
       ('Número de pagos', '$numAbonos', Icons.receipt_long_outlined,
           const Color(0xFF00838F)),
     ];
@@ -404,40 +407,7 @@ class _ResumenCards extends StatelessWidget {
       runSpacing: 10,
       children: items.map((t) {
         final (label, value, icon, color) = t;
-        return SizedBox(
-          width: 200,
-          child: Card(
-            elevation: 0,
-            color: color.withOpacity(0.08),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-              side: BorderSide(color: color.withOpacity(0.25)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Icon(icon, size: 16, color: color),
-                      const SizedBox(width: 6),
-                      Expanded(
-                          child: Text(label,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: color,
-                                  fontWeight: FontWeight.w600))),
-                    ]),
-                    const SizedBox(height: 8),
-                    Text(value,
-                        style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: color)),
-                  ]),
-            ),
-          ),
-        );
+        return StatCard(label: label, value: value, icon: icon, color: color);
       }).toList(),
     );
   }
@@ -526,7 +496,7 @@ class _TablaHistorial extends StatelessWidget {
                         if (a.nombreProd != null)
                           Text(a.nombreProd!,
                               style: TextStyle(
-                                  fontSize: 10, color: Colors.grey[600])),
+                                  fontSize: 10, color: AppTheme.inkSoft)),
                       ],
                     )),
                     DataCell(SizedBox(
@@ -536,17 +506,17 @@ class _TablaHistorial extends StatelessWidget {
                           overflow: TextOverflow.ellipsis),
                     )),
                     DataCell(Text('\$ ${Fmt.money(a.vlrabonoprima)}',
-                        style: const TextStyle(
-                            fontFamily: 'monospace',
+                        style: TextStyle(
+                            fontFamily: AppTheme.monoFamily,
                             fontSize: 12,
                             fontWeight: FontWeight.bold))),
                     DataCell(Text(Fmt.percent(a.porccomision, dec: 1))),
                     DataCell(Text('\$ ${Fmt.money(a.vlrcomision)}',
-                        style: const TextStyle(
-                            fontFamily: 'monospace', fontSize: 12))),
+                        style: TextStyle(
+                            fontFamily: AppTheme.monoFamily, fontSize: 12))),
                     DataCell(Text('\$ ${Fmt.money(a.vlrcomad)}',
-                        style: const TextStyle(
-                            fontFamily: 'monospace', fontSize: 12))),
+                        style: TextStyle(
+                            fontFamily: AppTheme.monoFamily, fontSize: 12))),
                     DataCell(Text(a.numFactura ?? '—',
                         style: const TextStyle(fontSize: 12))),
                     DataCell(_ChipEstado(a.estadoPago)),
@@ -569,17 +539,17 @@ class _TablaHistorial extends StatelessWidget {
                   const DataCell(Text('')),
                   const DataCell(Text('')),
                   DataCell(Text('\$ ${Fmt.money(totPrima)}',
-                      style: const TextStyle(
-                          fontFamily: 'monospace',
+                      style: TextStyle(
+                          fontFamily: AppTheme.monoFamily,
                           fontWeight: FontWeight.bold))),
                   const DataCell(Text('')),
                   DataCell(Text('\$ ${Fmt.money(totCom)}',
-                      style: const TextStyle(
-                          fontFamily: 'monospace',
+                      style: TextStyle(
+                          fontFamily: AppTheme.monoFamily,
                           fontWeight: FontWeight.bold))),
                   DataCell(Text('\$ ${Fmt.money(totComAd)}',
-                      style: const TextStyle(
-                          fontFamily: 'monospace',
+                      style: TextStyle(
+                          fontFamily: AppTheme.monoFamily,
                           fontWeight: FontWeight.bold))),
                   const DataCell(Text('')),
                   const DataCell(Text('')),
@@ -604,13 +574,13 @@ class _ChipEstado extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final (bg, fg) = switch (estado) {
-      'C' => (const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
-      'R' => (const Color(0xFFE3F2FD), const Color(0xFF1565C0)),
-      'I' => (const Color(0xFFFFF3E0), const Color(0xFFE65100)),
-      'V' => (const Color(0xFFFFEBEE), const Color(0xFFB71C1C)),
-      'A' => (const Color(0xFFF5F5F5), const Color(0xFF616161)),
-      _   => (const Color(0xFFF5F5F5), const Color(0xFF616161)),
+      'C' => (cs.secondaryContainer, cs.onSecondaryContainer),
+      'R' => (cs.primaryContainer, cs.onPrimaryContainer),
+      'I' => (AppTheme.warningContainer, AppTheme.onWarningContainer),
+      'V' => (cs.errorContainer, cs.onErrorContainer),
+      _   => (cs.surfaceContainerHighest, cs.onSurfaceVariant),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -678,7 +648,7 @@ class _PaginaFacturaState extends State<_PaginaFactura> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Error: $e'), backgroundColor: Colors.red),
+              content: Text('Error: $e'), backgroundColor: AppTheme.danger),
         );
       }
     } finally {
@@ -719,7 +689,6 @@ class _PaginaFacturaState extends State<_PaginaFactura> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Card(
-              elevation: 2,
               child: Padding(
                 padding: const EdgeInsets.all(32),
                 child: Column(
@@ -837,7 +806,7 @@ class _PaginaFacturaState extends State<_PaginaFactura> {
                         2: FlexColumnWidth(2),
                       },
                       border: TableBorder.all(
-                          color: Colors.grey.shade300, width: 1),
+                          color: AppTheme.outlineVariant, width: 1),
                       children: [
                         _filaTabla(
                           ['Concepto', 'Vlr Prima Póliza', 'Abono / Comisión'],
@@ -931,7 +900,7 @@ class _PaginaFacturaState extends State<_PaginaFactura> {
                             ? FontWeight.bold
                             : FontWeight.normal,
                         fontFamily:
-                            (!isHeader && c.startsWith('\$')) ? 'monospace' : null)),
+                            (!isHeader && c.startsWith('\$')) ? AppTheme.monoFamily : null)),
               ))
           .toList(),
     );
@@ -939,11 +908,11 @@ class _PaginaFacturaState extends State<_PaginaFactura> {
 
   Color _colorEstado(String e) {
     return switch (e) {
-      'C' => const Color(0xFF2E7D32),
-      'R' => const Color(0xFF1565C0),
-      'I' => const Color(0xFFE65100),
-      'V' => const Color(0xFFB71C1C),
-      _   => const Color(0xFF616161),
+      'C' => AppTheme.green,
+      'R' => AppTheme.navy,
+      'I' => AppTheme.warning,
+      'V' => AppTheme.danger,
+      _   => AppTheme.inkSoft,
     };
   }
 }
@@ -975,7 +944,7 @@ class _SeccionFactura extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: AppTheme.outlineVariant),
           borderRadius: const BorderRadius.only(
               bottomLeft: Radius.circular(6),
               bottomRight: Radius.circular(6)),

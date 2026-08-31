@@ -12,9 +12,9 @@ class GeneradorPdf {
   static final _dft = DateFormat('dd/MM/yyyy HH:mm');
 
   // ── Colores corporativos ──────────────────────────────────────────────────
-  static const _azul      = PdfColor.fromInt(0xFF1565C0);
-  static const _azulClaro = PdfColor.fromInt(0xFF1976D2);
-  static const _verde     = PdfColor.fromInt(0xFF2E7D32);
+  static const _azul      = PdfColor.fromInt(0xFF1C4870);
+  static const _azulClaro = PdfColor.fromInt(0xFF2E5F8C);
+  static const _verde     = PdfColor.fromInt(0xFF1E9B4E);
   static const _gris      = PdfColor.fromInt(0xFF616161);
   static const _grisClaro = PdfColor.fromInt(0xFFF5F5F5);
   static const _blanco    = PdfColors.white;

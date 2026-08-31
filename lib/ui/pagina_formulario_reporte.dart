@@ -13,6 +13,9 @@ import '../datos/repositorio_pagos.dart';
 import '../datos/repositorio_polizas.dart';
 import '../datos/sesion.dart';
 import '../utils/formatters.dart';
+import 'theme/app_layout.dart';
+import 'theme/app_theme.dart';
+import 'widgets/stat_card.dart';
 import 'pagina_estado_cuenta.dart';
 import 'widgets/buscador_dropdown.dart';
 
@@ -237,7 +240,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancelar')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red[700]),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Eliminar'),
           ),
@@ -257,7 +260,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
   void _snack(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: error ? Colors.red[700] : null,
+      backgroundColor: error ? AppTheme.danger : null,
     ));
   }
 
@@ -307,10 +310,10 @@ class _FormularioReporteState extends State<FormularioReportePago> {
       ),
       body: Form(
         key: _formKey,
-        child: CustomScrollView(
+        child: AppLayout.centered(CustomScrollView(
           slivers: [
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              padding: AppLayout.pagePadding,
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   // ── 1. Cabecera del reporte ──────────────────────────────
@@ -449,29 +452,32 @@ class _FormularioReporteState extends State<FormularioReportePago> {
                     const SizedBox(height: 12),
                     Row(children: [
                       Expanded(
-                        child: _SummaryCard(
+                        child: StatCard(
+                          width: null,
                           label: 'Prima total (calculada)',
                           value: '\$ ${Fmt.money(_sumaPrima)}',
                           icon: Icons.attach_money,
-                          color: const Color(0xFF1565C0),
+                          color: AppTheme.navy,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: _SummaryCard(
+                        child: StatCard(
+                          width: null,
                           label: 'Comisión total (calculada)',
                           value: '\$ ${Fmt.money(_sumaCom)}',
                           icon: Icons.percent,
-                          color: const Color(0xFF2E7D32),
+                          color: AppTheme.green,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: _SummaryCard(
+                        child: StatCard(
+                          width: null,
                           label: 'Pólizas en reporte',
                           value: '${_abonos.length}',
                           icon: Icons.receipt_long,
-                          color: const Color(0xFFE65100),
+                          color: AppTheme.warning,
                         ),
                       ),
                     ]),
@@ -529,7 +535,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
               ),
             ),
           ],
-        ),
+        )),
       ),
     );
   }
@@ -597,7 +603,7 @@ class _TablaAbonos extends StatelessWidget {
                       Text(
                         '${a.tipodocCliente ?? ''} ${a.docCliente}',
                         style:
-                            TextStyle(fontSize: 10, color: Colors.grey[600]),
+                            TextStyle(fontSize: 10, color: AppTheme.inkSoft),
                       ),
                   ],
                 )),
@@ -610,7 +616,7 @@ class _TablaAbonos extends StatelessWidget {
                     if (a.nombreProd != null)
                       Text(a.nombreProd!,
                           style: TextStyle(
-                              fontSize: 10, color: Colors.grey[600])),
+                              fontSize: 10, color: AppTheme.inkSoft)),
                   ],
                 )),
                 DataCell(SizedBox(
@@ -622,17 +628,17 @@ class _TablaAbonos extends StatelessWidget {
                   ),
                 )),
                 DataCell(Text('\$ ${Fmt.money(a.vlrprimaPoliza)}',
-                    style: const TextStyle(
-                        fontFamily: 'monospace', fontSize: 12))),
+                    style: TextStyle(
+                        fontFamily: AppTheme.monoFamily, fontSize: 12))),
                 DataCell(Text('\$ ${Fmt.money(a.vlrabonoprima)}',
-                    style: const TextStyle(
-                        fontFamily: 'monospace',
+                    style: TextStyle(
+                        fontFamily: AppTheme.monoFamily,
                         fontSize: 12,
                         fontWeight: FontWeight.bold))),
                 DataCell(Text(Fmt.percent(a.porccomision, dec: 1))),
                 DataCell(Text('\$ ${Fmt.money(a.vlrcomision)}',
-                    style: const TextStyle(
-                        fontFamily: 'monospace', fontSize: 12))),
+                    style: TextStyle(
+                        fontFamily: AppTheme.monoFamily, fontSize: 12))),
                 DataCell(_ChipEstadoAbono(a.estadoPago)),
                 DataCell(Row(
                   mainAxisSize: MainAxisSize.min,
@@ -646,13 +652,13 @@ class _TablaAbonos extends StatelessWidget {
                       icon: const Icon(Icons.account_balance_wallet_outlined,
                           size: 17),
                       tooltip: 'Estado de cuenta',
-                      color: Colors.blue[700],
+                      color: AppTheme.navy,
                       onPressed: () => onEstadoCuenta(a),
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline, size: 17),
                       tooltip: 'Eliminar',
-                      color: Colors.red[700],
+                      color: AppTheme.danger,
                       onPressed: () => onDelete(a),
                     ),
                   ],
@@ -773,7 +779,7 @@ class _DialogAbonoState extends State<_DialogAbono> {
     if (_poliza == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Selecciona una póliza'),
-        backgroundColor: Colors.red,
+        backgroundColor: AppTheme.danger,
       ));
       return;
     }
@@ -805,7 +811,7 @@ class _DialogAbonoState extends State<_DialogAbono> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.danger,
         ));
       }
     } finally {
@@ -1063,13 +1069,13 @@ class _ChipEstadoAbono extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final (bg, fg) = switch (estado) {
-      'C' => (const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
-      'R' => (const Color(0xFFE3F2FD), const Color(0xFF1565C0)),
-      'I' => (const Color(0xFFFFF3E0), const Color(0xFFE65100)),
-      'V' => (const Color(0xFFFFEBEE), const Color(0xFFB71C1C)),
-      'A' => (const Color(0xFFF5F5F5), const Color(0xFF616161)),
-      _   => (const Color(0xFFF5F5F5), const Color(0xFF616161)),
+      'C' => (cs.secondaryContainer, cs.onSecondaryContainer),
+      'R' => (cs.primaryContainer, cs.onPrimaryContainer),
+      'I' => (AppTheme.warningContainer, AppTheme.onWarningContainer),
+      'V' => (cs.errorContainer, cs.onErrorContainer),
+      _   => (cs.surfaceContainerHighest, cs.onSurfaceVariant),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -1103,54 +1109,6 @@ class _SeccionHeader extends StatelessWidget {
       const SizedBox(width: 8),
       Expanded(child: Divider(color: cs.primary.withOpacity(0.3))),
     ]);
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  const _SummaryCard(
-      {required this.label,
-      required this.value,
-      required this.icon,
-      required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: color.withOpacity(0.08),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: color.withOpacity(0.2)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Icon(icon, size: 15, color: color),
-              const SizedBox(width: 6),
-              Expanded(
-                  child: Text(label,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: color,
-                          fontWeight: FontWeight.w600))),
-            ]),
-            const SizedBox(height: 6),
-            Text(value,
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: color)),
-          ],
-        ),
-      ),
-    );
   }
 }
 

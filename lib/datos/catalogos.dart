@@ -106,24 +106,6 @@ class Cliente {
     );
   }
 
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'nombre_cliente': nombreCliente,
-        'tipopers_cliente': tipopersCliente,
-        'tipodoc_cliente': tipodocCliente,
-        'doc_cliente': docCliente,
-        'tel_cliente': telCliente,
-        'correo_cliente': correoCliente,
-        'dir_cliente': dirCliente,
-        'munic_id': municId,
-        'notas_cliente': notasCliente,
-        'contacto_cliente': contactoCliente,
-        'cargocont_cliente': cargocontCliente,
-        'asesor_id': asesorId,
-        'estado_cliente': estadoCliente,
-        'recordar_cliente': recordarCliente,
-      };
-
   Map<String, dynamic> toInsertMap() => {
         'nombre_cliente': nombreCliente,
         'tipopers_cliente': tipopersCliente,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_layout.dart';
+import '../widgets/section_card.dart';
 
 class FormFormaPago extends StatefulWidget {
   final FormaPago? forma;
@@ -83,11 +85,6 @@ class _FormFormaPagoState extends State<FormFormaPago> {
 
     setState(() => guardando = true);
     try {
-      if (!esEdicion && await repo.existeFormaPagoId(idNum)) {
-        _toast('Ya existe una forma de pago con ese ID.');
-        return;
-      }
-
       final f = FormaPago(
         id: esEdicion ? widget.forma!.id : idNum,
         nombreFormaPago: nombreCtrl.text.trim(),
@@ -135,17 +132,11 @@ class _FormFormaPagoState extends State<FormFormaPago> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.pagePadding,
               children: [
-                Card(
-                  elevation: 1,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Datos', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                        const Divider(height: 18),
+                SectionCard(
+                  titulo: 'Datos',
+                  children: [
                         TextFormField(
                           controller: idCtrl,
                           enabled: !esEdicion,
@@ -182,8 +173,6 @@ class _FormFormaPagoState extends State<FormFormaPago> {
                           contentPadding: EdgeInsets.zero,
                         ),
                       ],
-                    ),
-                  ),
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(

@@ -8,6 +8,7 @@ import 'pagina_estado_cuenta.dart';
 import '../datos/poliza.dart';
 import '../datos/repositorio_polizas.dart';
 import 'pagina_formulario_polizas.dart';
+import 'theme/app_theme.dart';
 
 class PaginaPolizas extends StatefulWidget {
   const PaginaPolizas({super.key});
@@ -106,6 +107,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   bool _sortAscending = false;
 
   Timer? debounce;
+  Timer? _clienteDebounce;
 
   final ScrollController _verticalCtrl = ScrollController();
   final ScrollController _horizontalCtrl = ScrollController();
@@ -120,6 +122,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   void dispose() {
     ctrlBuscar.dispose();
     debounce?.cancel();
+    _clienteDebounce?.cancel();
     _verticalCtrl.dispose();
     _horizontalCtrl.dispose();
     super.dispose();
@@ -147,13 +150,14 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   }
 
   /// Carga completa paginada: trae todos los registros de a 1.000.
-  Future<void> _cargarTodo() async {
+  Future<void> _cargarTodo({bool forzar = false}) async {
     if (cargando) return;
     if (mounted) setState(() { cargando = true; _cargados = 0; _errorCarga = null; });
     final busqueda = ctrlBuscar.text.trim();
     try {
       final data = await repo.listarTodos(
         busqueda: busqueda,
+        forzar: forzar,
         onProgreso: (n) {
           if (mounted) setState(() => _cargados = n);
         },
@@ -238,16 +242,10 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
           final da = a.fcreado ?? DateTime(9999);
           final db = b.fcreado ?? DateTime(9999);
           cmp = da.compareTo(db);
-        case 13:
-          final da = a.fultmod ?? DateTime(9999);
-          final db = b.fultmod ?? DateTime(9999);
-          cmp = da.compareTo(db);
         case 15:
           cmp = (a.apodoUsuario ?? '').toLowerCase().compareTo(
                 (b.apodoUsuario ?? '').toLowerCase(),
               );
-        case 16:
-          cmp = (a.vlrasegPoliza ?? 0).compareTo(b.vlrasegPoliza ?? 0);
         default:
           cmp = a.id.compareTo(b.id);
       }
@@ -324,7 +322,12 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
           style: const TextStyle(fontSize: 13),
           onChanged: (t) {
             if (textSearch) {
-              onChanged(t.isNotEmpty ? t : null);
+              // Filtro de cliente recorre toda la lista en memoria en cada
+              // cambio — se espera una pausa al tipear para no recalcularlo
+              // en cada tecla.
+              _clienteDebounce?.cancel();
+              _clienteDebounce = Timer(const Duration(milliseconds: 250),
+                  () => onChanged(t.isNotEmpty ? t : null));
             } else {
               if (t.isEmpty && value != null) onChanged(null);
             }
@@ -413,7 +416,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
 
   Widget _vistaMovil(List<Poliza> data) {
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
       itemCount: data.length,
       itemBuilder: (_, i) {
         final p = data[i];
@@ -609,7 +612,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
       );
     }
     return Container(
-      color: Colors.grey.shade200,
+      color: cs.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(children: [
         col('Cód.', _wCod, 0, num: true),
@@ -637,7 +640,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
       onTap: () => _abrirEditar(p),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE)))),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppTheme.outlineVariant))),
         child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
           SizedBox(width: _wCod, child: Text(p.id.toString(), style: const TextStyle(fontSize: 12), textAlign: TextAlign.right)),
           const SizedBox(width: 8),
@@ -647,7 +650,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(p.bienAsegurado ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
               if (p.vlrasegPoliza != null && p.vlrasegPoliza! > 0)
-                Text(_fmtNum(p.vlrasegPoliza), style: const TextStyle(fontSize: 11, color: Colors.grey), overflow: TextOverflow.ellipsis),
+                Text(_fmtNum(p.vlrasegPoliza), style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
             ]),
           ),
           SizedBox(
@@ -655,7 +658,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(p.nombreCliente ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
               if ((p.docCliente ?? '').isNotEmpty)
-                Text(p.docCliente!, style: const TextStyle(fontSize: 11, color: Colors.grey), overflow: TextOverflow.ellipsis),
+                Text(p.docCliente!, style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
             ]),
           ),
           SizedBox(width: _wAseg, child: Text(p.nombreAseg ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
@@ -664,7 +667,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(p.nombreRamo ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
               if ((p.nombreProd ?? '').isNotEmpty)
-                Text(p.nombreProd!, style: const TextStyle(fontSize: 11, color: Colors.grey), overflow: TextOverflow.ellipsis),
+                Text(p.nombreProd!, style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
             ]),
           ),
           SizedBox(width: _wFecha, child: Text(_fmtFecha(p.finiPoliza), style: const TextStyle(fontSize: 12))),
@@ -679,7 +682,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(_fmtFechaHora(p.fcreado), overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
               if (p.fultmod != null)
-                Text(_fmtFechaHora(p.fultmod), style: const TextStyle(fontSize: 11, color: Colors.grey), overflow: TextOverflow.ellipsis),
+                Text(_fmtFechaHora(p.fultmod), style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
             ]),
           ),
           SizedBox(width: _wUsuario, child: Text(p.apodoUsuario ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
@@ -759,7 +762,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
           IconButton(
             tooltip: 'Recargar lista',
             icon: const Icon(Icons.refresh),
-            onPressed: cargando ? null : () => _datosCompletos ? _cargarTodo() : _cargar(),
+            onPressed: cargando ? null : () => _datosCompletos ? _cargarTodo(forzar: true) : _cargar(),
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -774,7 +777,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: TextField(
               controller: ctrlBuscar,
               onChanged: _onBuscarChanged,
@@ -787,7 +790,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 2),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -844,14 +847,14 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
             child: Row(
               children: [
-                Icon(Icons.keyboard_outlined, size: 14, color: Colors.grey.shade500),
+                Icon(Icons.keyboard_outlined, size: 14, color: AppTheme.inkSoft),
                 const SizedBox(width: 6),
                 Text(
                   'Presiona Alt+N para crear una nueva póliza',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  style: TextStyle(fontSize: 12, color: AppTheme.inkSoft),
                 ),
               ],
             ),
@@ -863,7 +866,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Text(
                   'Cargando... ${_cargados.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} pólizas',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 12, color: AppTheme.inkSoft),
                 ),
               ),
           ],

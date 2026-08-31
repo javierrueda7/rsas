@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_theme.dart';
 import 'form_forma_expedicion.dart';
 
 class ListaFormasExpedicion extends StatefulWidget {
@@ -136,7 +137,7 @@ class _ListaFormasExpedicionState extends State<ListaFormasExpedicion> {
       );
     }
     return Container(
-      color: Colors.grey.shade200,
+      color: cs.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       child: Row(children: [
         col('ID', _wId, () => _sort<num>((f) => f.id, 0, _sortColumnIndex != 0 || !_sortAscending), 0),
@@ -151,7 +152,7 @@ class _ListaFormasExpedicionState extends State<ListaFormasExpedicion> {
       onTap: () => _abrirEditar(f),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE)))),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppTheme.outlineVariant))),
         child: Row(children: [
           SizedBox(width: _wId, child: Text(f.id.toString(), style: const TextStyle(fontSize: 13))),
           SizedBox(width: _wNombre, child: Text(f.nombreFormaexp, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
@@ -196,7 +197,7 @@ class _ListaFormasExpedicionState extends State<ListaFormasExpedicion> {
 
   Widget _vistaMovil(List<FormaExpedicion> data) {
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
       itemCount: data.length,
       itemBuilder: (_, i) {
         final f = data[i];
@@ -237,7 +238,7 @@ class _ListaFormasExpedicionState extends State<ListaFormasExpedicion> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: TextField(
               controller: _buscarCtrl,
               decoration: InputDecoration(

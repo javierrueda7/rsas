@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:seguimiento_polizas/ui/pagina_login.dart';
+import 'package:seguimiento_polizas/ui/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
@@ -34,16 +35,7 @@ class AppPolizas extends StatelessWidget {
     return MaterialApp(
       title: 'SegurApp',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1565C0),
-        ),
-        appBarTheme: const AppBarTheme(
-          centerTitle: false,
-          scrolledUnderElevation: 1,
-        ),
-      ),
+      theme: AppTheme.light(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

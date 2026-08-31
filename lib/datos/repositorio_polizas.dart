@@ -46,11 +46,27 @@ class RepositorioPolizas {
   /// Llama [onProgreso] después de cada página con el total acumulado.
   static const int _pageSize = 1000;
 
+  /// Cache en memoria del último "traer todas" (solo para busqueda vacía),
+  /// compartido entre pantallas (Pólizas y Reportes usan cada una su propia
+  /// instancia de este repositorio, pero el cache es de clase). Se invalida
+  /// automáticamente al crear/editar/eliminar una póliza.
+  static List<Poliza>? _cacheTodos;
+
+  /// Trae todas las pólizas. Si ya se cargaron todas antes (busqueda vacía)
+  /// y nada las invalidó, devuelve el resultado en memoria sin ir a la red
+  /// — a menos que [forzar] sea true (ej: botón "Recargar").
   Future<List<Poliza>> listarTodos({
     String busqueda = '',
+    bool forzar = false,
     void Function(int cargados)? onProgreso,
   }) async {
     final b = busqueda.trim();
+
+    if (!forzar && b.isEmpty && _cacheTodos != null) {
+      onProgreso?.call(_cacheTodos!.length);
+      return _cacheTodos!;
+    }
+
     final List<Poliza> todos = [];
     int desde = 0;
 
@@ -94,6 +110,7 @@ class RepositorioPolizas {
       desde += _pageSize;
     }
 
+    if (b.isEmpty) _cacheTodos = todos;
     return todos;
   }
 
@@ -121,11 +138,6 @@ class RepositorioPolizas {
     return ultimoId + 1;
   }
 
-  Future<bool> existeId(int id) async {
-    final res = await _db.from(_tabla).select('id').eq('id', id).maybeSingle();
-    return res != null;
-  }
-
   Future<bool> existeNroPoliza(String nroPoliza, {int? excluirId}) async {
     final nro = nroPoliza.trim();
     if (nro.isEmpty) return false;
@@ -142,6 +154,7 @@ class RepositorioPolizas {
 
   Future<void> crearPoliza(Map<String, dynamic> data) async {
     await _db.from(_tabla).insert(_limpiarMapa(data));
+    _cacheTodos = null;
   }
 
   Future<void> actualizarPoliza(int id, Map<String, dynamic> data) async {
@@ -149,10 +162,12 @@ class RepositorioPolizas {
       ..._limpiarMapa(data),
       'fultmod': DateTime.now().toIso8601String(),
     }).eq('id', id);
+    _cacheTodos = null;
   }
 
   Future<void> eliminarPoliza(int id) async {
     await _db.from(_tabla).delete().eq('id', id);
+    _cacheTodos = null;
   }
 
   Map<String, dynamic> _limpiarMapa(Map<String, dynamic> data) {

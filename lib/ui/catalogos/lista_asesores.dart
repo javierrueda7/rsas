@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_theme.dart';
 import 'form_asesor.dart';
 
 class ListaAsesores extends StatefulWidget {
@@ -163,7 +164,7 @@ class _ListaAsesoresState extends State<ListaAsesores> {
 
   Widget _vistaMovil(List<Asesor> data) {
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
       itemCount: data.length,
       itemBuilder: (_, i) {
         final a = data[i];
@@ -216,9 +217,9 @@ class _ListaAsesoresState extends State<ListaAsesores> {
                 PopupMenuItem(
                   value: 'delete',
                   child: Row(children: [
-                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                    Icon(Icons.delete_outline, size: 18, color: AppTheme.danger),
                     SizedBox(width: 10),
-                    Text('Eliminar', style: TextStyle(color: Colors.red)),
+                    Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
                   ]),
                 ),
               ],
@@ -255,7 +256,7 @@ class _ListaAsesoresState extends State<ListaAsesores> {
       );
     }
     return Container(
-      color: Colors.grey.shade200,
+      color: cs.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       child: Row(children: [
         col('ID', _wId, () => _sort<num>((a) => a.id, 0, _sortColumnIndex != 0 || !_sortAscending), 0),
@@ -276,7 +277,7 @@ class _ListaAsesoresState extends State<ListaAsesores> {
       onTap: () => _abrirEditar(a),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE)))),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppTheme.outlineVariant))),
         child: Row(children: [
           SizedBox(width: _wId, child: Text(a.id.toString(), style: const TextStyle(fontSize: 13))),
           SizedBox(width: _wNombre, child: Text(a.nombreAsesor, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
@@ -353,7 +354,7 @@ class _ListaAsesoresState extends State<ListaAsesores> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: Column(
               children: [
                 TextField(

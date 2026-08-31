@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_layout.dart';
+import '../widgets/section_card.dart';
 
 class FormProducto extends StatefulWidget {
   final Producto? producto;
@@ -187,14 +189,6 @@ class _FormProductoState extends State<FormProducto> {
     setState(() => guardando = true);
 
     try {
-      if (!esEdicion) {
-        final existe = await repo.existeProductoId(idNum);
-        if (existe) {
-          _toast('Ya existe un producto con ese ID.');
-          return;
-        }
-      }
-
       final p = Producto(
         id: esEdicion ? widget.producto!.id : idNum,
         nombreProd: nombre,
@@ -224,24 +218,7 @@ class _FormProductoState extends State<FormProducto> {
   }
 
   Widget _seccion(String titulo, List<Widget> campos) {
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titulo,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            const Divider(height: 18),
-            ...campos,
-          ],
-        ),
-      ),
-    );
+    return SectionCard(titulo: titulo, children: campos);
   }
 
   Widget _fila2(Widget a, Widget b) {
@@ -328,7 +305,7 @@ class _FormProductoState extends State<FormProducto> {
             key: _formKey,
             autovalidateMode: AutovalidateMode.onUserInteraction,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.pagePadding,
               children: [
                 // ── 1. Identificación ────────────────────────────────────────
                 _seccion('Identificación', [

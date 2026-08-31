@@ -11,7 +11,10 @@ import '../datos/poliza.dart';
 import '../datos/sesion.dart';
 import '../utils/formatters.dart';
 import 'catalogos/form_cliente.dart';
+import 'theme/app_layout.dart';
+import 'theme/app_theme.dart';
 import 'widgets/buscador_dropdown.dart';
+import 'widgets/section_card.dart';
 
 extension FirstWhereOrNullExt<E> on Iterable<E> {
   E? firstWhereOrNull(bool Function(E) test) {
@@ -741,7 +744,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     final comFija = _parseNumero(_vlrComFijaCtrl.text) ?? 0;
     final comDistrib = _parseNumero(_comDistribCtrl.text) ?? 0;
     final maxComDistrib = vlrCom + comFija;
-    if (comDistrib > maxComDistrib && maxComDistrib > 0) {
+    if (comDistrib > maxComDistrib) {
       _toast('La Com. a distribuir ($comDistrib) no puede ser mayor a Vlr Com + Com Fija ($maxComDistrib).');
       return;
     }
@@ -758,10 +761,14 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     setState(() => _guardando = true);
 
     try {
-      if (!esEdicion) {
-        final existe = await _repoPol.existeId(id);
-        if (existe) {
-          _toast('Ya existe una póliza con ese código.');
+      final nroPolizaTrim = _nroCtrl.text.trim();
+      if (nroPolizaTrim.isNotEmpty) {
+        final existeNro = await _repoPol.existeNroPoliza(
+          nroPolizaTrim,
+          excluirId: esEdicion ? id : null,
+        );
+        if (existeNro) {
+          _toast('Ya existe una póliza con el número "$nroPolizaTrim".');
           return;
         }
       }
@@ -769,7 +776,6 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       final porcomAsesor = _parseNumero(_porcomAsesor1Ctrl.text);
 
       final data = <String, dynamic>{
-        'id': id,
         'nro_poliza':
             _nroCtrl.text.trim().isEmpty ? null : _nroCtrl.text.trim(),
         'cliente_id': _idValido(cliente?.id),
@@ -817,7 +823,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         // Al editar no se modifica quién la creó originalmente
         await _repoPol.actualizarPoliza(
           originalId,
-          data..remove('id')..remove('usuario_id'),
+          data..remove('usuario_id'),
         );
       } else {
         await _repoPol.crearPoliza(data);
@@ -906,24 +912,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   }
 
   Widget _seccion(String titulo, List<Widget> campos) {
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titulo,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            const Divider(height: 18),
-            ...campos,
-          ],
-        ),
-      ),
-    );
+    return SectionCard(titulo: titulo, children: campos);
   }
 
 
@@ -989,7 +978,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.pagePadding,
               children: [
 
                 // ── Fila 1: Código · Nro Póliza · Fechas ─────────────────────
@@ -1074,7 +1063,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                           labelText: '% Base Com.',
                           border: const OutlineInputBorder(),
                           filled: true,
-                          fillColor: Colors.grey.shade100,
+                          fillColor: AppTheme.surfaceContainerHighest,
                         ),
                         child: Text(
                           ramo != null ? ramo!.porcomBaseRamo.toString() : '—',
@@ -1280,14 +1269,14 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                       Icon(excede ? Icons.warning_amber_rounded : Icons.check_circle_outline,
                           size: 16,
-                          color: excede ? Colors.red : Colors.green),
+                          color: excede ? AppTheme.danger : AppTheme.green),
                       const SizedBox(width: 4),
                       Text(
                         'Total: ${total.toStringAsFixed(2)}%',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: excede ? Colors.red : Colors.green,
+                          color: excede ? AppTheme.danger : AppTheme.green,
                         ),
                       ),
                     ]);
@@ -1308,14 +1297,14 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                       Icon(excede ? Icons.warning_amber_rounded : Icons.check_circle_outline,
                           size: 16,
-                          color: excede ? Colors.red : Colors.green),
+                          color: excede ? AppTheme.danger : AppTheme.green),
                       const SizedBox(width: 4),
                       Text(
                         'Total adic.: ${total.toStringAsFixed(2)}%',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: excede ? Colors.red : Colors.green,
+                          color: excede ? AppTheme.danger : AppTheme.green,
                         ),
                       ),
                     ]);

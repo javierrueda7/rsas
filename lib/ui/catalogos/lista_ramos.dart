@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_theme.dart';
 import 'form_ramo.dart';
 
 class ListaRamos extends StatefulWidget {
@@ -181,7 +182,7 @@ class _ListaRamosState extends State<ListaRamos> {
 
   Widget _vistaMovil(List<Ramo> data) {
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
       itemCount: data.length,
       itemBuilder: (_, i) {
         final r = data[i];
@@ -226,9 +227,9 @@ class _ListaRamosState extends State<ListaRamos> {
                 PopupMenuItem(
                   value: 'delete',
                   child: Row(children: [
-                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                    Icon(Icons.delete_outline, size: 18, color: AppTheme.danger),
                     SizedBox(width: 10),
-                    Text('Eliminar', style: TextStyle(color: Colors.red)),
+                    Text('Eliminar', style: TextStyle(color: AppTheme.danger)),
                   ]),
                 ),
               ],
@@ -263,7 +264,7 @@ class _ListaRamosState extends State<ListaRamos> {
       );
     }
     return Container(
-      color: Colors.grey.shade200,
+      color: cs.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       child: Row(children: [
         col('ID', _wId, () => _sort<num>((r) => r.id, 0, _sortColumnIndex != 0 || !_sortAscending), 0),
@@ -281,7 +282,7 @@ class _ListaRamosState extends State<ListaRamos> {
       onTap: () => _abrirEditar(r),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE)))),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppTheme.outlineVariant))),
         child: Row(children: [
           SizedBox(width: _wId, child: Text(r.id.toString(), style: const TextStyle(fontSize: 13))),
           SizedBox(width: _wNombre, child: Text(r.nombreRamo, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
@@ -356,7 +357,7 @@ class _ListaRamosState extends State<ListaRamos> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: Column(
               children: [
                 TextField(

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
 import '../../utils/formatters.dart';
+import '../theme/app_layout.dart';
+import '../widgets/section_card.dart';
 
 class FormAsesor extends StatefulWidget {
   final Asesor? asesor;
@@ -166,14 +168,6 @@ class _FormAsesorState extends State<FormAsesor> {
 
     setState(() => guardando = true);
     try {
-      if (!esEdicion) {
-        final existe = await repo.existeAsesorId(idNum);
-        if (existe) {
-          _toast('Ya existe un asesor con ese ID.');
-          return;
-        }
-      }
-
       final a = Asesor(
         id: esEdicion ? widget.asesor!.id : idNum,
         nombreAsesor: _limpiarObligatorio(nombreCtrl.text),
@@ -201,24 +195,7 @@ class _FormAsesorState extends State<FormAsesor> {
   }
 
   Widget _seccion(String titulo, List<Widget> campos) {
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titulo,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            const Divider(height: 18),
-            ...campos,
-          ],
-        ),
-      ),
-    );
+    return SectionCard(titulo: titulo, children: campos);
   }
 
   Widget _fila2(Widget a, Widget b) {
@@ -269,7 +246,7 @@ class _FormAsesorState extends State<FormAsesor> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.pagePadding,
               children: [
                 // ── 1. Datos principales ─────────────────────────────────────
                 _seccion('Datos principales', [

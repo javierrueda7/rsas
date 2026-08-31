@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_layout.dart';
+import '../widgets/section_card.dart';
 
 class FormAseguradora extends StatefulWidget {
   final Aseguradora? aseguradora;
@@ -145,14 +147,6 @@ class _FormAseguradoraState extends State<FormAseguradora> {
     setState(() => guardando = true);
 
     try {
-      if (!esEdicion) {
-        final existe = await repo.existeAseguradoraId(idNum);
-        if (existe) {
-          _toast('Ya existe una aseguradora con ese ID.');
-          return;
-        }
-      }
-
       final a = Aseguradora(
         id: esEdicion ? widget.aseguradora!.id : idNum,
         nombreAseg: _limpiarObligatorio(nombreCtrl.text),
@@ -177,24 +171,7 @@ class _FormAseguradoraState extends State<FormAseguradora> {
   }
 
   Widget _seccion(String titulo, List<Widget> campos) {
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titulo,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            const Divider(height: 18),
-            ...campos,
-          ],
-        ),
-      ),
-    );
+    return SectionCard(titulo: titulo, children: campos);
   }
 
   Widget _fila2(Widget a, Widget b) {
@@ -245,7 +222,7 @@ class _FormAseguradoraState extends State<FormAseguradora> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: AppLayout.pagePadding,
               children: [
                 // ── 1. Identificación ────────────────────────────────────────
                 _seccion('Identificación', [

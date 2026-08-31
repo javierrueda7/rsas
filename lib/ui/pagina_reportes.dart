@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart';
@@ -7,6 +9,9 @@ import 'package:intl/intl.dart';
 
 import '../datos/poliza.dart';
 import '../datos/repositorio_polizas.dart';
+import 'theme/app_layout.dart';
+import 'theme/app_theme.dart';
+import 'widgets/stat_card.dart';
 
 // ── Modelo auxiliar ───────────────────────────────────────────────────────────
 
@@ -80,15 +85,21 @@ class _PaginaReportesState extends State<PaginaReportes>
   void dispose() {
     _ctrlBuscar.dispose();
     _tabCtrl.dispose();
+    _clienteDebounce?.cancel();
+    _busquedaDebounce?.cancel();
     super.dispose();
   }
 
+  Timer? _clienteDebounce;
+  Timer? _busquedaDebounce;
+
   // ── Carga ─────────────────────────────────────────────────────────────────
 
-  Future<void> _cargar() async {
+  Future<void> _cargar({bool forzar = false}) async {
     setState(() { _cargando = true; _cargados = 0; _errorCarga = null; });
     try {
       final data = await _repo.listarTodos(
+        forzar: forzar,
         onProgreso: (n) { if (mounted) setState(() => _cargados = n); },
       ).timeout(const Duration(minutes: 3));
       if (mounted) setState(() { _polizas = data; _cargando = false; });
@@ -345,30 +356,32 @@ class _PaginaReportesState extends State<PaginaReportes>
     return DateTime(n.year, n.month, n.day);
   }
 
-  List<Poliza> get _vigentes => _filtradas
+  // Reciben la lista ya filtrada (calculada una sola vez por build en vez de
+  // que cada tab la vuelva a derivar de _filtradas por su cuenta).
+  List<Poliza> _vigentes(List<Poliza> filtradas) => filtradas
       .where((p) => p.ffinPoliza != null && !p.ffinPoliza!.isBefore(_hoy))
       .toList();
 
-  List<Poliza> get _vencidas => _filtradas
+  List<Poliza> _vencidas(List<Poliza> filtradas) => filtradas
       .where((p) => p.ffinPoliza != null && p.ffinPoliza!.isBefore(_hoy))
       .toList()
     ..sort((a, b) => b.ffinPoliza!.compareTo(a.ffinPoliza!));
 
-  List<Poliza> _porVencer(int desdeD, int hastaD) =>
-      _filtradas.where((p) {
+  List<Poliza> _porVencer(List<Poliza> filtradas, int desdeD, int hastaD) =>
+      filtradas.where((p) {
         if (p.ffinPoliza == null) return false;
         final diff = p.ffinPoliza!.difference(_hoy).inDays;
         return diff >= desdeD && diff <= hastaD;
       }).toList()
         ..sort((a, b) => a.ffinPoliza!.compareTo(b.ffinPoliza!));
 
-  List<Poliza> get _sinFfin => _filtradas
+  List<Poliza> _sinFfin(List<Poliza> filtradas) => filtradas
       .where((p) => p.ffinPoliza == null)
       .toList()
         ..sort((a, b) => (b.fcreado ?? DateTime(0)).compareTo(a.fcreado ?? DateTime(0)));
 
-  double get _primaTotal =>
-      _filtradas.fold(0.0, (s, p) => s + p.primaPoliza);
+  double _primaTotal(List<Poliza> filtradas) =>
+      filtradas.fold(0.0, (s, p) => s + p.primaPoliza);
 
   Map<String, _Grupo> _agrupar(List<Poliza> lista, String Function(Poliza) key) {
     final map = <String, _Grupo>{};
@@ -416,9 +429,10 @@ class _PaginaReportesState extends State<PaginaReportes>
     await Future.delayed(const Duration(milliseconds: 80));
     try {
       final hoy = _hoy;
+      final fil = _filtradas;
       final bytes = await compute(_buildExcelBytes, _ExcelParams(
-        polizas: _filtradas,
-        porVencer90: _porVencer(0, 90),
+        polizas: fil,
+        porVencer90: _porVencer(fil, 0, 90),
         hoy: hoy,
       ));
       if (bytes == null) throw Exception('No se pudo generar el archivo.');
@@ -450,6 +464,9 @@ class _PaginaReportesState extends State<PaginaReportes>
   @override
   Widget build(BuildContext context) {
     final activos = _filtrosActivos;
+    // Se calcula una sola vez por build y se pasa a cada tab, en vez de que
+    // cada uno vuelva a filtrar toda la lista por su cuenta.
+    final filtradas = _filtradas;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reportes'),
@@ -506,7 +523,7 @@ class _PaginaReportesState extends State<PaginaReportes>
             IconButton(
               tooltip: 'Recargar',
               icon: const Icon(Icons.refresh),
-              onPressed: _cargar,
+              onPressed: () => _cargar(forzar: true),
             ),
           ],
         ],
@@ -515,13 +532,17 @@ class _PaginaReportesState extends State<PaginaReportes>
           ? _vistaCargando()
           : _errorCarga != null
               ? _vistaError()
-              : Column(
+              : AppLayout.centered(Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
                   child: TextField(
                     controller: _ctrlBuscar,
-                    onChanged: (v) => setState(() => _busqueda = v.trim()),
+                    onChanged: (v) {
+                      _busquedaDebounce?.cancel();
+                      _busquedaDebounce = Timer(const Duration(milliseconds: 250),
+                          () => setState(() => _busqueda = v.trim()));
+                    },
                     decoration: InputDecoration(
                       labelText: 'Buscar por ID, póliza, cliente, documento, aseguradora, ramo, asesor…',
                       border: const OutlineInputBorder(),
@@ -531,6 +552,7 @@ class _PaginaReportesState extends State<PaginaReportes>
                           ? IconButton(
                               icon: const Icon(Icons.clear),
                               onPressed: () {
+                                _busquedaDebounce?.cancel();
                                 _ctrlBuscar.clear();
                                 setState(() => _busqueda = '');
                               },
@@ -550,22 +572,22 @@ class _PaginaReportesState extends State<PaginaReportes>
                   child: TabBarView(
                     controller: _tabCtrl,
                     children: [
-                      _tabResumen(),
+                      _tabResumen(filtradas),
                       _tabAgrupado(
-                          _agrupar(_filtradas, (p) => p.nombreAseg ?? 'Sin aseguradora'),
-                          'Aseguradora', 'aseg'),
+                          _agrupar(filtradas, (p) => p.nombreAseg ?? 'Sin aseguradora'),
+                          'Aseguradora', 'aseg', filtradas),
                       _tabAgrupado(
-                          _agrupar(_filtradas, (p) => p.nombreRamo ?? 'Sin ramo'),
-                          'Ramo', 'ramo'),
+                          _agrupar(filtradas, (p) => p.nombreRamo ?? 'Sin ramo'),
+                          'Ramo', 'ramo', filtradas),
                       _tabAgrupado(
-                          _agrupar(_filtradas, (p) => p.nombreAsesor ?? 'Sin asesor'),
-                          'Asesor', 'asesor'),
-                      _tabVencimientos(),
+                          _agrupar(filtradas, (p) => p.nombreAsesor ?? 'Sin asesor'),
+                          'Asesor', 'asesor', filtradas),
+                      _tabVencimientos(filtradas),
                     ],
                   ),
                 ),
               ],
-            ),
+            )),
     );
   }
 
@@ -578,7 +600,7 @@ class _PaginaReportesState extends State<PaginaReportes>
 
     return Container(
       color: cs.surfaceContainerLow,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -751,7 +773,12 @@ class _PaginaReportesState extends State<PaginaReportes>
           style: const TextStyle(fontSize: 13),
           onChanged: (t) {
             if (textSearch) {
-              setState(() => onChanged(t.isNotEmpty ? t : null));
+              // Filtro de cliente recorre toda la lista en memoria en cada
+              // cambio — se espera una pausa al tipear para no recalcularlo
+              // en cada tecla.
+              _clienteDebounce?.cancel();
+              _clienteDebounce = Timer(const Duration(milliseconds: 250),
+                  () => setState(() => onChanged(t.isNotEmpty ? t : null)));
             } else {
               if (t.isEmpty && value != null) setState(() => onChanged(null));
             }
@@ -795,52 +822,46 @@ class _PaginaReportesState extends State<PaginaReportes>
         ? '${desde != null ? _df.format(desde) : '—'} → ${hasta != null ? _df.format(hasta) : '—'}'
         : 'Cualquier fecha';
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: hasDate ? cs.primaryContainer : cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: hasDate
-                ? cs.primary.withOpacity(0.5)
-                : cs.outline.withOpacity(0.3),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.date_range_outlined,
-                size: 15,
-                color: hasDate ? cs.primary : cs.onSurfaceVariant),
-            const SizedBox(width: 6),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 10,
-                        color: hasDate ? cs.primary : cs.onSurfaceVariant)),
-                Text(rangeText,
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight:
-                            hasDate ? FontWeight.bold : FontWeight.normal,
-                        color: hasDate ? cs.onPrimaryContainer : cs.onSurface)),
-              ],
+    return Tooltip(
+      message: '$label: $rangeText',
+      child: InkWell(
+        onTap: onTap,
+        customBorder: AppLayout.chipShape,
+        child: Container(
+          padding: AppLayout.chipPadding,
+          decoration: BoxDecoration(
+            color: hasDate ? cs.primaryContainer : cs.surfaceContainerHighest,
+            shape: BoxShape.rectangle,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: hasDate
+                  ? cs.primary.withOpacity(0.5)
+                  : cs.outline.withOpacity(0.4),
             ),
-            if (hasDate) ...[
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.date_range_outlined,
+                  size: 14,
+                  color: hasDate ? cs.primary : cs.onSurfaceVariant),
               const SizedBox(width: 6),
-              GestureDetector(
-                onTap: onClear,
-                child:
-                    Icon(Icons.close, size: 14, color: cs.primary),
+              Text(
+                hasDate ? '$label: $rangeText' : label,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: hasDate ? FontWeight.bold : FontWeight.normal,
+                    color: hasDate ? cs.onPrimaryContainer : cs.onSurface),
               ),
+              if (hasDate) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: onClear,
+                  child: Icon(Icons.close, size: 14, color: cs.primary),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -851,8 +872,9 @@ class _PaginaReportesState extends State<PaginaReportes>
     final cs = Theme.of(context).colorScheme;
     return ActionChip(
       label: Text(label, style: const TextStyle(fontSize: 11)),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+      padding: AppLayout.chipPadding,
       visualDensity: VisualDensity.compact,
+      shape: AppLayout.chipShape,
       side: BorderSide(color: cs.outline.withOpacity(0.4)),
       onPressed: onTap,
     );
@@ -866,10 +888,10 @@ class _PaginaReportesState extends State<PaginaReportes>
       onTap: () => setState(() => _filtroEstado = valor),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        padding: AppLayout.chipPadding,
         decoration: BoxDecoration(
           color: activo ? cs.primary : cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(100),
         ),
         child: Text(label,
             style: TextStyle(
@@ -899,7 +921,7 @@ class _PaginaReportesState extends State<PaginaReportes>
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
-              onPressed: _cargar,
+              onPressed: () => _cargar(forzar: true),
               icon: const Icon(Icons.refresh),
               label: const Text('Reintentar'),
             ),
@@ -987,22 +1009,22 @@ class _PaginaReportesState extends State<PaginaReportes>
 
   // ── Tab Resumen ───────────────────────────────────────────────────────────
 
-  Widget _tabResumen() {
+  Widget _tabResumen(List<Poliza> fil) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final fil = _filtradas;
     final total = fil.length;
-    final sinFfin = _sinFfin.length;
-    final vigentes = _vigentes;
-    final vencidas = _vencidas;
-    final pv30 = _porVencer(0, 30);
-    final pv60 = _porVencer(31, 60);
-    final pv90 = _porVencer(61, 90);
+    final sinFfin = _sinFfin(fil).length;
+    final vigentes = _vigentes(fil);
+    final vencidas = _vencidas(fil);
+    final pv30 = _porVencer(fil, 0, 30);
+    final pv60 = _porVencer(fil, 31, 60);
+    final pv90 = _porVencer(fil, 61, 90);
+    final primaTotal = _primaTotal(fil);
     final topAseg = _agrupar(fil, (p) => p.nombreAseg ?? 'Sin aseguradora').values.take(5).toList();
     final topRamo = _agrupar(fil, (p) => p.nombreRamo ?? 'Sin ramo').values.take(5).toList();
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: AppLayout.pagePadding,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 960),
@@ -1031,22 +1053,22 @@ class _PaginaReportesState extends State<PaginaReportes>
                 _kpi('Total pólizas', _nf.format(total),
                     Icons.receipt_long_outlined, cs.primary),
                 _kpi('Vigentes', _nf.format(vigentes.length),
-                    Icons.check_circle_outline, Colors.green.shade600,
+                    Icons.check_circle_outline, AppTheme.green,
                     onTap: () {
                       setState(() => _filtroEstado = 1);
                       if (!_filtrosVisible) setState(() => _filtrosVisible = true);
                     }),
                 _kpi('Vencidas', _nf.format(vencidas.length),
-                    Icons.cancel_outlined, Colors.red.shade600,
+                    Icons.cancel_outlined, AppTheme.danger,
                     onTap: () {
                       setState(() => _filtroEstado = 2);
                       _tabCtrl.animateTo(_iVenc);
                     }),
-                _kpi('Prima total', _nf.format(_primaTotal),
+                _kpi('Prima total', _nf.format(primaTotal),
                     Icons.attach_money, cs.secondary),
                 if (sinFfin > 0)
                   _kpi('Sin fecha venc.', _nf.format(sinFfin),
-                      Icons.event_busy_outlined, Colors.blueGrey.shade400,
+                      Icons.event_busy_outlined, AppTheme.inkSoft,
                       onTap: () => _tabCtrl.animateTo(_iVenc)),
               ]),
               const SizedBox(height: 24),
@@ -1056,13 +1078,13 @@ class _PaginaReportesState extends State<PaginaReportes>
               const SizedBox(height: 10),
               Wrap(spacing: 12, runSpacing: 12, children: [
                 _kpi('0 – 30 días', _nf.format(pv30.length),
-                    Icons.warning_amber_outlined, Colors.red.shade600,
+                    Icons.warning_amber_outlined, AppTheme.danger,
                     onTap: () {
                       _presetFfin(0, 30);
                       _tabCtrl.animateTo(_iVenc);
                     }),
                 _kpi('31 – 60 días', _nf.format(pv60.length),
-                    Icons.access_time_outlined, Colors.orange.shade700,
+                    Icons.access_time_outlined, AppTheme.warning,
                     onTap: () {
                       _presetFfin(31, 60);
                       _tabCtrl.animateTo(_iVenc);
@@ -1118,45 +1140,7 @@ class _PaginaReportesState extends State<PaginaReportes>
 
   Widget _kpi(String titulo, String valor, IconData icono, Color color,
       {VoidCallback? onTap}) {
-    final isClickable = onTap != null;
-    return SizedBox(
-      width: 200,
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: color.withOpacity(0.3)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Icon(icono, color: color, size: 22),
-                if (isClickable) ...[
-                  const Spacer(),
-                  Icon(Icons.chevron_right, size: 16,
-                      color: color.withOpacity(0.5)),
-                ],
-              ]),
-              const SizedBox(height: 10),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(valor,
-                    style: TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-              ),
-              const SizedBox(height: 4),
-              Text(titulo,
-                  style: const TextStyle(fontSize: 12)),
-            ]),
-          ),
-        ),
-      ),
-    );
+    return StatCard(label: titulo, value: valor, icon: icono, color: color, onTap: onTap);
   }
 
   Widget _miniBar(String nombre, int cantidad, int total, Color color,
@@ -1214,18 +1198,19 @@ class _PaginaReportesState extends State<PaginaReportes>
 
   // ── Tab Agrupado ──────────────────────────────────────────────────────────
 
-  Widget _tabAgrupado(Map<String, _Grupo> grupos, String colNombre, String filterKey) {
+  Widget _tabAgrupado(Map<String, _Grupo> grupos, String colNombre, String filterKey,
+      List<Poliza> fil) {
     final cs = Theme.of(context).colorScheme;
     if (grupos.isEmpty) return const Center(child: Text('Sin datos'));
 
     final maxRef = _sortByPrima
         ? grupos.values.first.prima
         : grupos.values.first.cantidad.toDouble();
-    final total = _filtradas.length;
-    final primaTotal = _primaTotal;
+    final total = fil.length;
+    final primaTotal = _primaTotal(fil);
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: AppLayout.pagePadding,
       children: [
         // Encabezado con toggle de orden
         Row(children: [
@@ -1376,18 +1361,18 @@ class _PaginaReportesState extends State<PaginaReportes>
 
   // ── Tab Vencimientos ──────────────────────────────────────────────────────
 
-  Widget _tabVencimientos() {
+  Widget _tabVencimientos(List<Poliza> fil) {
     final cs = Theme.of(context).colorScheme;
     final secciones = [
-      ('Vencen en 0 – 30 días',      _porVencer(0, 30),  Colors.red.shade600,    Icons.warning_amber_outlined),
-      ('Vencen en 31 – 60 días',     _porVencer(31, 60), Colors.orange.shade700,  Icons.access_time_outlined),
-      ('Vencen en 61 – 90 días',     _porVencer(61, 90), Colors.amber.shade700,   Icons.event_outlined),
-      ('Ya vencidas (últimas 100)', _vencidas.take(100).toList(), Colors.grey.shade500, Icons.cancel_outlined),
-      ('Sin fecha de vencimiento',  _sinFfin, Colors.blueGrey.shade400, Icons.event_busy_outlined),
+      ('Vencen en 0 – 30 días',      _porVencer(fil, 0, 30),  AppTheme.danger,    Icons.warning_amber_outlined),
+      ('Vencen en 31 – 60 días',     _porVencer(fil, 31, 60), AppTheme.warning,  Icons.access_time_outlined),
+      ('Vencen en 61 – 90 días',     _porVencer(fil, 61, 90), Colors.amber.shade700,   Icons.event_outlined),
+      ('Ya vencidas (últimas 100)', _vencidas(fil).take(100).toList(), AppTheme.inkSoft, Icons.cancel_outlined),
+      ('Sin fecha de vencimiento',  _sinFfin(fil), AppTheme.inkSoft, Icons.event_busy_outlined),
     ];
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: AppLayout.pagePadding,
       children: secciones.expand<Widget>((rec) {
         final (titulo, lista, color, icono) = rec;
         if (lista.isEmpty) return const [];

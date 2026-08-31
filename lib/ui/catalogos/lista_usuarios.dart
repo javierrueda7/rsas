@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_theme.dart';
 import 'form_usuario.dart';
 
 class ListaUsuarios extends StatefulWidget {
@@ -168,7 +169,7 @@ class _ListaUsuariosState extends State<ListaUsuarios> {
       );
     }
     return Container(
-      color: Colors.grey.shade200,
+      color: cs.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       child: Row(children: [
         col('ID', _wId, () => _sort<num>((u) => u.id, 0, _sortColumnIndex != 0 || !_sortAscending), 0),
@@ -186,7 +187,7 @@ class _ListaUsuariosState extends State<ListaUsuarios> {
       onTap: () => _abrirEditar(u),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE)))),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppTheme.outlineVariant))),
         child: Row(children: [
           SizedBox(width: _wId, child: Text(u.id.toString(), style: const TextStyle(fontSize: 13))),
           SizedBox(width: _wApodo, child: Text(u.apodoUsuario, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
@@ -234,7 +235,7 @@ class _ListaUsuariosState extends State<ListaUsuarios> {
 
   Widget _vistaMovil(List<Usuario> data) {
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
       itemCount: data.length,
       itemBuilder: (_, i) {
         final u = data[i];
@@ -274,7 +275,7 @@ class _ListaUsuariosState extends State<ListaUsuarios> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: Column(children: [
               TextField(
                 controller: _buscarCtrl,

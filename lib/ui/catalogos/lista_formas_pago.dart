@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../theme/app_theme.dart';
 import 'form_forma_pago.dart';
 
 class ListaFormasPago extends StatefulWidget {
@@ -138,7 +139,7 @@ class _ListaFormasPagoState extends State<ListaFormasPago> {
       );
     }
     return Container(
-      color: Colors.grey.shade200,
+      color: cs.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       child: Row(children: [
         col('ID', _wId, () => _sort<num>((f) => f.id, 0, _sortColumnIndex != 0 || !_sortAscending), 0),
@@ -155,7 +156,7 @@ class _ListaFormasPagoState extends State<ListaFormasPago> {
       onTap: () => _abrirEditar(f),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE)))),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppTheme.outlineVariant))),
         child: Row(children: [
           SizedBox(width: _wId, child: Text(f.id.toString(), style: const TextStyle(fontSize: 13))),
           SizedBox(width: _wNombre, child: Text(f.nombreFormaPago, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
@@ -164,7 +165,7 @@ class _ListaFormasPagoState extends State<ListaFormasPago> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: f.estadoFormaPago ? Colors.green.shade50 : Colors.grey.shade100,
+                color: f.estadoFormaPago ? cs.secondaryContainer : cs.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -172,7 +173,7 @@ class _ListaFormasPagoState extends State<ListaFormasPago> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: f.estadoFormaPago ? Colors.green.shade700 : cs.onSurfaceVariant,
+                  color: f.estadoFormaPago ? cs.onSecondaryContainer : cs.onSurfaceVariant,
                 ),
               ),
             ),
@@ -218,7 +219,7 @@ class _ListaFormasPagoState extends State<ListaFormasPago> {
 
   Widget _vistaMovil(List<FormaPago> data) {
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
       itemCount: data.length,
       itemBuilder: (_, i) {
         final f = data[i];
@@ -260,7 +261,7 @@ class _ListaFormasPagoState extends State<ListaFormasPago> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
             child: TextField(
               controller: _buscarCtrl,
               decoration: InputDecoration(
@@ -274,7 +275,7 @@ class _ListaFormasPagoState extends State<ListaFormasPago> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: Row(children: [
               Switch(
                 value: _soloActivas,
