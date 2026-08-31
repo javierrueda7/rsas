@@ -16,6 +16,8 @@ create extension if not exists pgcrypto;
 create or replace function hash_clave_usuario()
 returns trigger
 language plpgsql
+security definer
+set search_path = public, extensions
 as $$
 begin
   if new.clave_usuario is not null
@@ -82,4 +84,33 @@ grant execute on function autenticar_usuario(text, text) to anon, authenticated;
 --    token/OTP) — sigue siendo débil contra alguien que conozca ambos
 --    datos de un compañero. Es un cambio más grande (requiere envío de
 --    correo) que no entró en este alcance.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Diagnóstico: correr estas dos consultas por separado para revisar el
+-- estado de todos los usuarios después de la migración.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- 1. Estado de cada usuario: ¿su clave ya es un hash bcrypt? (debería decir
+--    "hasheada" en todas las filas; si alguna dice "TEXTO PLANO" es porque
+--    se guardó después de la migración con el trigger viejo, sin
+--    search_path — hay que corregirlo a mano o re-guardando esa clave ahora
+--    que el trigger ya está arreglado).
+select
+  apodo_usuario,
+  estado_usuario,
+  case
+    when clave_usuario ~ '^\$2[aby]\$' then 'hasheada'
+    when clave_usuario is null then 'sin clave'
+    else 'TEXTO PLANO'
+  end as estado_clave
+from usuarios
+order by apodo_usuario;
+
+-- 2. Probar un login puntual sin pasar por la app (reemplazá apodo/clave).
+--    ilike para no fallar por mayúsculas/minúsculas al diagnosticar.
+select apodo_usuario, estado_usuario,
+       clave_usuario = crypt('JCRS01', clave_usuario) as clave_coincide
+from usuarios
+where apodo_usuario ilike 'javier';
 -- ═══════════════════════════════════════════════════════════════════════════
