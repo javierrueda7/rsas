@@ -39,6 +39,7 @@ dependencies:
   file_saver: ^0.2.14
   pdf: ^3.11.0
   google_fonts: ^6.2.1
+  file_picker: ^8.1.4
 
 
 

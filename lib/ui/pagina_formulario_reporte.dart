@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'dart:async';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,7 @@ import '../datos/abono_poliza.dart';
 import '../datos/catalogos.dart';
 import '../datos/poliza.dart';
 import '../datos/repositorio_catalogos.dart';
+import '../datos/repositorio_ia.dart';
 import '../datos/repositorio_pagos.dart';
 import '../datos/repositorio_polizas.dart';
 import '../datos/sesion.dart';
@@ -17,6 +19,7 @@ import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
 import 'widgets/stat_card.dart';
 import 'pagina_estado_cuenta.dart';
+import 'pagina_revision_reporte_pago.dart';
 import 'widgets/buscador_dropdown.dart';
 
 // ── Formateo moneda colombiana mientras escribe ───────────────────────────────
@@ -64,6 +67,10 @@ extension _FirstOrNull<E> on Iterable<E> {
 // FormularioReportePago
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// La importación de reportes de comisiones con IA sigue en pruebas —
+/// oculta hasta validarla más.
+const bool _mostrarImportarReporte = false;
+
 class FormularioReportePago extends StatefulWidget {
   final ReportePago? reporte;
   const FormularioReportePago({super.key, this.reporte});
@@ -76,11 +83,14 @@ class _FormularioReporteState extends State<FormularioReportePago> {
   final _formKey        = GlobalKey<FormState>();
   final _repoPagos      = RepositorioPagos();
   final _repoCatalogos  = RepositorioCatalogos();
+  final _repoIA         = RepositorioIA();
   final _df             = DateFormat('dd/MM/yyyy');
 
   bool _guardando       = false;
   bool _cargandoCatalogos = false;
   bool _cargandoAbonos  = false;
+  bool _importando      = false;
+  List<Map<String, dynamic>> _lineasPendientes = [];
 
   List<AbonoPoliza>  _abonos        = [];
   List<Aseguradora>  _aseguradoras  = [];
@@ -185,6 +195,25 @@ class _FormularioReporteState extends State<FormularioReportePago> {
       if (_esNuevo) {
         final id = await _repoPagos.crearReporte(data);
         if (!mounted) return;
+
+        // Si se había importado un documento antes de guardar, las líneas
+        // quedaron pendientes esperando un id real — ahora que existe, se
+        // revisan/confirman antes de volver.
+        if (_lineasPendientes.isNotEmpty) {
+          final lineas = _lineasPendientes;
+          setState(() => _lineasPendientes = []);
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PaginaRevisionReportePago(
+                idReporte: id,
+                lineas: lineas,
+              ),
+            ),
+          );
+          if (!mounted) return;
+        }
+
         // Reemplaza la pantalla con la del reporte recién creado
         final nuevo = await _repoPagos.obtenerReporte(id);
         if (!mounted) return;
@@ -226,6 +255,116 @@ class _FormularioReporteState extends State<FormularioReportePago> {
       await _cargarAbonos();
       await _repoPagos.recalcularTotales(_idReporte!);
     }
+  }
+
+  Future<void> _importarDesdeArchivo() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.single;
+    final bytes = file.bytes;
+    final ext = (file.extension ?? '').toLowerCase();
+    final mimeType = switch (ext) {
+      'pdf' => 'application/pdf',
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => null,
+    };
+    if (bytes == null || mimeType == null) {
+      _snack('No se pudo leer el archivo. Usá PDF, JPG, PNG o WEBP.', error: true);
+      return;
+    }
+
+    setState(() => _importando = true);
+    try {
+      final extraido = await _repoIA.extraerReportePago(bytes, mimeType);
+      if (!mounted) return;
+
+      // Cabecera: solo se aplica lo que efectivamente se reconoció.
+      final nombreAseg = extraido.cabecera['nombre_aseguradora'] as String?;
+      final matchAseg = _matchPorNombre(
+          _aseguradoras, (a) => a.nombreAseg, nombreAseg);
+      final dRep = _parseFechaISO(extraido.cabecera['fecha_reporte']);
+      final dIni = _parseFechaISO(extraido.cabecera['fecha_inicio_periodo']);
+      final dFin = _parseFechaISO(extraido.cabecera['fecha_fin_periodo']);
+      setState(() {
+        if (matchAseg != null) _aseguradora = matchAseg;
+        if (dRep != null) _fechaRep = dRep;
+        if (dIni != null) _finiRep = dIni;
+        if (dFin != null) _ffinRep = dFin;
+      });
+
+      if (extraido.lineas.isEmpty) {
+        _snack('Se completó la cabecera. No se encontraron líneas de pólizas en el documento.');
+        return;
+      }
+
+      if (_idReporte != null) {
+        // El reporte ya existe: se revisan las líneas de una.
+        final creoAlgo = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaginaRevisionReportePago(
+              idReporte: _idReporte!,
+              lineas: extraido.lineas,
+            ),
+          ),
+        );
+        if (creoAlgo == true) {
+          await _cargarAbonos();
+          await _repoPagos.recalcularTotales(_idReporte!);
+        }
+      } else {
+        // Reporte nuevo, todavía sin id: las líneas quedan pendientes hasta
+        // que se guarde — recién ahí se pueden crear los abonos.
+        setState(() => _lineasPendientes = extraido.lineas);
+        _snack(
+            'Se completó la cabecera y se detectaron ${extraido.lineas.length} línea(s). '
+            'Guardá el reporte para revisarlas y crear los abonos.');
+      }
+    } catch (e) {
+      _snack('Error al importar: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _importando = false);
+    }
+  }
+
+  DateTime? _parseFechaISO(dynamic v) {
+    if (v is! String || v.trim().isEmpty) return null;
+    try {
+      final d = DateTime.parse(v.trim());
+      return DateTime(d.year, d.month, d.day);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  T? _matchPorNombre<T>(
+      List<T> lista, String Function(T) nombre, String? candidato) {
+    if (candidato == null || candidato.trim().isEmpty) return null;
+    final norm = _normalizarTexto(candidato);
+    for (final item in lista) {
+      if (_normalizarTexto(nombre(item)) == norm) return item;
+    }
+    for (final item in lista) {
+      final n = _normalizarTexto(nombre(item));
+      if (n.isNotEmpty && (n.contains(norm) || norm.contains(n))) return item;
+    }
+    return null;
+  }
+
+  String _normalizarTexto(String s) {
+    var r = s.trim().toUpperCase();
+    const acentos = {
+      'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ñ': 'N',
+    };
+    acentos.forEach((k, v) => r = r.replaceAll(k, v));
+    return r;
   }
 
   Future<void> _confirmarEliminarAbono(AbonoPoliza a) async {
@@ -280,6 +419,23 @@ class _FormularioReporteState extends State<FormularioReportePago> {
       appBar: AppBar(
         title: Text(_esNuevo ? 'Nuevo Reporte' : 'Reporte #$_idReporte'),
         actions: [
+          // Oculto por ahora: la importación de reportes de comisiones
+          // sigue en pruebas. Para reactivarla, poner en true.
+          if (_mostrarImportarReporte && _importando)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (_mostrarImportarReporte)
+            TextButton.icon(
+              onPressed: _importarDesdeArchivo,
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('Importar desde PDF/imagen'),
+            ),
           if (!_esNuevo)
             IconButton(
               icon: const Icon(Icons.account_balance_wallet_outlined),

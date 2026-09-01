@@ -1,10 +1,12 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show TextInputFormatter, TextEditingValue;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../datos/repositorio_catalogos.dart';
+import '../datos/repositorio_ia.dart';
 import '../datos/repositorio_polizas.dart';
 import '../datos/catalogos.dart';
 import '../datos/poliza.dart';
@@ -141,10 +143,12 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
   final _repoCat = RepositorioCatalogos();
   final _repoPol = RepositorioPolizas();
+  final _repoIA = RepositorioIA();
   final _db = Supabase.instance.client;
 
   bool _cargando = true;
   bool _guardando = false;
+  bool _importando = false;
 
   final _idCtrl = TextEditingController();
   final _nroCtrl = TextEditingController();
@@ -586,6 +590,199 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     );
   }
 
+  // ── Importar desde PDF/imagen (IA) ──────────────────────────────────────
+
+  Future<void> _importarDesdeArchivo() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.single;
+    final bytes = file.bytes;
+    final ext = (file.extension ?? '').toLowerCase();
+    final mimeType = switch (ext) {
+      'pdf' => 'application/pdf',
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => null,
+    };
+    if (bytes == null || mimeType == null) {
+      _toast('No se pudo leer el archivo. Usá PDF, JPG, PNG o WEBP.');
+      return;
+    }
+
+    setState(() => _importando = true);
+    try {
+      final datos = await _repoIA.extraerPoliza(bytes, mimeType);
+      if (!mounted) return;
+      final completados = await _aplicarDatosExtraidos(datos);
+      _toast(completados > 0
+          ? 'Se completaron $completados campo(s) automáticamente. Revisá antes de guardar.'
+          : 'No se pudo identificar ningún dato en el documento.');
+    } catch (e) {
+      _toast('Error al importar: $e');
+    } finally {
+      if (mounted) setState(() => _importando = false);
+    }
+  }
+
+  Future<int> _aplicarDatosExtraidos(Map<String, dynamic> datos) async {
+    int completados = 0;
+
+    String? texto(String key) {
+      final v = datos[key];
+      return (v is String && v.trim().isNotEmpty) ? v.trim() : null;
+    }
+
+    num? numero(String key) {
+      final v = datos[key];
+      return v is num ? v : null;
+    }
+
+    // La búsqueda de cliente pega al servidor — se resuelve antes del
+    // setState para no mezclar await con la actualización de estado.
+    final matchCliente = await _buscarClienteExtraido(
+        texto('nombre_cliente'), texto('doc_cliente'));
+
+    setState(() {
+      final nro = texto('nro_poliza');
+      if (nro != null) {
+        _nroCtrl.text = nro;
+        completados++;
+      }
+
+      final matchAseg = _matchPorNombre(
+          aseguradoras, (a) => a.nombreAseg, texto('nombre_aseguradora'));
+      if (matchAseg != null) {
+        aseguradora = matchAseg;
+        completados++;
+      }
+
+      final matchRamo =
+          _matchPorNombre(ramos, (r) => r.nombreRamo, texto('nombre_ramo'));
+      if (matchRamo != null) {
+        ramo = matchRamo;
+        completados++;
+      }
+
+      if (matchCliente != null) {
+        cliente = matchCliente;
+        completados++;
+      }
+
+      final dIni = _parseFechaISO(datos['fecha_inicio']);
+      if (dIni != null) {
+        fIni = dIni;
+        _fIniCtrl.text = _formatearFecha(dIni);
+        completados++;
+      }
+      final dFin = _parseFechaISO(datos['fecha_fin']);
+      if (dFin != null) {
+        fFin = dFin;
+        _fFinCtrl.text = _formatearFecha(dFin);
+        completados++;
+      }
+      final dExp = _parseFechaISO(datos['fecha_expedicion']);
+      if (dExp != null) {
+        fExp = dExp;
+        _fExpCtrl.text = _formatearFecha(dExp);
+        completados++;
+      }
+
+      final prima = numero('prima');
+      if (prima != null) {
+        _primaCtrl.text = _fmtMoney(prima);
+        completados++;
+      }
+      final vlrAseg = numero('valor_asegurado');
+      if (vlrAseg != null) {
+        _vlrAsegCtrl.text = _fmtMoney(vlrAseg);
+        completados++;
+      }
+      final valorPoliza = numero('valor_poliza');
+      if (valorPoliza != null) {
+        _valorPolizaCtrl.text = _fmtMoney(valorPoliza);
+        completados++;
+      }
+
+      final bien = texto('bien_asegurado');
+      if (bien != null) {
+        _bienCtrl.text = bien;
+        completados++;
+      }
+    });
+
+    // El producto depende de la aseguradora y el ramo ya seteados arriba.
+    if (aseguradora != null && ramo != null) {
+      await _refrescarProductos();
+      final matchProd = _matchPorNombre(
+          productos, (p) => p.nombreProd, texto('nombre_producto'));
+      if (matchProd != null && mounted) {
+        setState(() => producto = matchProd);
+        completados++;
+      }
+    }
+
+    return completados;
+  }
+
+  Future<Cliente?> _buscarClienteExtraido(String? nombre, String? doc) async {
+    final docLimpio = (doc ?? '').replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
+    try {
+      if (docLimpio.isNotEmpty) {
+        final res = await _repoCat.buscarClientes(docLimpio, limit: 5);
+        final match = res.firstWhereOrNull((c) =>
+            (c.docCliente ?? '').replaceAll(RegExp(r'[^0-9A-Za-z]'), '') ==
+            docLimpio);
+        if (match != null) return match;
+      }
+      if (nombre != null && nombre.isNotEmpty) {
+        final res = await _repoCat.buscarClientes(nombre, limit: 5);
+        return _matchPorNombre(res, (c) => c.nombreCliente, nombre);
+      }
+    } catch (_) {
+      // Si falla la búsqueda, se deja para que el usuario elija a mano.
+    }
+    return null;
+  }
+
+  T? _matchPorNombre<T>(
+      List<T> lista, String Function(T) nombre, String? candidato) {
+    if (candidato == null || candidato.trim().isEmpty) return null;
+    final norm = _normalizarTexto(candidato);
+    for (final item in lista) {
+      if (_normalizarTexto(nombre(item)) == norm) return item;
+    }
+    for (final item in lista) {
+      final n = _normalizarTexto(nombre(item));
+      if (n.isNotEmpty && (n.contains(norm) || norm.contains(n))) return item;
+    }
+    return null;
+  }
+
+  String _normalizarTexto(String s) {
+    var r = s.trim().toUpperCase();
+    const acentos = {
+      'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ñ': 'N',
+    };
+    acentos.forEach((k, v) => r = r.replaceAll(k, v));
+    return r;
+  }
+
+  DateTime? _parseFechaISO(dynamic v) {
+    if (v is! String || v.trim().isEmpty) return null;
+    try {
+      final d = DateTime.parse(v.trim());
+      return DateTime(d.year, d.month, d.day);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Widget _campo(
     String l,
     TextEditingController c, {
@@ -954,6 +1151,21 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       appBar: AppBar(
         title: Text(esEdicion ? 'Editar póliza' : 'Nueva póliza'),
         actions: [
+          if (!esEdicion && _importando)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          if (!esEdicion && !_importando)
+            TextButton.icon(
+              onPressed: _importarDesdeArchivo,
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('Importar desde PDF/imagen'),
+            ),
           if (_guardando)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
