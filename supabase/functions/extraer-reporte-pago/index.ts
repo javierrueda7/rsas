@@ -18,7 +18,15 @@ const CORS_HEADERS = {
 const LINEA_SCHEMA = {
   type: "OBJECT",
   properties: {
-    nro_poliza: { type: "STRING", nullable: true, description: "Número de póliza" },
+    nro_poliza: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Número de póliza COMPLETO de esa línea. Si en la tabla o en la fila aparece " +
+        "también un número de ANEXO para esa póliza, incluilo al final del número, " +
+        "separado por un espacio (ej: '400 97 994000000046 6'), igual que el número de " +
+        "póliza completo se guarda en el sistema — no lo dejes afuera.",
+    },
     nombre_cliente: { type: "STRING", nullable: true, description: "Nombre del asegurado/tomador" },
     vlrprima_poliza: { type: "NUMBER", nullable: true, description: "Valor de la prima de esa póliza, número plano" },
     vlrabono_prima: { type: "NUMBER", nullable: true, description: "Valor abonado/pagado de la prima en este corte, número plano" },

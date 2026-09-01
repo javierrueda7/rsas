@@ -19,7 +19,23 @@ const CORS_HEADERS = {
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
-    nro_poliza: { type: "STRING", nullable: true, description: "Número de póliza" },
+    nro_poliza: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Número de póliza COMPLETO. Muchas aseguradoras colombianas lo muestran " +
+        "compuesto por varios segmentos junto al campo 'Póliza No' o 'No. Póliza' " +
+        "(por ejemplo código de agencia, ramo y número consecutivo, como " +
+        "'400-97-994000000046'), y por separado un campo 'ANEXO' con un número. " +
+        "Si el documento tiene un ANEXO (mayor a 0, o cualquier valor distinto de vacío), " +
+        "el nro_poliza debe ser la unión de TODOS los segmentos del número de póliza MÁS " +
+        "el número de anexo al final, separados por un solo espacio y sin guiones — por " +
+        "ejemplo: si 'Póliza No' es '400-97-994000000046' y 'ANEXO' es '6', el resultado " +
+        "es '400 97 994000000046 6'. Si el documento repite ese mismo número ya concatenado " +
+        "con espacios en otra parte (pie de página, código de barras, encabezados repetidos), " +
+        "usá esa forma como referencia de formato. Si no hay anexo o el documento solo " +
+        "muestra un número simple sin segmentos, usá ese número tal cual aparece.",
+    },
     nombre_cliente: { type: "STRING", nullable: true, description: "Nombre del asegurado/tomador" },
     doc_cliente: { type: "STRING", nullable: true, description: "Número de documento del asegurado (cédula, NIT, etc.), solo dígitos" },
     nombre_aseguradora: { type: "STRING", nullable: true, description: "Nombre de la compañía aseguradora que emite la póliza" },
@@ -82,7 +98,9 @@ Deno.serve(async (req: Request) => {
               {
                 text:
                   "Este es un documento de póliza de seguros emitido por una aseguradora colombiana. " +
-                  "Extraé los datos según el schema. Si un dato no aparece en el documento, dejalo en " +
+                  "Extraé los datos según el schema. Prestá especial atención a nro_poliza: seguí " +
+                  "exactamente las instrucciones de su descripción sobre cómo armar el número completo " +
+                  "cuando el documento tiene un ANEXO. Si un dato no aparece en el documento, dejalo en " +
                   "null — no inventes valores.",
               },
             ],

@@ -138,11 +138,15 @@ class RepositorioPolizas {
     return ultimoId + 1;
   }
 
+  /// Compara ignorando espacios/separadores (via la columna generada
+  /// nro_poliza_norm, ver lib/fix_nro_poliza_normalizado.sql) — "1 0987 2"
+  /// y "109872" se consideran el mismo número.
   Future<bool> existeNroPoliza(String nroPoliza, {int? excluirId}) async {
-    final nro = nroPoliza.trim();
-    if (nro.isEmpty) return false;
+    final normalizado = _normalizarNro(nroPoliza);
+    if (normalizado.isEmpty) return false;
 
-    dynamic query = _db.from(_tabla).select('id').eq('nro_poliza', nro);
+    dynamic query =
+        _db.from(_tabla).select('id').eq('nro_poliza_norm', normalizado);
 
     if (excluirId != null) {
       query = query.neq('id', excluirId);
@@ -151,6 +155,9 @@ class RepositorioPolizas {
     final res = await query.maybeSingle();
     return res != null;
   }
+
+  String _normalizarNro(String s) =>
+      s.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
 
   Future<void> crearPoliza(Map<String, dynamic> data) async {
     await _db.from(_tabla).insert(_limpiarMapa(data));

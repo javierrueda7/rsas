@@ -152,6 +152,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
   final _idCtrl = TextEditingController();
   final _nroCtrl = TextEditingController();
+  String? _nroPolizaOriginal;
 
   final _fExpCtrl = TextEditingController();
   final _fIniCtrl = TextEditingController();
@@ -438,6 +439,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
         _idCtrl.text = p.id.toString();
         _nroCtrl.text = p.nroPoliza ?? '';
+        _nroPolizaOriginal = p.nroPoliza ?? '';
 
         _bienCtrl.text = p.bienAsegurado ?? '';
         _vlrAsegCtrl.text = _fmtMoney(p.vlrasegPoliza);
@@ -764,6 +766,13 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     return null;
   }
 
+  /// Ignora espacios/separadores, igual que RepositorioPolizas.existeNroPoliza
+  /// — se usa para detectar si el usuario realmente cambió el número (y no
+  /// solo el espaciado) y así evitar re-chequear duplicados preexistentes
+  /// contra pólizas que ya se guardaron así antes de este fix.
+  String _normalizarNroLocal(String s) =>
+      s.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
+
   String _normalizarTexto(String s) {
     var r = s.trim().toUpperCase();
     const acentos = {
@@ -959,7 +968,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
     try {
       final nroPolizaTrim = _nroCtrl.text.trim();
-      if (nroPolizaTrim.isNotEmpty) {
+      final nroPolizaCambio = !esEdicion ||
+          _normalizarNroLocal(nroPolizaTrim) !=
+              _normalizarNroLocal(_nroPolizaOriginal ?? '');
+      if (nroPolizaTrim.isNotEmpty && nroPolizaCambio) {
         final existeNro = await _repoPol.existeNroPoliza(
           nroPolizaTrim,
           excluirId: esEdicion ? id : null,

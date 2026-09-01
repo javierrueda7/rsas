@@ -48,6 +48,11 @@ String _normalizar(String s) {
   return r;
 }
 
+/// Para nro_poliza específicamente: ignora espacios/separadores además de
+/// mayúsculas — "1 0987 2" y "109872" deben matchear igual.
+String _normalizarNro(String s) =>
+    s.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
+
 /// Una línea del documento importado, ya con sus controllers de edición.
 class _LineaRevision {
   bool incluir;
@@ -175,9 +180,9 @@ class _PaginaRevisionReportePagoState
     try {
       if (nro.isNotEmpty) {
         final res = await _repoPolizas.listar(busqueda: nro, limite: 10);
-        final normNro = _normalizar(nro);
+        final normNro = _normalizarNro(nro);
         for (final p in res) {
-          if (p.nroPoliza != null && _normalizar(p.nroPoliza!) == normNro) {
+          if (p.nroPoliza != null && _normalizarNro(p.nroPoliza!) == normNro) {
             return p;
           }
         }
