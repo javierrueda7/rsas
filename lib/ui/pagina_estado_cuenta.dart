@@ -444,9 +444,12 @@ class _TablaHistorial extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Scrollbar(
         controller: hScroll,
+        thumbVisibility: true,
+        trackVisibility: true,
         child: SingleChildScrollView(
           controller: hScroll,
           scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(bottom: 10),
           child: DataTable(
             headingRowColor:
                 WidgetStateProperty.all(cs.surfaceContainerHighest),

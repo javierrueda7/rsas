@@ -260,7 +260,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
   Future<void> _importarDesdeArchivo() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+      allowedExtensions: ['pdf', 'xlsx', 'jpg', 'jpeg', 'png', 'webp'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
@@ -270,13 +270,15 @@ class _FormularioReporteState extends State<FormularioReportePago> {
     final ext = (file.extension ?? '').toLowerCase();
     final mimeType = switch (ext) {
       'pdf' => 'application/pdf',
+      'xlsx' =>
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'jpg' || 'jpeg' => 'image/jpeg',
       'png' => 'image/png',
       'webp' => 'image/webp',
       _ => null,
     };
     if (bytes == null || mimeType == null) {
-      _snack('No se pudo leer el archivo. Usá PDF, JPG, PNG o WEBP.', error: true);
+      _snack('No se pudo leer el archivo. Usá PDF, XLSX, JPG, PNG o WEBP.', error: true);
       return;
     }
 
@@ -389,6 +391,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
     if (ok != true) return;
     try {
       await _repoPagos.eliminarAbono(a.id);
+      await _repoPagos.actualizarEstadoPolizaSegunPagos(a.idPoliza);
       await _cargarAbonos();
       await _repoPagos.recalcularTotales(_idReporte!);
     } catch (e) {
@@ -723,9 +726,12 @@ class _TablaAbonos extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Scrollbar(
         controller: hScroll,
+        thumbVisibility: true,
+        trackVisibility: true,
         child: SingleChildScrollView(
           controller: hScroll,
           scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(bottom: 10),
           child: DataTable(
             headingRowColor: WidgetStateProperty.all(cs.surfaceContainerHighest),
             dataRowMinHeight: 52,
@@ -962,6 +968,7 @@ class _DialogAbonoState extends State<_DialogAbono> {
       } else {
         await widget.repo.actualizarAbono(widget.abono!.id, data);
       }
+      await widget.repo.actualizarEstadoPolizaSegunPagos(_poliza!.id);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {

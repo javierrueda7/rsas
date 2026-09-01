@@ -241,6 +241,7 @@ class _PaginaRevisionReportePagoState
           'num_factura': f.facturaCtrl.text.trim().isEmpty ? null : f.facturaCtrl.text.trim(),
           'estado_pago': 'I',
         });
+        await _repoPagos.actualizarEstadoPolizaSegunPagos(f.poliza!.id);
         creados++;
       } catch (_) {
         fallidos++;
@@ -344,9 +345,19 @@ class _PaginaRevisionReportePagoState
             if (encontrada)
               Padding(
                 padding: const EdgeInsets.only(left: 48, bottom: 8),
-                child: Text(
-                  'Póliza ${f.poliza!.nroPoliza ?? f.poliza!.id} — ${f.poliza!.nombreCliente ?? ''}',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Póliza ${f.poliza!.nroPoliza ?? f.poliza!.id} — ${f.poliza!.nombreCliente ?? ''}',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    Text(
+                      '${f.poliza!.nombreRamo ?? '—'} · ${f.poliza!.nombreProd ?? '—'}  '
+                      '·  Prima póliza: \$ ${Fmt.money(f.poliza!.primaPoliza)}',
+                      style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
+                    ),
+                  ],
                 ),
               )
             else

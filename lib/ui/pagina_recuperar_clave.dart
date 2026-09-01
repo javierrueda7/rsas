@@ -23,6 +23,7 @@ class _PaginaRecuperarClaveState extends State<PaginaRecuperarClave> {
 
   // Datos verificados
   String _apodoVerificado = '';
+  String _correoVerificado = '';
 
   // Controladores paso 1
   final _apodoCtrl = TextEditingController();
@@ -59,7 +60,7 @@ class _PaginaRecuperarClaveState extends State<PaginaRecuperarClave> {
     setState(() { _cargando = true; _error = null; });
     try {
       final apodo = _apodoCtrl.text.trim();
-      final existe = await _repo.existeApodoUsuario(apodo);
+      final existe = await _repo.verificarApodoRecuperacion(apodo);
       if (!mounted) return;
       if (!existe) {
         _setError('No se encontró ningún usuario con ese nombre.');
@@ -85,7 +86,7 @@ class _PaginaRecuperarClaveState extends State<PaginaRecuperarClave> {
       if (apodoOk == null) {
         _setError('El correo no coincide con el registrado para este usuario.');
       } else {
-        setState(() => _paso = 3);
+        setState(() { _paso = 3; _correoVerificado = correo; });
       }
     } catch (e) {
       _setError('Error al verificar: $e');
@@ -100,8 +101,13 @@ class _PaginaRecuperarClaveState extends State<PaginaRecuperarClave> {
     if (!(_fk3.currentState?.validate() ?? false)) return;
     setState(() { _cargando = true; _error = null; });
     try {
-      await _repo.cambiarClave(_apodoVerificado, _claveCtrl.text);
+      final ok = await _repo.cambiarClave(
+          _apodoVerificado, _correoVerificado, _claveCtrl.text);
       if (!mounted) return;
+      if (!ok) {
+        _setError('No se pudo verificar el usuario. Volvé a intentar desde el paso 1.');
+        return;
+      }
       _mostrarExito();
     } catch (e) {
       _setError('Error al guardar: $e');

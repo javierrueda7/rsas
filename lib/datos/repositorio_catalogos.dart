@@ -487,40 +487,63 @@ Future<void> eliminarRamo(int id) async {
     }
   }
 
-  /// Verifica que el apodo y el correo coincidan con un usuario activo.
-  /// Devuelve el apodo si la verificación es exitosa, null si no.
-  Future<String?> verificarRecuperacion(String apodo, String correo) async {
-    final res = await _db
-        .from('usuarios')
-        .select('apodo_usuario')
-        .eq('apodo_usuario', apodo.trim())
-        .eq('correo_usuario', correo.trim().toLowerCase())
-        .eq('estado_usuario', true)
-        .maybeSingle();
-    if (res == null) return null;
-    return res['apodo_usuario'] as String;
-  }
-
-  /// Cambia la clave del usuario identificado por [apodo].
-  Future<void> cambiarClave(String apodo, String nuevaClave) async {
-    await _db
-        .from('usuarios')
-        .update({'clave_usuario': nuevaClave})
-        .eq('apodo_usuario', apodo.trim());
-  }
-
-  /// Devuelve el usuario si el apodo y la clave coinciden, null si no.
-  /// La verificación ocurre en la base (función `autenticar_usuario`, ver
-  /// migracion_hash_claves.sql) para no comparar ni exponer el hash acá.
-  Future<Usuario?> autenticar(String apodo, String clave) async {
-    final res = await _db.rpc('autenticar_usuario', params: {
+  /// Paso 1 de "Olvidé mi clave": ¿existe ese apodo? Corre ANTES del login,
+  /// así que usa una función SECURITY DEFINER propia (ver
+  /// lib/fix_rls_seguridad.sql) en vez de leer la tabla usuarios directo —
+  /// una vez con RLS, el rol anon no tiene acceso a esa tabla.
+  Future<bool> verificarApodoRecuperacion(String apodo) async {
+    final res = await _db.rpc('verificar_apodo_recuperacion', params: {
       'p_apodo': apodo.trim(),
-      'p_clave': clave,
     });
+    return res == true;
+  }
 
-    final rows = (res as List).cast<Map<String, dynamic>>();
-    if (rows.isEmpty) return null;
-    return Usuario.fromMap(rows.first);
+  /// Paso 2: verifica que el apodo y el correo coincidan con un usuario
+  /// activo. Devuelve el apodo si la verificación es exitosa, null si no.
+  Future<String?> verificarRecuperacion(String apodo, String correo) async {
+    final res = await _db.rpc('verificar_recuperacion_usuario', params: {
+      'p_apodo': apodo.trim(),
+      'p_correo': correo.trim().toLowerCase(),
+    });
+    return res == true ? apodo.trim() : null;
+  }
+
+  /// Paso 3: cambia la clave del usuario identificado por [apodo], previa
+  /// revalidación server-side de que [correo] sigue coincidiendo (no confía
+  /// solo en que el paso 2 ya se haya cumplido del lado del cliente).
+  Future<bool> cambiarClave(String apodo, String correo, String nuevaClave) async {
+    final res = await _db.rpc('cambiar_clave_usuario', params: {
+      'p_apodo': apodo.trim(),
+      'p_correo': correo.trim().toLowerCase(),
+      'p_nueva_clave': nuevaClave,
+    });
+    return res == true;
+  }
+
+  /// Verifica apodo+clave y, si son válidos, deja al cliente autenticado
+  /// como rol `authenticated` de Supabase (necesario para la RLS, ver
+  /// lib/fix_rls_seguridad.sql). La verificación real sigue ocurriendo en
+  /// la base (función `autenticar_usuario`) — la Edge Function `login` solo
+  /// la invoca y firma el token, nunca ve ni compara el hash.
+  Future<Usuario?> autenticar(String apodo, String clave) async {
+    final FunctionResponse res;
+    try {
+      res = await _db.functions.invoke('login', body: {
+        'apodo': apodo.trim(),
+        'clave': clave,
+      });
+    } on FunctionException catch (e) {
+      final detalle = e.details;
+      if (e.status == 401) return null;
+      final mensaje = detalle is Map ? detalle['error'] : null;
+      throw Exception(mensaje ?? 'Error al iniciar sesión (${e.status}).');
+    }
+
+    final data = (res.data as Map).cast<String, dynamic>();
+    final accessToken = data['accessToken'] as String;
+    _db.rest.setAuth(accessToken);
+
+    return Usuario.fromMap((data['usuario'] as Map).cast<String, dynamic>());
   }
 
   // ================== FORMAS DE EXPEDICIÓN ==================
