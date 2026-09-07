@@ -4,7 +4,6 @@ import '../datos/sesion.dart';
 import 'pagina_login.dart';
 import 'pagina_polizas.dart';
 import 'pagina_catalogos.dart';
-import 'catalogos/lista_clientes.dart'; // para digitadores
 import 'pagina_reportes.dart';
 import 'pagina_reportes_pago.dart';
 import 'theme/app_layout.dart';
@@ -156,29 +155,20 @@ class _PaginaInicioState extends State<PaginaInicio> {
               ),
               const SizedBox(height: 10),
 
-              // ── Catálogos (Admin: todos / Digitador: solo Clientes) ────────
-              if (usuarioActivo?.rol.toUpperCase() == 'D')
-                _NavCard(
-                  icon: Icons.people_outline,
-                  iconColor: cs.tertiary,
-                  title: 'Clientes',
-                  subtitle: 'Personas y empresas aseguradas',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ListaClientes()),
-                  ),
-                )
-              else
-                _NavCard(
-                  icon: Icons.folder_open_outlined,
-                  iconColor: cs.tertiary,
-                  title: 'Catálogos',
-                  subtitle: 'Clientes, asesores, aseguradoras, ramos, productos y más',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PaginaCatalogos()),
-                  ),
+              // ── Catálogos (Admin: todos / Digitador: Clientes, Aseguradoras,
+              // Ramos y Productos — PaginaCatalogos oculta el resto sola) ────
+              _NavCard(
+                icon: Icons.folder_open_outlined,
+                iconColor: cs.tertiary,
+                title: 'Catálogos',
+                subtitle: usuarioActivo?.rol.toUpperCase() == 'D'
+                    ? 'Clientes, aseguradoras, ramos y productos'
+                    : 'Clientes, asesores, aseguradoras, ramos, productos y más',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PaginaCatalogos()),
                 ),
+              ),
               const SizedBox(height: 10),
 
               // ── Reportes ──────────────────────────────────────────────────

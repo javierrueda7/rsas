@@ -39,8 +39,25 @@ const RESPONSE_SCHEMA = {
         "en ese caso NO concatenes nada, dejá el número de póliza tal cual aparece, " +
         "con sus guiones originales.",
     },
-    nombre_cliente: { type: "STRING", nullable: true, description: "Nombre del asegurado/tomador" },
-    doc_cliente: { type: "STRING", nullable: true, description: "Número de documento del asegurado (cédula, NIT, etc.), solo dígitos" },
+    nombre_cliente: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Nombre del TOMADOR de la póliza (quien la contrata y paga la prima) — es el " +
+        "cliente real del intermediario de seguros. En pólizas de cumplimiento/garantía " +
+        "el Tomador (ej: un contratista, persona natural) suele ser DISTINTO del " +
+        "Asegurado/Beneficiario (normalmente la entidad estatal protegida) — en ese caso " +
+        "usá el nombre del TOMADOR, no el del asegurado/beneficiario. Solo si el " +
+        "documento no distingue Tomador de Asegurado (son la misma persona/campo), usá ese.",
+    },
+    doc_cliente: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Número de documento del TOMADOR de la póliza (cédula, NIT, etc.), solo dígitos " +
+        "— mismo criterio que nombre_cliente: si Tomador y Asegurado/Beneficiario son " +
+        "personas distintas, usá el documento del Tomador.",
+    },
     nombre_aseguradora: { type: "STRING", nullable: true, description: "Nombre de la compañía aseguradora que emite la póliza" },
     nombre_ramo: { type: "STRING", nullable: true, description: "Ramo del seguro (ej: Autos, Vida, Hogar, Todo Riesgo)" },
     nombre_producto: { type: "STRING", nullable: true, description: "Nombre comercial del producto/plan" },

@@ -622,8 +622,14 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       final datos = await _repoIA.extraerPoliza(bytes, mimeType);
       if (!mounted) return;
       final completados = await _aplicarDatosExtraidos(datos);
+      final huboCliente = cliente != null;
+      final avisoCliente = huboCliente
+          ? ''
+          : ' Cliente extraído: "${datos['nombre_cliente'] ?? '—'}" '
+              '(doc "${datos['doc_cliente'] ?? '—'}") — no se encontró en la base, '
+              'buscalo a mano.';
       _toast(completados > 0
-          ? 'Se completaron $completados campo(s) automáticamente. Revisá antes de guardar.'
+          ? 'Se completaron $completados campo(s) automáticamente. Revisá antes de guardar.$avisoCliente'
           : 'No se pudo identificar ningún dato en el documento.');
     } catch (e) {
       _toast('Error al importar: $e');
@@ -698,6 +704,9 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       final prima = numero('prima');
       if (prima != null) {
         _primaCtrl.text = _fmtMoney(prima);
+        // Igual que si se escribiera a mano: dispara el recálculo en
+        // cascada de Vlr. Base Com. y Vlr. Com. (ver _recalcularBaseCom).
+        _recalcularBaseCom();
         completados++;
       }
       final vlrAseg = numero('valor_asegurado');
@@ -724,7 +733,12 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       final matchProd = _matchPorNombre(
           productos, (p) => p.nombreProd, texto('nombre_producto'));
       if (matchProd != null && mounted) {
-        setState(() => producto = matchProd);
+        setState(() {
+          producto = matchProd;
+          // Igual que al elegir el producto a mano: aplica su % de
+          // comisión por defecto y recalcula Vlr. Com.
+          _aplicarDefaultsDesdeProducto();
+        });
         completados++;
       }
     }
@@ -736,7 +750,16 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     final docLimpio = (doc ?? '').replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
     try {
       if (docLimpio.isNotEmpty) {
-        final res = await _repoCat.buscarClientes(docLimpio, limit: 5);
+        // El doc extraído viene sin puntos ("74184458"), pero en la base
+        // suele estar con puntos de miles ("74.184.458") — un ilike de la
+        // cadena completa no encuentra ese substring porque el punto corta
+        // la coincidencia. Los últimos 3 dígitos sí quedan siempre juntos
+        // (el punto va cada 3 dígitos contados desde la derecha), así que
+        // buscamos por eso y filtramos el match exacto acá.
+        final sufijo = docLimpio.length > 3
+            ? docLimpio.substring(docLimpio.length - 3)
+            : docLimpio;
+        final res = await _repoCat.buscarClientes(sufijo, limit: 200);
         final match = res.firstWhereOrNull((c) =>
             (c.docCliente ?? '').replaceAll(RegExp(r'[^0-9A-Za-z]'), '') ==
             docLimpio);

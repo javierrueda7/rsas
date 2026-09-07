@@ -34,6 +34,27 @@ class PaginaCatalogos extends StatelessWidget {
                 onTap: () => Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const ListaClientes())),
               ),
+              _CatalogoTile(
+                icon: Icons.account_balance_outlined,
+                title: 'Aseguradoras',
+                subtitle: 'Compañías de seguros',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ListaAseguradoras())),
+              ),
+              _CatalogoTile(
+                icon: Icons.category_outlined,
+                title: 'Ramos',
+                subtitle: 'Líneas de negocio',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ListaRamos())),
+              ),
+              _CatalogoTile(
+                icon: Icons.inventory_2_outlined,
+                title: 'Productos',
+                subtitle: 'Planes y coberturas por ramo',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ListaProductos())),
+              ),
               if (esAdmin) ...[
                 _CatalogoTile(
                   icon: Icons.badge_outlined,
@@ -41,27 +62,6 @@ class PaginaCatalogos extends StatelessWidget {
                   subtitle: 'Corredores, agentes y agencias',
                   onTap: () => Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const ListaAsesores())),
-                ),
-                _CatalogoTile(
-                  icon: Icons.account_balance_outlined,
-                  title: 'Aseguradoras',
-                  subtitle: 'Compañías de seguros',
-                  onTap: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const ListaAseguradoras())),
-                ),
-                _CatalogoTile(
-                  icon: Icons.category_outlined,
-                  title: 'Ramos',
-                  subtitle: 'Líneas de negocio',
-                  onTap: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const ListaRamos())),
-                ),
-                _CatalogoTile(
-                  icon: Icons.inventory_2_outlined,
-                  title: 'Productos',
-                  subtitle: 'Planes y coberturas por ramo',
-                  onTap: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const ListaProductos())),
                 ),
                 _CatalogoTile(
                   icon: Icons.payment_outlined,
