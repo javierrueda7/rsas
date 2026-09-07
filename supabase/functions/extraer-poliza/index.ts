@@ -23,18 +23,21 @@ const RESPONSE_SCHEMA = {
       type: "STRING",
       nullable: true,
       description:
-        "Número de póliza COMPLETO. Muchas aseguradoras colombianas lo muestran " +
-        "compuesto por varios segmentos junto al campo 'Póliza No' o 'No. Póliza' " +
-        "(por ejemplo código de agencia, ramo y número consecutivo, como " +
-        "'400-97-994000000046'), y por separado un campo 'ANEXO' con un número. " +
-        "Si el documento tiene un ANEXO (mayor a 0, o cualquier valor distinto de vacío), " +
-        "el nro_poliza debe ser la unión de TODOS los segmentos del número de póliza MÁS " +
-        "el número de anexo al final, separados por un solo espacio y sin guiones — por " +
-        "ejemplo: si 'Póliza No' es '400-97-994000000046' y 'ANEXO' es '6', el resultado " +
-        "es '400 97 994000000046 6'. Si el documento repite ese mismo número ya concatenado " +
-        "con espacios en otra parte (pie de página, código de barras, encabezados repetidos), " +
-        "usá esa forma como referencia de formato. Si no hay anexo o el documento solo " +
-        "muestra un número simple sin segmentos, usá ese número tal cual aparece.",
+        "Número de póliza COMPLETO, tal cual aparece en el documento junto al campo " +
+        "'Póliza No' o 'No. Póliza' — por defecto copialo literal, CON sus guiones o " +
+        "separadores originales (ej: 'B-100071475' se guarda 'B-100071475', no " +
+        "'B100071475' ni 'B 100071475'). Solo se arma distinto en un caso específico: " +
+        "si además el documento trae un campo 'ANEXO' con un número REAL de anexo " +
+        "(1, 2, 3... — o sea, esta póliza es una modificación/endoso de una anterior), " +
+        "el nro_poliza pasa a ser la unión de TODOS los segmentos del número de póliza " +
+        "MÁS ese número de anexo al final, separados por un solo espacio y sin guiones — " +
+        "por ejemplo: si 'Póliza No' es '400-97-994000000046' y 'ANEXO' es '6', el " +
+        "resultado es '400 97 994000000046 6'. Si el documento repite ese mismo número " +
+        "ya concatenado con espacios en otra parte (pie de página, código de barras, " +
+        "encabezados repetidos), usá esa forma como referencia de formato. " +
+        "IMPORTANTE: un ANEXO en '0', vacío, 'N/A' o ausente NO cuenta como anexo real — " +
+        "en ese caso NO concatenes nada, dejá el número de póliza tal cual aparece, " +
+        "con sus guiones originales.",
     },
     nombre_cliente: { type: "STRING", nullable: true, description: "Nombre del asegurado/tomador" },
     doc_cliente: { type: "STRING", nullable: true, description: "Número de documento del asegurado (cédula, NIT, etc.), solo dígitos" },

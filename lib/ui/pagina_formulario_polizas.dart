@@ -743,7 +743,15 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         if (match != null) return match;
       }
       if (nombre != null && nombre.isNotEmpty) {
-        final res = await _repoCat.buscarClientes(nombre, limit: 5);
+        // El documento puede traer el nombre en otro orden que la base
+        // ("APELLIDOS, NOMBRE" vs "Nombre Apellidos") — un ilike de la
+        // cadena completa no encontraría nada, así que buscamos por la
+        // palabra más significativa (la más larga) y comparamos después
+        // por conjunto de palabras, sin importar el orden.
+        final palabras = _palabras(_normalizarTexto(nombre)).toList()
+          ..sort((a, b) => b.length.compareTo(a.length));
+        if (palabras.isEmpty) return null;
+        final res = await _repoCat.buscarClientes(palabras.first, limit: 20);
         return _matchPorNombre(res, (c) => c.nombreCliente, nombre);
       }
     } catch (_) {
@@ -763,8 +771,28 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       final n = _normalizarTexto(nombre(item));
       if (n.isNotEmpty && (n.contains(norm) || norm.contains(n))) return item;
     }
+    // Mismo conjunto de palabras aunque el orden difiera (ej: nombre del
+    // documento en "APELLIDOS, NOMBRE" contra "Nombre Apellidos" en la
+    // base) — uno de los dos debe contener todas las palabras del otro.
+    final palabrasCandidato = _palabras(norm);
+    if (palabrasCandidato.length >= 2) {
+      for (final item in lista) {
+        final palabrasItem = _palabras(_normalizarTexto(nombre(item)));
+        if (palabrasItem.isEmpty) continue;
+        if (palabrasCandidato.difference(palabrasItem).isEmpty ||
+            palabrasItem.difference(palabrasCandidato).isEmpty) {
+          return item;
+        }
+      }
+    }
     return null;
   }
+
+  Set<String> _palabras(String s) => s
+      .replaceAll(',', ' ')
+      .split(RegExp(r'\s+'))
+      .where((w) => w.length > 1)
+      .toSet();
 
   /// Ignora espacios/separadores, igual que RepositorioPolizas.existeNroPoliza
   /// — se usa para detectar si el usuario realmente cambió el número (y no

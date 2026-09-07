@@ -261,11 +261,15 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
                                   ),
                                   DataCell(Text(
                                     '\$ ${Fmt.money(r.vlrsumprimaRep)}',
+                                    softWrap: false,
+                                    overflow: TextOverflow.visible,
                                     style: TextStyle(
                                         fontFamily: AppTheme.monoFamily, fontSize: 12),
                                   )),
                                   DataCell(Text(
                                     '\$ ${Fmt.money(r.vlrsumcomRep)}',
+                                    softWrap: false,
+                                    overflow: TextOverflow.visible,
                                     style: TextStyle(
                                         fontFamily: AppTheme.monoFamily, fontSize: 12),
                                   )),
