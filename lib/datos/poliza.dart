@@ -207,4 +207,47 @@ class Poliza {
         nombreUsuario: _toText(m['nombre_usuario']),
         apodoUsuario: _toText(m['apodo_usuario']),
       );
+
+  /// Mapa con las columnas propias de la tabla `polizas` (sin id/fcreado/
+  /// fultmod, que maneja la base, ni los campos extra de la vista de
+  /// búsqueda) — mismo shape que arma _mapaActual() en el formulario.
+  Map<String, dynamic> toInsertMap() => {
+        'nro_poliza': nroPoliza,
+        'cliente_id': clienteId,
+        'asesor_id': asesorId,
+        'ramo_id': ramoId,
+        'producto_id': productoId,
+        'fexp_poliza': fexpPoliza?.toIso8601String(),
+        'fini_poliza': finiPoliza?.toIso8601String(),
+        'ffin_poliza': ffinPoliza?.toIso8601String(),
+        'prima_poliza': primaPoliza,
+        'valor_poliza': valorPoliza,
+        'bien_asegurado': bienAsegurado,
+        'obs_poliza': obsPoliza,
+        'vlraseg_poliza': vlrasegPoliza,
+        'porccom_poliza': porccomPoliza,
+        'vlrbasecom_poliza': vlrbasecomPoliza,
+        'intermediario_id': intermediarioId,
+        'porcom_agencia': porcomAgencia,
+        'vlrcom_poliza': vlrcomPoliza,
+        'vlrcomfija_poliza': vlrcomfijaPoliza,
+        'porcomadic_poliza': porcomadicPoliza,
+        'vlrcomadic_poliza': vlrcomadicPoliza,
+        'porcom_asesor1': porcomAsesor1,
+        'porcom_asesor2': porcomAsesor2,
+        'porcom_asesor3': porcomAsesor3,
+        'porcom_asesorad': porcomAsesorad,
+        'porcom_agenciaad': porcomAgenciaad,
+        'agencia_id': agenciaId,
+        'forma_pago_id': formaPagoId,
+        'estado_poliza_id': estadoPolizaId,
+        'vlrprimapagada_poliza': vlrprimapagadaPoliza,
+        'asesor2_id': asesor2Id,
+        'asesor3_id': asesor3Id,
+        'asesorad_id': asesoradId,
+        'agenciaad_id': agenciaadId,
+        'formaexp_id': formaexpId,
+        'aseg_id': asegId,
+        'usuario_id': usuarioId,
+      };
 }
