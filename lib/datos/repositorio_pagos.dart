@@ -64,8 +64,14 @@ class RepositorioPagos {
   }
 
   /// Recalcula vlrsumprima_rep y vlrsumcom_rep sumando los abonos vigentes.
-  Future<void> recalcularTotales(int idReporte) async {
-    final abonos = await listarAbonosPorReporte(idReporte);
+  /// Si el llamador ya tiene la lista fresca a mano (ej. recién la volvió a
+  /// cargar para refrescar la pantalla), puede pasarla en [abonosYaCargados]
+  /// para no traerla de nuevo de la base.
+  Future<void> recalcularTotales(
+    int idReporte, {
+    List<AbonoPoliza>? abonosYaCargados,
+  }) async {
+    final abonos = abonosYaCargados ?? await listarAbonosPorReporte(idReporte);
     final sumPrima = abonos.fold<num>(0, (s, a) => s + a.vlrabonoprima);
     final sumCom   = abonos.fold<num>(0, (s, a) => s + a.vlrcomision + a.vlrcomad);
     await _db.from(_tablaReportes).update({

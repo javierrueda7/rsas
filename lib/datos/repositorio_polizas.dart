@@ -125,19 +125,6 @@ class RepositorioPolizas {
     return Poliza.fromMap(res as Map<String, dynamic>);
   }
 
-  Future<int> obtenerSiguienteId() async {
-    final res = await _db
-        .from(_tabla)
-        .select('id')
-        .order('id', ascending: false)
-        .limit(1)
-        .maybeSingle();
-
-    if (res == null) return 1;
-    final ultimoId = (res['id'] as num?)?.toInt() ?? 0;
-    return ultimoId + 1;
-  }
-
   /// Compara ignorando espacios/separadores (via la columna generada
   /// nro_poliza_norm, ver lib/fix_nro_poliza_normalizado.sql) — "1 0987 2"
   /// y "109872" se consideran el mismo número.
@@ -156,7 +143,13 @@ class RepositorioPolizas {
     return res != null;
   }
 
-  String _normalizarNro(String s) =>
+  String _normalizarNro(String s) => normalizarNroPoliza(s);
+
+  /// Ignora espacios/guiones/separadores — "1-0987-2" y "1 0987 2" y
+  /// "109872" se consideran el mismo número. Pública para que otras
+  /// pantallas (ej. la de pólizas duplicadas) agrupen con el mismo
+  /// criterio exacto que usa la comparación de duplicados al guardar.
+  static String normalizarNroPoliza(String s) =>
       s.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
 
   Future<void> crearPoliza(Map<String, dynamic> data) async {
@@ -187,6 +180,14 @@ class RepositorioPolizas {
       if (value is String) {
         value = value.trim();
         if (value.isEmpty) value = null;
+      }
+
+      // Formato acordado para nro_poliza: segmentos unidos con guion, nunca
+      // con espacios — si se tipeó o importó con espacios, se normaliza
+      // sola al guardar en vez de dejar los dos formatos mezclados en la
+      // base.
+      if (key == 'nro_poliza' && value is String) {
+        value = value.replaceAll(RegExp(r'\s+'), '-');
       }
 
       if (_camposEnterosNullable.contains(key)) {

@@ -213,8 +213,12 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
                   )
                 : Scrollbar(
                     controller: _vScroll,
+                    thumbVisibility: true,
+                    trackVisibility: true,
                     child: Scrollbar(
                       controller: _hScroll,
+                      thumbVisibility: true,
+                      trackVisibility: true,
                       notificationPredicate: (n) => n.depth == 1,
                       child: SingleChildScrollView(
                         controller: _vScroll,

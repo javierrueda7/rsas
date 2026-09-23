@@ -204,7 +204,15 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   List<Asesor> asesores = [];
   List<Aseguradora> aseguradoras = [];
   List<Ramo> ramos = [];
+  /// Ramos que tienen al menos un producto activo bajo la aseguradora
+  /// elegida — igual que Producto se reduce por Ramo+Aseguradora, Ramo se
+  /// reduce por Aseguradora (los ramos no tienen aseguradora propia, se
+  /// derivan de los productos). Sin aseguradora elegida, muestra todos.
+  List<Ramo> ramosDisponibles = [];
   List<Producto> productos = [];
+  /// Todos los productos activos (de cualquier aseguradora/ramo) — sirve
+  /// para derivar qué ramos tiene cada aseguradora sin ir a la red.
+  List<Producto> _todosProductos = [];
   List<FormaPagoLite> formasPago = [];
   List<EstadoPolizaLite> estadosPoliza = [];
   List<IntermediarioLite> intermediarios = [];
@@ -333,6 +341,20 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     _recalcularBaseCom();
   }
 
+  /// Ramos que tienen al menos un producto activo bajo [aseg] — sin
+  /// aseguradora elegida, muestra todos. Siempre incluye el ramo ya
+  /// seleccionado (si hay), para no ocultar una selección válida por datos
+  /// de catálogo inconsistentes.
+  List<Ramo> _calcularRamosDisponibles(Aseguradora? aseg) {
+    if (aseg == null) return ramos;
+    final idsConProducto = _todosProductos
+        .where((p) => p.aseguradoraId == aseg.id)
+        .map((p) => p.ramoId)
+        .toSet();
+    if (ramo != null) idsConProducto.add(ramo!.id);
+    return ramos.where((r) => idsConProducto.contains(r.id)).toList();
+  }
+
   void _aplicarDefaultsDesdeProducto() {
     if (producto == null) return;
 
@@ -432,7 +454,9 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       asesores = results[0] as List<Asesor>;
       aseguradoras = results[1] as List<Aseguradora>;
       ramos = results[2] as List<Ramo>;
-      final allProductosActivos = results[3] as List<Producto>;
+      ramosDisponibles = ramos;
+      _todosProductos = results[3] as List<Producto>;
+      final allProductosActivos = _todosProductos;
 
       if (esEdicion) {
         final p = await _repoPol.obtenerPoliza(widget.poliza!.id) ?? widget.poliza!;
@@ -530,9 +554,9 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           (i) => i.nombre.toUpperCase().contains('STELLA'),
         );
 
-        final siguienteId = await _repoPol.obtenerSiguienteId();
-        _idCtrl.text = siguienteId.toString();
       }
+
+      ramosDisponibles = _calcularRamosDisponibles(aseguradora);
 
       if (!mounted) return;
       setState(() => _cargando = false);
@@ -667,13 +691,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           aseguradoras, (a) => a.nombreAseg, texto('nombre_aseguradora'));
       if (matchAseg != null) {
         aseguradora = matchAseg;
-        completados++;
-      }
-
-      final matchRamo =
-          _matchPorNombre(ramos, (r) => r.nombreRamo, texto('nombre_ramo'));
-      if (matchRamo != null) {
-        ramo = matchRamo;
+        ramosDisponibles = _calcularRamosDisponibles(aseguradora);
         completados++;
       }
 
@@ -727,19 +745,68 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       }
     });
 
-    // El producto depende de la aseguradora y el ramo ya seteados arriba.
-    if (aseguradora != null && ramo != null) {
-      await _refrescarProductos();
+    // Ramo y Producto: cada Producto ya pertenece a un Ramo fijo en el
+    // catálogo, así que primero se intenta matchear el Producto (suele
+    // aparecer más literal en el documento — título de la póliza, tipo de
+    // plan — que un "Ramo" que casi nunca se escribe como texto) contra
+    // los productos de la aseguradora ya detectada, y el Ramo se DERIVA de
+    // ahí. Si no matchea ningún producto, se cae al intento viejo de
+    // matchear el ramo por nombre directo.
+    if (aseguradora != null) {
+      final candidatosProd = _todosProductos
+          .where((p) => p.aseguradoraId == aseguradora!.id)
+          .toList();
       final matchProd = _matchPorNombre(
-          productos, (p) => p.nombreProd, texto('nombre_producto'));
+              candidatosProd, (p) => p.nombreProd, texto('nombre_producto')) ??
+          _matchPorNombre(
+              candidatosProd, (p) => p.nombreProd, texto('nombre_ramo'));
+
       if (matchProd != null && mounted) {
+        final matchRamoDerivado =
+            ramos.firstWhereOrNull((r) => r.id == matchProd.ramoId);
         setState(() {
+          if (matchRamoDerivado != null) {
+            ramo = matchRamoDerivado;
+            ramosDisponibles = _calcularRamosDisponibles(aseguradora);
+            completados++;
+          }
+          // Instancia provisoria (viene de _todosProductos, cargada al
+          // abrir el formulario) — _refrescarProductos() la reemplaza por
+          // la instancia real de la lista recién traída para ese ramo,
+          // usando el id. Si no se hace así, el dropdown de Producto
+          // revienta: su value quedaría siendo un objeto que no es ==
+          // (por identidad) a ninguno de los items de la lista nueva.
           producto = matchProd;
-          // Igual que al elegir el producto a mano: aplica su % de
-          // comisión por defecto y recalcula Vlr. Com.
-          _aplicarDefaultsDesdeProducto();
         });
-        completados++;
+        await _refrescarProductos();
+        if (mounted && producto != null) {
+          setState(() {
+            // Igual que al elegir el producto a mano: aplica su % de
+            // comisión por defecto y recalcula Vlr. Com.
+            _aplicarDefaultsDesdeProducto();
+          });
+          completados++;
+        }
+      } else {
+        final matchRamo =
+            _matchPorNombre(ramos, (r) => r.nombreRamo, texto('nombre_ramo'));
+        if (matchRamo != null && mounted) {
+          setState(() {
+            ramo = matchRamo;
+            ramosDisponibles = _calcularRamosDisponibles(aseguradora);
+          });
+          completados++;
+          await _refrescarProductos();
+          final matchProd2 = _matchPorNombre(
+              productos, (p) => p.nombreProd, texto('nombre_producto'));
+          if (matchProd2 != null && mounted) {
+            setState(() {
+              producto = matchProd2;
+              _aplicarDefaultsDesdeProducto();
+            });
+            completados++;
+          }
+        }
       }
     }
 
@@ -1006,12 +1073,6 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       return;
     }
 
-    final id = int.tryParse(_idCtrl.text.trim());
-    if (id == null || id <= 0) {
-      _toast('El código debe ser un número válido mayor que 0.');
-      return;
-    }
-
     final prima = _parseNumero(_primaCtrl.text) ?? 0;
     final valorPoliza = _parseNumero(_valorPolizaCtrl.text) ?? 0;
 
@@ -1025,7 +1086,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       if (nroPolizaTrim.isNotEmpty && nroPolizaCambio) {
         final existeNro = await _repoPol.existeNroPoliza(
           nroPolizaTrim,
-          excluirId: esEdicion ? id : null,
+          excluirId: esEdicion ? widget.poliza!.id : null,
         );
         if (existeNro) {
           _toast('Ya existe una póliza con el número "$nroPolizaTrim".');
@@ -1261,11 +1322,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     SizedBox(
                       width: 110,
-                      child: _campo('Código *', _idCtrl,
-                          req: true,
+                      child: _campo('Código', _idCtrl,
                           num: true,
-                          readOnly: esEdicion,
-                          helper: esEdicion ? null : 'Auto'),
+                          readOnly: true,
+                          helper: 'Auto'),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1305,7 +1365,15 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                         items: aseguradoras,
                         itemLabel: (a) => a.nombreAseg,
                         onChanged: (v) async {
-                          setState(() { aseguradora = v; producto = null; });
+                          setState(() {
+                            aseguradora = v;
+                            ramosDisponibles = _calcularRamosDisponibles(v);
+                            if (ramo != null &&
+                                !ramosDisponibles.any((r) => r.id == ramo!.id)) {
+                              ramo = null;
+                            }
+                            producto = null;
+                          });
                           await _refrescarProductos();
                         },
                         validator: (x) => x == null ? 'Requerido' : null,
@@ -1317,7 +1385,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                       child: BuscadorDropdown<Ramo>(
                         label: 'Ramo *',
                         value: ramo,
-                        items: ramos,
+                        items: ramosDisponibles,
                         itemLabel: (r) => r.nombreRamo,
                         onChanged: (v) async {
                           setState(() {

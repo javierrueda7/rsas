@@ -5,6 +5,24 @@ import 'sesion.dart';
 class RepositorioCatalogos {
   final SupabaseClient _db = Supabase.instance.client;
 
+  // Caché simple en memoria para catálogos chicos que se cargan seguido
+  // (dropdowns del formulario de póliza, etc.) — una sola traída completa
+  // por tabla sirve para todas las variantes de filtro (se filtra en Dart),
+  // y se invalida sola al crear/editar/eliminar en esa tabla.
+  static final Map<String, List<Map<String, dynamic>>> _cache = {};
+
+  Future<List<Map<String, dynamic>>> _filas(String tabla, String orderBy) async {
+    final cacheadas = _cache[tabla];
+    if (cacheadas != null) return cacheadas;
+    final res =
+        await _db.from(tabla).select().order(orderBy, ascending: true).limit(50000);
+    final rows = (res as List).cast<Map<String, dynamic>>();
+    _cache[tabla] = rows;
+    return rows;
+  }
+
+  void _invalidar(String tabla) => _cache.remove(tabla);
+
   // Extrae el siguiente ID a partir de la fila más reciente de una tabla.
   int _siguienteIdDesde(List<Map<String, dynamic>> rows) {
     if (rows.isEmpty) return 1;
@@ -177,24 +195,15 @@ Future<void> eliminarCliente(int id) async {
 
     // ================== MUNICIPIOS ==================
   Future<List<Municipio>> listarMunicipios() async {
-    final res = await _db
-        .from('municipio')
-        .select()
-        .order('nombre_munic', ascending: true)
-        .limit(50000);
-
-    final rows = (res as List).cast<Map<String, dynamic>>();
+    final rows = await _filas('municipio', 'nombre_munic');
     return rows.map(Municipio.fromMap).toList();
   }
 
   // ================== ASESORES ==================
 Future<List<Asesor>> listarAsesores({bool soloActivos = false}) async {
-  dynamic q = _db.from('asesores').select();
-  if (soloActivos) q = q.eq('estado_asesor', true);
-
-  final res = await q.order('nombre_asesor', ascending: true).limit(50000);
-  final rows = (res as List).cast<Map<String, dynamic>>();
-  return rows.map(Asesor.fromMap).toList();
+  final rows = await _filas('asesores', 'nombre_asesor');
+  final lista = rows.map(Asesor.fromMap).toList();
+  return soloActivos ? lista.where((a) => a.estadoAsesor).toList() : lista;
 }
 
 Future<Asesor?> obtenerAsesor(int id) async {
@@ -219,6 +228,7 @@ Future<void> crearAsesor(Asesor a) async {
       ...a.toInsertMap(),
       'usuario_id': Sesion.usuarioId,
     });
+    _invalidar('asesores');
   } on PostgrestException catch (e) {
     throw Exception(
       _mensajePG(e, unico: 'Ya existe un asesor con esa información.'),
@@ -233,6 +243,7 @@ Future<void> actualizarAsesor(int id, Asesor a) async {
       'fultmod': DateTime.now().toIso8601String(),
       'usuario_id': Sesion.usuarioId,
     }).match({'id': id});
+    _invalidar('asesores');
   } on PostgrestException catch (e) {
     throw Exception(_mensajePG(e));
   }
@@ -248,12 +259,9 @@ Future<void> eliminarAsesor(int id) async {
 
  // ================== ASEGURADORAS ==================
 Future<List<Aseguradora>> listarAseguradoras({bool soloActivas = false}) async {
-  dynamic q = _db.from('aseguradoras').select();
-  if (soloActivas) q = q.eq('estado_aseg', true);
-
-  final res = await q.order('nombre_aseg', ascending: true).limit(50000);
-  final rows = (res as List).cast<Map<String, dynamic>>();
-  return rows.map(Aseguradora.fromMap).toList();
+  final rows = await _filas('aseguradoras', 'nombre_aseg');
+  final lista = rows.map(Aseguradora.fromMap).toList();
+  return soloActivas ? lista.where((a) => a.estadoAseg).toList() : lista;
 }
 
 Future<Aseguradora?> obtenerAseguradora(int id) async {
@@ -278,6 +286,7 @@ Future<void> crearAseguradora(Aseguradora a) async {
       ...a.toInsertMap(),
       'usuario_id': Sesion.usuarioId,
     });
+    _invalidar('aseguradoras');
   } on PostgrestException catch (e) {
     throw Exception(
       _mensajePG(e, unico: 'Ya existe una aseguradora con ese nombre.'),
@@ -292,6 +301,7 @@ Future<void> actualizarAseguradora(int id, Aseguradora a) async {
       'fultmod': DateTime.now().toIso8601String(),
       'usuario_id': Sesion.usuarioId,
     }).match({'id': id});
+    _invalidar('aseguradoras');
   } on PostgrestException catch (e) {
     throw Exception(
       _mensajePG(e, unico: 'Ya existe una aseguradora con ese nombre.'),
@@ -309,12 +319,9 @@ Future<void> eliminarAseguradora(int id) async {
 
 // ================== RAMOS ==================
 Future<List<Ramo>> listarRamos({bool soloActivos = false}) async {
-  dynamic q = _db.from('ramos').select();
-  if (soloActivos) q = q.eq('estado_ramo', true);
-
-  final res = await q.order('nombre_ramo', ascending: true).limit(50000);
-  final rows = (res as List).cast<Map<String, dynamic>>();
-  return rows.map(Ramo.fromMap).toList();
+  final rows = await _filas('ramos', 'nombre_ramo');
+  final lista = rows.map(Ramo.fromMap).toList();
+  return soloActivos ? lista.where((r) => r.estadoRamo).toList() : lista;
 }
 
 Future<Ramo?> obtenerRamo(int id) async {
@@ -340,6 +347,7 @@ Future<void> crearRamo(Ramo r) async {
       ...r.toInsertMap(),
       'usuario_id': Sesion.usuarioId,
     });
+    _invalidar('ramos');
   } on PostgrestException catch (e) {
     throw Exception(
       _mensajePG(e, unico: 'Ya existe un ramo con ese nombre.'),
@@ -354,6 +362,7 @@ Future<void> actualizarRamo(int id, Ramo r) async {
       'fultmod': DateTime.now().toIso8601String(),
       'usuario_id': Sesion.usuarioId,
     }).match({'id': id});
+    _invalidar('ramos');
   } on PostgrestException catch (e) {
     throw Exception(_mensajePG(e));
   }
@@ -373,15 +382,14 @@ Future<void> eliminarRamo(int id) async {
     int? aseguradoraId,
     bool soloActivos = false,
   }) async {
-    dynamic q = _db.from('productos').select();
-
-    if (ramoId != null) q = q.eq('ramo_id', ramoId);
-    if (aseguradoraId != null) q = q.eq('aseguradora_id', aseguradoraId);
-    if (soloActivos) q = q.eq('estado_prod', true);
-
-    final res = await q.order('nombre_prod', ascending: true).limit(50000);
-    final rows = (res as List).cast<Map<String, dynamic>>();
-    return rows.map(Producto.fromMap).toList();
+    final rows = await _filas('productos', 'nombre_prod');
+    var lista = rows.map(Producto.fromMap).toList();
+    if (ramoId != null) lista = lista.where((p) => p.ramoId == ramoId).toList();
+    if (aseguradoraId != null) {
+      lista = lista.where((p) => p.aseguradoraId == aseguradoraId).toList();
+    }
+    if (soloActivos) lista = lista.where((p) => p.estadoProd).toList();
+    return lista;
   }
 
   Future<Producto?> obtenerProducto(int id) async {
@@ -407,6 +415,7 @@ Future<void> eliminarRamo(int id) async {
         ...p.toInsertMap(),
         'usuario_id': Sesion.usuarioId,
       });
+      _invalidar('productos');
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e));
     }
@@ -419,6 +428,7 @@ Future<void> eliminarRamo(int id) async {
         'fultmod': DateTime.now().toIso8601String(),
         'usuario_id': Sesion.usuarioId,
       }).match({'id': id});
+      _invalidar('productos');
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e));
     }
@@ -548,12 +558,8 @@ Future<void> eliminarRamo(int id) async {
 
   // ================== FORMAS DE EXPEDICIÓN ==================
   Future<List<FormaExpedicion>> listarFormasExpedicion() async {
-    final res = await _db
-        .from('formaexp')
-        .select()
-        .order('nombre_formaexp', ascending: true)
-        .limit(50000);
-    return (res as List).cast<Map<String, dynamic>>().map(FormaExpedicion.fromMap).toList();
+    final rows = await _filas('formaexp', 'nombre_formaexp');
+    return rows.map(FormaExpedicion.fromMap).toList();
   }
 
   Future<int> obtenerSiguienteIdFormaExp() async {
@@ -567,6 +573,7 @@ Future<void> eliminarRamo(int id) async {
         ...f.toInsertMap(),
         'usuario_id': Sesion.usuarioId,
       });
+      _invalidar('formaexp');
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e, unico: 'Ya existe una forma de expedición con ese nombre.'));
     }
@@ -578,6 +585,7 @@ Future<void> eliminarRamo(int id) async {
         ...f.toInsertMap(),
         'usuario_id': Sesion.usuarioId,
       }).match({'id': id});
+      _invalidar('formaexp');
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e));
     }
@@ -594,10 +602,9 @@ Future<void> eliminarRamo(int id) async {
   // ================== FORMAS DE PAGO ==================
 
   Future<List<FormaPago>> listarFormasPago({bool soloActivas = false}) async {
-    dynamic q = _db.from('formas_pago').select();
-    if (soloActivas) q = q.eq('estado_forma_pago', true);
-    final res = await q.order('nombre_forma_pago', ascending: true).limit(50000);
-    return (res as List).cast<Map<String, dynamic>>().map(FormaPago.fromMap).toList();
+    final rows = await _filas('formas_pago', 'nombre_forma_pago');
+    final lista = rows.map(FormaPago.fromMap).toList();
+    return soloActivas ? lista.where((f) => f.estadoFormaPago).toList() : lista;
   }
 
   Future<int> obtenerSiguienteIdFormaPago() async {
@@ -611,6 +618,7 @@ Future<void> eliminarRamo(int id) async {
         ...f.toInsertMap(),
         'usuario_id': Sesion.usuarioId,
       });
+      _invalidar('formas_pago');
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e, unico: 'Ya existe una forma de pago con ese nombre.'));
     }
@@ -622,6 +630,7 @@ Future<void> eliminarRamo(int id) async {
         ...f.toInsertMap(),
         'usuario_id': Sesion.usuarioId,
       }).match({'id': id});
+      _invalidar('formas_pago');
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e, unico: 'Ya existe una forma de pago con ese nombre.'));
     }
@@ -638,10 +647,9 @@ Future<void> eliminarRamo(int id) async {
   // ================== INTERMEDIARIOS ==================
 
   Future<List<Intermediario>> listarIntermediarios({bool soloActivos = false}) async {
-    dynamic q = _db.from('intermediarios').select('id, nombre_interm, estado_interm');
-    if (soloActivos) q = q.eq('estado_interm', true);
-    final res = await q.order('nombre_interm', ascending: true).limit(50000);
-    return (res as List).cast<Map<String, dynamic>>().map(Intermediario.fromMap).toList();
+    final rows = await _filas('intermediarios', 'nombre_interm');
+    final lista = rows.map(Intermediario.fromMap).toList();
+    return soloActivos ? lista.where((i) => i.estadoInterm).toList() : lista;
   }
 
   // ================== Helpers ==================
@@ -652,6 +660,7 @@ Future<void> eliminarRamo(int id) async {
   }) async {
     try {
       await _db.from(table).delete().match(match);
+      _invalidar(table);
     } on PostgrestException catch (e) {
       if (e.code == '23503') throw Exception(mensajeFK);
       throw Exception(_mensajePG(e));

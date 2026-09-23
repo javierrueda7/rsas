@@ -18,8 +18,9 @@ const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
 const GEMINI_MODEL = "gemini-3.6-flash";
 
 // Contraseña estándar de estos reportes (la misma para todos, según Rueda
-// Serrano) — solo se usa si el archivo efectivamente viene protegido.
-const PASSWORD_CONOCIDA = "63362817";
+// Serrano) — solo se usa si el archivo efectivamente viene protegido. Vive
+// como secret de Supabase, no en el código (ver README de deploy).
+const PASSWORD_CONOCIDA = Deno.env.get("REPORTE_PDF_PASSWORD") ?? "";
 
 /// btoa(String.fromCharCode(...bytes)) revienta el call stack con archivos
 /// grandes (spread de miles de argumentos) — arma el string en trozos.
@@ -131,11 +132,11 @@ const LINEA_SCHEMA = {
       type: "STRING",
       nullable: true,
       description:
-        "Número de póliza COMPLETO de esa línea, tal cual aparece (con sus guiones u " +
-        "otros separadores originales). Si además aparece un número de ANEXO REAL para " +
-        "esa póliza (1, 2, 3... — no cuenta un anexo en '0', vacío o 'N/A'), incluilo al " +
-        "final del número completo, separado por un espacio y sin guiones " +
-        "(ej: '400 97 994000000046 6').",
+        "Número de póliza COMPLETO de esa línea, en formato SEGMENTO1-SEGMENTO2-...-ANEXO " +
+        "— todos los segmentos del número unidos con GUIONES (si el documento usa " +
+        "espacios como separador, igual unilos con guion, nunca dejes espacios), y el " +
+        "número de ANEXO agregado siempre al final como último segmento, incluso si es " +
+        "'0' (ej: '400-97-994000000046-6', o 'B-100071475-0' si el anexo es 0).",
     },
     nombre_cliente: { type: "STRING", nullable: true, description: "Nombre del asegurado/tomador" },
     vlrprima_poliza: { type: "NUMBER", nullable: true, description: "Valor de la prima de esa póliza, número plano" },
@@ -246,6 +247,10 @@ Deno.serve(async (req: Request) => {
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
+          // Un reporte con muchas pólizas genera una respuesta larga — con
+          // el límite por defecto, Gemini cortaba la respuesta a mitad del
+          // arreglo de líneas y volvía "lineas: []". No bajar este valor
+          // sin volver a probar con un reporte de varias decenas de filas.
           maxOutputTokens: 65536,
         },
       }),
@@ -276,8 +281,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Diagnóstico temporal: si no se detectaron líneas pese a que el doc
-    // debería tenerlas, esto ayuda a ver si Gemini cortó la respuesta.
+    // Si no se detectaron líneas, deja rastro en los logs de la función
+    // (Dashboard → Edge Functions → Logs) con el finishReason, para poder
+    // distinguir "el documento no tenía tabla" de "Gemini cortó la
+    // respuesta" sin tener que reproducir el caso.
     const lineasCount = (extraido as { lineas?: unknown[] })?.lineas?.length ?? 0;
     if (lineasCount === 0) {
       console.log(`extraer-reporte-pago: 0 líneas, finishReason=${finishReason}, largo=${textoJson.length}`);

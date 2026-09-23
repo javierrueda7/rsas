@@ -158,7 +158,11 @@ class _FormularioReporteState extends State<FormularioReportePago> {
           _intermediario = _intermediarios.firstOrNull((i) => i.id == r!.intermId);
         }
       });
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        _snack('No se pudieron cargar aseguradoras/intermediarios: $e', error: true);
+      }
+    }
     if (mounted) setState(() => _cargandoCatalogos = false);
   }
 
@@ -169,12 +173,15 @@ class _FormularioReporteState extends State<FormularioReportePago> {
     try {
       final data = await _repoPagos.listarAbonosPorReporte(_idReporte!);
       if (mounted) setState(() => _abonos = data);
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) _snack('No se pudieron cargar los abonos: $e', error: true);
+    }
     if (mounted) setState(() => _cargandoAbonos = false);
   }
 
   // ── Guardar reporte ───────────────────────────────────────────────────────
   Future<void> _guardar() async {
+    if (_guardando) return;
     if (!_formKey.currentState!.validate()) return;
     setState(() => _guardando = true);
     try {
@@ -253,7 +260,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
     );
     if (ok == true) {
       await _cargarAbonos();
-      await _repoPagos.recalcularTotales(_idReporte!);
+      await _repoPagos.recalcularTotales(_idReporte!, abonosYaCargados: _abonos);
     }
   }
 
@@ -319,7 +326,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
         );
         if (creoAlgo == true) {
           await _cargarAbonos();
-          await _repoPagos.recalcularTotales(_idReporte!);
+          await _repoPagos.recalcularTotales(_idReporte!, abonosYaCargados: _abonos);
         }
       } else {
         // Reporte nuevo, todavía sin id: las líneas quedan pendientes hasta
@@ -393,7 +400,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
       await _repoPagos.eliminarAbono(a.id);
       await _repoPagos.actualizarEstadoPolizaSegunPagos(a.idPoliza);
       await _cargarAbonos();
-      await _repoPagos.recalcularTotales(_idReporte!);
+      await _repoPagos.recalcularTotales(_idReporte!, abonosYaCargados: _abonos);
     } catch (e) {
       _snack('Error: $e', error: true);
     }

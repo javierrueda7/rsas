@@ -23,21 +23,19 @@ const RESPONSE_SCHEMA = {
       type: "STRING",
       nullable: true,
       description:
-        "Número de póliza COMPLETO, tal cual aparece en el documento junto al campo " +
-        "'Póliza No' o 'No. Póliza' — por defecto copialo literal, CON sus guiones o " +
-        "separadores originales (ej: 'B-100071475' se guarda 'B-100071475', no " +
-        "'B100071475' ni 'B 100071475'). Solo se arma distinto en un caso específico: " +
-        "si además el documento trae un campo 'ANEXO' con un número REAL de anexo " +
-        "(1, 2, 3... — o sea, esta póliza es una modificación/endoso de una anterior), " +
-        "el nro_poliza pasa a ser la unión de TODOS los segmentos del número de póliza " +
-        "MÁS ese número de anexo al final, separados por un solo espacio y sin guiones — " +
-        "por ejemplo: si 'Póliza No' es '400-97-994000000046' y 'ANEXO' es '6', el " +
-        "resultado es '400 97 994000000046 6'. Si el documento repite ese mismo número " +
-        "ya concatenado con espacios en otra parte (pie de página, código de barras, " +
-        "encabezados repetidos), usá esa forma como referencia de formato. " +
-        "IMPORTANTE: un ANEXO en '0', vacío, 'N/A' o ausente NO cuenta como anexo real — " +
-        "en ese caso NO concatenes nada, dejá el número de póliza tal cual aparece, " +
-        "con sus guiones originales.",
+        "Número de póliza COMPLETO, en el formato exacto SEGMENTO1-SEGMENTO2-...-ANEXO " +
+        "(todos los segmentos del número, uno detrás de otro, unidos con GUIONES, y el " +
+        "número de ANEXO agregado SIEMPRE al final como un segmento más, incluso cuando " +
+        "el anexo es '0' — el anexo va siempre, no solo cuando es mayor a 0). Los " +
+        "segmentos pueden tener letras y números (ej: 'B', '400', '97', '994000000046'). " +
+        "Si el documento separa los segmentos del número de póliza con espacios en vez " +
+        "de guiones, igual los unís todos con guion en el resultado — NUNCA dejes " +
+        "espacios en el resultado, solo guiones. Ejemplos: 'Póliza No' = '400-97-" +
+        "994000000046', 'ANEXO' = '6' → resultado '400-97-994000000046-6'. " +
+        "'No. PÓLIZA' = 'B-100071475', 'No. ANEXO' = '0' → resultado 'B-100071475-0' " +
+        "(el anexo en 0 igual se agrega). Si el documento no tiene un campo ANEXO " +
+        "separado (no aplica a esa aseguradora), no agregues nada al final y dejá el " +
+        "número tal cual, con guiones en vez de espacios si tenía espacios.",
     },
     nombre_cliente: {
       type: "STRING",
@@ -59,8 +57,26 @@ const RESPONSE_SCHEMA = {
         "personas distintas, usá el documento del Tomador.",
     },
     nombre_aseguradora: { type: "STRING", nullable: true, description: "Nombre de la compañía aseguradora que emite la póliza" },
-    nombre_ramo: { type: "STRING", nullable: true, description: "Ramo del seguro (ej: Autos, Vida, Hogar, Todo Riesgo)" },
-    nombre_producto: { type: "STRING", nullable: true, description: "Nombre comercial del producto/plan" },
+    nombre_ramo: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Ramo del seguro (ej: Autos, Vida, Hogar, Todo Riesgo, Accidentes Personales). " +
+        "Muchos documentos NO tienen un campo 'Ramo' en texto plano (a veces solo un " +
+        "código numérico junto a 'RAMO'), así que si no encontrás uno explícito dejalo " +
+        "en null en vez de inventarlo — nombre_producto es más importante, el ramo se " +
+        "puede terminar de resolver a partir de él.",
+    },
+    nombre_producto: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Nombre comercial del producto/plan. Si el documento no tiene un campo explícito " +
+        "'Producto' o 'Plan', usá el título/encabezado que describe el tipo de póliza " +
+        "(ej: si el título dice 'POLIZA SEGURO DE ACCIDENTES ESCOLARES', el producto es " +
+        "'Accidentes Escolares' o 'Seguro de Accidentes Escolares') — ese texto es la " +
+        "pista más confiable para identificar qué producto es, más que el campo 'Ramo'.",
+    },
     fecha_inicio: { type: "STRING", nullable: true, description: "Fecha de inicio de vigencia, formato YYYY-MM-DD" },
     fecha_fin: { type: "STRING", nullable: true, description: "Fecha de fin de vigencia, formato YYYY-MM-DD" },
     fecha_expedicion: { type: "STRING", nullable: true, description: "Fecha de expedición/emisión, formato YYYY-MM-DD" },

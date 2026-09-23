@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'pagina_catalogos.dart';
 import 'pagina_estado_cuenta.dart';
+import 'pagina_polizas_duplicadas.dart';
 import '../datos/poliza.dart';
 import '../datos/repositorio_polizas.dart';
 import 'pagina_formulario_polizas.dart';
@@ -644,48 +645,96 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
           SizedBox(width: _wCod, child: Text(p.id.toString(), style: const TextStyle(fontSize: 12), textAlign: TextAlign.right)),
           const SizedBox(width: 8),
-          SizedBox(width: _wNro - 8, child: Text(p.nroPoliza ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+          SizedBox(
+            width: _wNro - 8,
+            child: Tooltip(
+              message: p.nroPoliza ?? '—',
+              child: Text(p.nroPoliza ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+            ),
+          ),
           SizedBox(
             width: _wBien,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text(p.bienAsegurado ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-              if (p.vlrasegPoliza != null && p.vlrasegPoliza! > 0)
-                Text(_fmtNum(p.vlrasegPoliza), style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
-            ]),
+            child: Tooltip(
+              message: [
+                p.bienAsegurado ?? '—',
+                if (p.vlrasegPoliza != null && p.vlrasegPoliza! > 0) _fmtNum(p.vlrasegPoliza),
+              ].join('\n'),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(p.bienAsegurado ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                if (p.vlrasegPoliza != null && p.vlrasegPoliza! > 0)
+                  Text(_fmtNum(p.vlrasegPoliza), style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
+              ]),
+            ),
           ),
           SizedBox(
             width: _wCliente,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text(p.nombreCliente ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-              if ((p.docCliente ?? '').isNotEmpty)
-                Text(p.docCliente!, style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
-            ]),
+            child: Tooltip(
+              message: [
+                p.nombreCliente ?? '—',
+                if ((p.docCliente ?? '').isNotEmpty) p.docCliente!,
+              ].join('\n'),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(p.nombreCliente ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                if ((p.docCliente ?? '').isNotEmpty)
+                  Text(p.docCliente!, style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
+              ]),
+            ),
           ),
-          SizedBox(width: _wAseg, child: Text(p.nombreAseg ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+          SizedBox(
+            width: _wAseg,
+            child: Tooltip(
+              message: p.nombreAseg ?? '—',
+              child: Text(p.nombreAseg ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+            ),
+          ),
           SizedBox(
             width: _wRamo,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text(p.nombreRamo ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-              if ((p.nombreProd ?? '').isNotEmpty)
-                Text(p.nombreProd!, style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
-            ]),
+            child: Tooltip(
+              message: [
+                p.nombreRamo ?? '—',
+                if ((p.nombreProd ?? '').isNotEmpty) p.nombreProd!,
+              ].join('\n'),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(p.nombreRamo ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                if ((p.nombreProd ?? '').isNotEmpty)
+                  Text(p.nombreProd!, style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
+              ]),
+            ),
           ),
-          SizedBox(width: _wFecha, child: Text(_fmtFecha(p.finiPoliza), style: const TextStyle(fontSize: 12))),
-          SizedBox(width: _wFecha, child: Text(_fmtFecha(p.ffinPoliza), style: const TextStyle(fontSize: 12))),
-          SizedBox(width: _wPrima, child: Text(_fmtNum(p.primaPoliza), style: const TextStyle(fontSize: 12), textAlign: TextAlign.right)),
-          SizedBox(width: _wValor, child: Text(_fmtNum(p.valorPoliza), style: const TextStyle(fontSize: 12), textAlign: TextAlign.right, overflow: TextOverflow.ellipsis)),
+          SizedBox(width: _wFecha, child: Tooltip(message: _fmtFecha(p.finiPoliza), child: Text(_fmtFecha(p.finiPoliza), style: const TextStyle(fontSize: 12)))),
+          SizedBox(width: _wFecha, child: Tooltip(message: _fmtFecha(p.ffinPoliza), child: Text(_fmtFecha(p.ffinPoliza), style: const TextStyle(fontSize: 12)))),
+          SizedBox(width: _wPrima, child: Tooltip(message: _fmtNum(p.primaPoliza), child: Text(_fmtNum(p.primaPoliza), style: const TextStyle(fontSize: 12), textAlign: TextAlign.right))),
+          SizedBox(width: _wValor, child: Tooltip(message: _fmtNum(p.valorPoliza), child: Text(_fmtNum(p.valorPoliza), style: const TextStyle(fontSize: 12), textAlign: TextAlign.right, overflow: TextOverflow.ellipsis))),
           const SizedBox(width: 12),
-          SizedBox(width: _wFecha, child: Text(_fmtFecha(p.fexpPoliza), style: const TextStyle(fontSize: 12))),
-          SizedBox(width: _wAsesor, child: Text(p.nombreAsesor ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+          SizedBox(width: _wFecha, child: Tooltip(message: _fmtFecha(p.fexpPoliza), child: Text(_fmtFecha(p.fexpPoliza), style: const TextStyle(fontSize: 12)))),
+          SizedBox(
+            width: _wAsesor,
+            child: Tooltip(
+              message: p.nombreAsesor ?? '—',
+              child: Text(p.nombreAsesor ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+            ),
+          ),
           SizedBox(
             width: _wFCreado,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text(_fmtFechaHora(p.fcreado), overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-              if (p.fultmod != null)
-                Text(_fmtFechaHora(p.fultmod), style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
-            ]),
+            child: Tooltip(
+              message: [
+                _fmtFechaHora(p.fcreado),
+                if (p.fultmod != null) _fmtFechaHora(p.fultmod),
+              ].join('\n'),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(_fmtFechaHora(p.fcreado), overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                if (p.fultmod != null)
+                  Text(_fmtFechaHora(p.fultmod), style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
+              ]),
+            ),
           ),
-          SizedBox(width: _wUsuario, child: Text(p.apodoUsuario ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+          SizedBox(
+            width: _wUsuario,
+            child: Tooltip(
+              message: p.apodoUsuario ?? '—',
+              child: Text(p.apodoUsuario ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+            ),
+          ),
           SizedBox(
             width: _wAcciones,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -763,6 +812,14 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             tooltip: 'Recargar lista',
             icon: const Icon(Icons.refresh),
             onPressed: cargando ? null : () => _datosCompletos ? _cargarTodo(forzar: true) : _cargar(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.content_copy_outlined),
+            tooltip: 'Pólizas con número repetido',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PaginaPolizasDuplicadas()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.settings),
