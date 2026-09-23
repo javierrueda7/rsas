@@ -13,6 +13,8 @@ class RepositorioPolizas {
     int limite = 500,
   }) async {
     final b = busqueda.trim();
+    // doc_cliente se guarda sin puntos — si buscan con puntos igual matchea.
+    final bDoc = b.replaceAll('.', '');
     dynamic query = _db.from(_vista).select();
 
     if (b.isNotEmpty) {
@@ -22,7 +24,7 @@ class RepositorioPolizas {
         '$idClause'
         'nro_poliza.ilike.%$b%,'
         'nombre_cliente.ilike.%$b%,'
-        'doc_cliente.ilike.%$b%,'
+        'doc_cliente.ilike.%$bDoc%,'
         'nombre_asesor.ilike.%$b%,'
         'nombre_ramo.ilike.%$b%,'
         'nombre_prod.ilike.%$b%,'
@@ -61,6 +63,7 @@ class RepositorioPolizas {
     void Function(int cargados)? onProgreso,
   }) async {
     final b = busqueda.trim();
+    final bDoc = b.replaceAll('.', '');
 
     if (!forzar && b.isEmpty && _cacheTodos != null) {
       onProgreso?.call(_cacheTodos!.length);
@@ -80,7 +83,7 @@ class RepositorioPolizas {
           '$idClause'
           'nro_poliza.ilike.%$b%,'
           'nombre_cliente.ilike.%$b%,'
-          'doc_cliente.ilike.%$b%,'
+          'doc_cliente.ilike.%$bDoc%,'
           'nombre_asesor.ilike.%$b%,'
           'nombre_ramo.ilike.%$b%,'
           'nombre_prod.ilike.%$b%,'

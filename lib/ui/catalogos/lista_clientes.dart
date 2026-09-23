@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../../utils/formatters.dart';
 import '../theme/app_theme.dart';
 import 'form_cliente.dart';
 
@@ -224,7 +225,7 @@ class _ListaClientesState extends State<ListaClientes> {
         final c = data[i];
         final docTxt = [
           if ((c.tipodocCliente ?? '').isNotEmpty) c.tipodocCliente!.trim(),
-          if ((c.docCliente ?? '').isNotEmpty) c.docCliente!.trim(),
+          if ((c.docCliente ?? '').isNotEmpty) Fmt.doc(c.docCliente),
         ].join(' ');
 
         final linea2 = [
@@ -333,7 +334,7 @@ class _ListaClientesState extends State<ListaClientes> {
   Widget _filaEscritorio(Cliente c) {
     final docTxt = [
       if ((c.tipodocCliente ?? '').isNotEmpty) c.tipodocCliente!.trim(),
-      if ((c.docCliente ?? '').isNotEmpty) c.docCliente!.trim(),
+      if ((c.docCliente ?? '').isNotEmpty) Fmt.doc(c.docCliente),
     ].join(' ');
 
     return InkWell(

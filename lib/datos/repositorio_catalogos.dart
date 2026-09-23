@@ -78,12 +78,16 @@ Future<List<Cliente>> listarTodosClientes({
 /// Búsqueda server-side sin JOIN — para la lista de catálogo.
 Future<List<Cliente>> buscarClientesCompleto(String query) async {
   final q = query.trim();
+  // doc_cliente se guarda sin puntos (ver fix_doc_cliente_sin_puntos.sql) —
+  // si buscan pegando el número tal como aparece en el documento (con
+  // puntos), igual tiene que encontrarlo.
+  final qDoc = q.replaceAll('.', '');
   dynamic req = _db.from('clientes').select(_selectClienteSinJoin);
 
   if (q.isNotEmpty) {
     req = req.or(
       'nombre_cliente.ilike.%$q%,'
-      'doc_cliente.ilike.%$q%,'
+      'doc_cliente.ilike.%$qDoc%,'
       'tel_cliente.ilike.%$q%,'
       'correo_cliente.ilike.%$q%',
     );
@@ -98,12 +102,13 @@ Future<List<Cliente>> buscarClientesCompleto(String query) async {
 /// Devuelve máximo [limit] resultados. Si [query] está vacío devuelve los primeros [limit].
 Future<List<Cliente>> buscarClientes(String query, {int limit = 60}) async {
   final q = query.trim();
+  final qDoc = q.replaceAll('.', '');
   dynamic req = _db
       .from('clientes')
       .select('id, nombre_cliente, tipodoc_cliente, doc_cliente, estado_cliente');
 
   if (q.isNotEmpty) {
-    req = req.or('nombre_cliente.ilike.%$q%,doc_cliente.ilike.%$q%');
+    req = req.or('nombre_cliente.ilike.%$q%,doc_cliente.ilike.%$qDoc%');
   }
 
   final res = await req

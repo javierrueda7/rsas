@@ -98,7 +98,7 @@ class GeneradorPdf {
           children: [
             pw.Expanded(child: _bloqueInfo('DATOS DEL CLIENTE', [
               ('Cliente',     abono.nombreCliente ?? '—'),
-              ('Documento',   '${abono.tipodocCliente ?? ''} ${abono.docCliente ?? '—'}'),
+              ('Documento',   '${abono.tipodocCliente ?? ''} ${abono.docCliente != null ? Fmt.doc(abono.docCliente) : '—'}'),
               ('Teléfono',    abono.telCliente ?? '—'),
               ('Correo',      abono.correoCliente ?? '—'),
               ('Dirección',   abono.dirCliente ?? '—'),

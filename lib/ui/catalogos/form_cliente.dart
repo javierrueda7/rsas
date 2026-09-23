@@ -1,8 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../../utils/formatters.dart';
 import '../theme/app_layout.dart';
 import '../widgets/section_card.dart';
+
+/// Agrega los puntos de miles al documento mientras se escribe, igual que
+/// los campos de plata — el guion del dígito de verificación de NIT (si lo
+/// hay) se deja tal cual, sin agruparle puntos a lo que viene después.
+class _DocInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final limpio = newValue.text.replaceAll(RegExp(r'[^0-9\-]'), '');
+    if (limpio.isEmpty) return newValue.copyWith(text: '');
+
+    final guionIdx = limpio.indexOf('-');
+    final numero = guionIdx == -1 ? limpio : limpio.substring(0, guionIdx);
+    final sufijo = guionIdx == -1 ? '' : limpio.substring(guionIdx);
+
+    final buf = StringBuffer();
+    for (var i = 0; i < numero.length; i++) {
+      if (i > 0 && (numero.length - i) % 3 == 0) buf.write('.');
+      buf.write(numero[i]);
+    }
+    final resultado = '$buf$sufijo';
+
+    return newValue.copyWith(
+      text: resultado,
+      selection: TextSelection.collapsed(offset: resultado.length),
+    );
+  }
+}
 
 class FormCliente extends StatefulWidget {
   final Cliente? cliente;
@@ -55,7 +85,7 @@ class _FormClienteState extends State<FormCliente> {
       text: esEdicion ? widget.cliente!.id.toString() : '',
     );
     nombreCtrl = TextEditingController(text: widget.cliente?.nombreCliente ?? '');
-    docCtrl = TextEditingController(text: widget.cliente?.docCliente ?? '');
+    docCtrl = TextEditingController(text: Fmt.doc(widget.cliente?.docCliente));
     telCtrl = TextEditingController(text: widget.cliente?.telCliente ?? '');
     correoCtrl = TextEditingController(text: widget.cliente?.correoCliente ?? '');
     dirCtrl = TextEditingController(text: widget.cliente?.dirCliente ?? '');
@@ -168,7 +198,9 @@ class _FormClienteState extends State<FormCliente> {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
-    final doc = _limpiarONull(docCtrl.text);
+    // Se guarda sin puntos — el campo solo los muestra para que sea más
+    // fácil de leer mientras se digita (ver fix_doc_cliente_sin_puntos.sql).
+    final doc = _limpiarONull(docCtrl.text.replaceAll('.', ''));
     if (doc != null && (tipoDocSel == null || tipoDocSel!.trim().isEmpty)) {
       _toast('Selecciona el tipo de documento.');
       return;
@@ -363,9 +395,12 @@ class _FormClienteState extends State<FormCliente> {
                         flex: 3,
                         child: TextFormField(
                           controller: docCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [_DocInputFormatter()],
                           decoration: const InputDecoration(
                             labelText: 'Documento',
                             border: OutlineInputBorder(),
+                            helperText: 'Los puntos se agregan solos',
                           ),
                         ),
                       ),

@@ -123,7 +123,8 @@ class _PaginaReportesState extends State<PaginaReportes>
 
   bool _matchCliente(Poliza p, String q) =>
       (p.nombreCliente ?? '').toLowerCase().contains(q) ||
-      (p.docCliente ?? '').toLowerCase().contains(q);
+      // doc_cliente se guarda sin puntos — si buscan con puntos igual matchea.
+      (p.docCliente ?? '').toLowerCase().contains(q.replaceAll('.', ''));
 
   List<String> get _listaAseg => _polizas.where((p) {
     if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
@@ -180,7 +181,7 @@ class _PaginaReportesState extends State<PaginaReportes>
         final coincide = (intId != null && p.id == intId) ||
             (p.nroPoliza ?? '').toLowerCase().contains(q) ||
             (p.nombreCliente ?? '').toLowerCase().contains(q) ||
-            (p.docCliente ?? '').toLowerCase().contains(q) ||
+            (p.docCliente ?? '').toLowerCase().contains(q.replaceAll('.', '')) ||
             (p.nombreAseg ?? '').toLowerCase().contains(q) ||
             (p.nombreRamo ?? '').toLowerCase().contains(q) ||
             (p.nombreProd ?? '').toLowerCase().contains(q) ||

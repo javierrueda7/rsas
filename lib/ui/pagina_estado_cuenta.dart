@@ -765,7 +765,7 @@ class _PaginaFacturaState extends State<_PaginaFactura> {
                               ('Nombre', a.nombreCliente ?? '—'),
                               if (a.tipodocCliente != null || a.docCliente != null)
                                 ('Documento',
-                                    '${a.tipodocCliente ?? ''} ${a.docCliente ?? ''}'),
+                                    '${a.tipodocCliente ?? ''} ${Fmt.doc(a.docCliente)}'),
                               if (a.telCliente != null)
                                 ('Teléfono', a.telCliente!),
                               if (a.correoCliente != null)

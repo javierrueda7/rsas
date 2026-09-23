@@ -770,7 +770,7 @@ class _TablaAbonos extends StatelessWidget {
                         style: const TextStyle(fontSize: 12)),
                     if (a.docCliente != null)
                       Text(
-                        '${a.tipodocCliente ?? ''} ${a.docCliente}',
+                        '${a.tipodocCliente ?? ''} ${Fmt.doc(a.docCliente)}',
                         style:
                             TextStyle(fontSize: 10, color: AppTheme.inkSoft),
                       ),

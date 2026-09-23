@@ -6,8 +6,11 @@ import 'package:intl/intl.dart';
 import 'pagina_catalogos.dart';
 import 'pagina_estado_cuenta.dart';
 import 'pagina_polizas_duplicadas.dart';
+import 'pagina_polizas_pendientes.dart';
 import '../datos/poliza.dart';
 import '../datos/repositorio_polizas.dart';
+import '../datos/repositorio_polizas_pendientes.dart';
+import '../utils/formatters.dart';
 import 'pagina_formulario_polizas.dart';
 import 'theme/app_theme.dart';
 
@@ -39,7 +42,8 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
 
   bool _matchCliente(Poliza p, String q) =>
       (p.nombreCliente ?? '').toLowerCase().contains(q) ||
-      (p.docCliente ?? '').toLowerCase().contains(q);
+      // doc_cliente se guarda sin puntos — si buscan con puntos igual matchea.
+      (p.docCliente ?? '').toLowerCase().contains(q.replaceAll('.', ''));
 
   List<String> get _opAseguradoras => polizas.where((p) {
     if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
@@ -113,10 +117,21 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   final ScrollController _verticalCtrl = ScrollController();
   final ScrollController _horizontalCtrl = ScrollController();
 
+  final _repoPend = RepositorioPolizasPendientes();
+  int _pendientesCount = 0;
+
   @override
   void initState() {
     super.initState();
     _cargar();
+    _cargarPendientesCount();
+  }
+
+  Future<void> _cargarPendientesCount() async {
+    try {
+      final n = await _repoPend.contar();
+      if (mounted) setState(() => _pendientesCount = n);
+    } catch (_) {}
   }
 
   @override
@@ -404,6 +419,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
       MaterialPageRoute(builder: (_) => const PaginaFormularioPolizas()),
     );
     _datosCompletos ? _cargarTodo() : _cargar();
+    _cargarPendientesCount();
   }
 
   void _abrirEditar(Poliza p) async {
@@ -459,7 +475,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
                   ),
                   if ((p.docCliente ?? '').isNotEmpty)
                     Text(
-                      p.docCliente!,
+                      Fmt.doc(p.docCliente),
                       style: TextStyle(
                         fontSize: 11,
                         color: Theme.of(context).colorScheme.outline,
@@ -581,11 +597,11 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   static const _wCliente = 190.0;
   static const _wAseg = 150.0;
   static const _wRamo = 140.0;
-  static const _wAsesor = 100.0;
+  static const _wAsesor = 62.0;
   static const _wFecha = 80.0;
   static const _wPrima = 80.0;
   static const _wValor = 80.0;
-  static const _wFCreado = 100.0;
+  static const _wFCreado = 138.0;
   static const _wUsuario = 50.0;
   static const _wAcciones = 88.0;
   static const _totalAncho = _wCod + _wNro + _wBien + _wCliente + _wAseg +
@@ -671,12 +687,12 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             child: Tooltip(
               message: [
                 p.nombreCliente ?? '—',
-                if ((p.docCliente ?? '').isNotEmpty) p.docCliente!,
+                if ((p.docCliente ?? '').isNotEmpty) Fmt.doc(p.docCliente),
               ].join('\n'),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
                 Text(p.nombreCliente ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
                 if ((p.docCliente ?? '').isNotEmpty)
-                  Text(p.docCliente!, style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
+                  Text(Fmt.doc(p.docCliente), style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
               ]),
             ),
           ),
@@ -722,9 +738,9 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
                 if (p.fultmod != null) _fmtFechaHora(p.fultmod),
               ].join('\n'),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text(_fmtFechaHora(p.fcreado), overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                Text(_fmtFechaHora(p.fcreado), overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
                 if (p.fultmod != null)
-                  Text(_fmtFechaHora(p.fultmod), style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
+                  Text(_fmtFechaHora(p.fultmod), style: const TextStyle(fontSize: 10, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
               ]),
             ),
           ),
@@ -820,6 +836,24 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
               context,
               MaterialPageRoute(builder: (_) => const PaginaPolizasDuplicadas()),
             ),
+          ),
+          IconButton(
+            icon: Badge(
+              label: Text('$_pendientesCount'),
+              isLabelVisible: _pendientesCount > 0,
+              child: const Icon(Icons.pending_actions_outlined),
+            ),
+            tooltip: 'Pólizas pendientes (borrador / por revisar)',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PaginaPolizasPendientes()),
+              );
+              _cargarPendientesCount();
+              // Si desde ahí se terminó de digitar y guardar una póliza
+              // real, esta lista tiene que reflejarla al volver.
+              _datosCompletos ? _cargarTodo(forzar: true) : _cargar();
+            },
           ),
           IconButton(
             icon: const Icon(Icons.settings),

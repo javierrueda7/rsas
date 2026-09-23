@@ -8,8 +8,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../datos/repositorio_catalogos.dart';
 import '../datos/repositorio_ia.dart';
 import '../datos/repositorio_polizas.dart';
+import '../datos/repositorio_polizas_pendientes.dart';
 import '../datos/catalogos.dart';
 import '../datos/poliza.dart';
+import '../datos/poliza_pendiente.dart';
 import '../datos/sesion.dart';
 import '../utils/formatters.dart';
 import 'catalogos/form_cliente.dart';
@@ -131,7 +133,10 @@ class FormaExpLite {
 
 class PaginaFormularioPolizas extends StatefulWidget {
   final Poliza? poliza;
-  const PaginaFormularioPolizas({super.key, this.poliza});
+  /// Póliza en borrador o predigitada por IA que se está retomando — ver
+  /// lib/fix_polizas_pendientes.sql. No se usa junto con [poliza].
+  final PolizaPendiente? polizaPendiente;
+  const PaginaFormularioPolizas({super.key, this.poliza, this.polizaPendiente});
 
   @override
   State<PaginaFormularioPolizas> createState() =>
@@ -144,10 +149,12 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   final _repoCat = RepositorioCatalogos();
   final _repoPol = RepositorioPolizas();
   final _repoIA = RepositorioIA();
+  final _repoPend = RepositorioPolizasPendientes();
   final _db = Supabase.instance.client;
 
   bool _cargando = true;
   bool _guardando = false;
+  bool _guardandoBorrador = false;
   bool _importando = false;
 
   final _idCtrl = TextEditingController();
@@ -224,7 +231,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   @override
   void initState() {
     super.initState();
-    _cargar();
+    _inicializar();
     // Rebuild en tiempo real para los valores calculados por asesor
     for (final ctrl in [
       _comDistribCtrl, _comAdicDistribCtrl,
@@ -444,6 +451,39 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     return nuevo;
   }
 
+  /// Abre el mismo formulario de edición de clientes que usa el catálogo,
+  /// pero sin salir de la póliza — al volver, refresca este cliente con lo
+  /// que se haya guardado (no reutiliza la instancia vieja en caché).
+  Future<void> _editarClienteActual() async {
+    if (cliente == null) return;
+    final id = await Navigator.push<int>(
+      context,
+      MaterialPageRoute(builder: (_) => FormCliente(cliente: cliente)),
+    );
+    if (id == null || !mounted) return;
+    final actualizado = await _repoCat.obtenerCliente(id);
+    if (actualizado == null || !mounted) return;
+    setState(() {
+      clientes = [
+        for (final c in clientes) if (c.id != id) c,
+        actualizado,
+      ]..sort((a, b) => a.nombreCliente.compareTo(b.nombreCliente));
+      cliente = actualizado;
+    });
+  }
+
+  Future<void> _inicializar() async {
+    await _cargar();
+    final pp = widget.polizaPendiente;
+    if (pp != null && pp.estado == 'pendiente_revision' && mounted) {
+      final completados = await _aplicarDatosExtraidos(pp.datos);
+      if (!mounted) return;
+      _toast(completados > 0
+          ? 'Póliza predigitada — revisá los $completados campo(s) antes de guardar.'
+          : 'No se pudo aplicar la información predigitada, completá a mano.');
+    }
+  }
+
   Future<void> _cargar() async {
     try {
       final results = await Future.wait([
@@ -557,8 +597,24 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           (i) => i.nombre.toUpperCase().contains('STELLA'),
         );
 
+        // Asesor 1 casi siempre es Luz Stella Serrano Mantilla con el 100%
+        // de la comisión — se predigita para no tener que llenarlo a mano
+        // cada vez, pero sigue siendo editable.
+        asesor1 = asesores.firstWhereOrNull(
+          (a) => a.nombreAsesor.toUpperCase().contains('LUZ STELLA SERRANO'),
+        );
+        if (asesor1 != null) _porcomAsesor1Ctrl.text = _fmtNum(100);
+
         final siguienteId = await _repoPol.obtenerSiguienteId();
         _idCtrl.text = siguienteId.toString();
+
+        // Retomando un borrador guardado a medio llenar — pisa los defaults
+        // de arriba con lo que ya se había digitado. La predigitada por IA
+        // ('pendiente_revision') se aplica en _inicializar() reusando el
+        // mismo matcheo por nombre que la importación manual de PDF.
+        if (widget.polizaPendiente?.estado == 'borrador') {
+          await _aplicarBorrador(widget.polizaPendiente!.datos);
+        }
       }
 
       ramosDisponibles = _calcularRamosDisponibles(aseguradora);
@@ -571,6 +627,104 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       if (!mounted) return;
       setState(() => _cargando = false);
       _toast('Error cargando catálogos: $e');
+    }
+  }
+
+  static int? _intJson(dynamic v) =>
+      v == null ? null : (v is int ? v : int.tryParse(v.toString()));
+  static num? _numJson(dynamic v) =>
+      v == null ? null : (v is num ? v : num.tryParse(v.toString()));
+  static DateTime? _dateJson(dynamic v) =>
+      v == null ? null : DateTime.tryParse(v.toString());
+
+  /// Repuebla el formulario con el mapa que guardó "Guardar borrador" — es
+  /// el mismo shape que arma _guardar() antes de insertar (ids reales, ya
+  /// elegidos por el usuario), no el de la extracción por IA.
+  Future<void> _aplicarBorrador(Map<String, dynamic> datos) async {
+    _nroCtrl.text = (datos['nro_poliza'] as String?) ?? '';
+    _bienCtrl.text = (datos['bien_asegurado'] as String?) ?? '';
+    _vlrAsegCtrl.text = _fmtMoney(_numJson(datos['vlraseg_poliza']));
+    _primaCtrl.text = _fmtMoney(_numJson(datos['prima_poliza']));
+    _valorPolizaCtrl.text = _fmtMoney(_numJson(datos['valor_poliza']));
+    _vlrBaseComCtrl.text = _fmtMoney(_numJson(datos['vlrbasecom_poliza']));
+    _porcComCtrl.text = _fmtNum(_numJson(datos['porccom_poliza']));
+    _porcomAgenciaCtrl.text = _fmtNum(_numJson(datos['porcom_agencia']));
+    _vlrComCtrl.text = _fmtMoney(_numJson(datos['vlrcom_poliza']));
+    _vlrComFijaCtrl.text = _fmtMoney(_numJson(datos['vlrcomfija_poliza']));
+    final comDistrib = (_numJson(datos['vlrcom_poliza']) ?? 0) +
+        (_numJson(datos['vlrcomfija_poliza']) ?? 0);
+    _comDistribCtrl.text = _fmtMoney(comDistrib);
+    _comAdicDistribCtrl.text = _fmtMoney(_numJson(datos['vlrcomadic_poliza']));
+    _porcomAdicCtrl.text = _fmtNum(_numJson(datos['porcomadic_poliza']));
+    _vlrComAdicCtrl.text = _fmtMoney(_numJson(datos['vlrcomadic_poliza']));
+    _porcomAsesor1Ctrl.text = _fmtNum(_numJson(datos['porcom_asesor1']));
+    _porcomAsesor2Ctrl.text = _fmtNum(_numJson(datos['porcom_asesor2']));
+    _porcomAsesor3Ctrl.text = _fmtNum(_numJson(datos['porcom_asesor3']));
+    _porcomAsesoradCtrl.text = _fmtNum(_numJson(datos['porcom_asesorad']));
+    _porcomAgenciaadCtrl.text = _fmtNum(_numJson(datos['porcom_agenciaad']));
+    _vlrPrimaPagadaCtrl.text = _fmtMoney(_numJson(datos['vlrprimapagada_poliza']));
+    _obsCtrl.text = (datos['obs_poliza'] as String?) ?? '';
+
+    fExp = _dateJson(datos['fexp_poliza']);
+    fIni = _dateJson(datos['fini_poliza']);
+    fFin = _dateJson(datos['ffin_poliza']);
+    _fExpCtrl.text = fExp == null ? '' : _formatearFecha(fExp!);
+    _fIniCtrl.text = fIni == null ? '' : _formatearFecha(fIni!);
+    _fFinCtrl.text = fFin == null ? '' : _formatearFecha(fFin!);
+
+    cliente = await _asegurarCliente(_intJson(datos['cliente_id']));
+    intermediario = intermediarios
+        .firstWhereOrNull((x) => x.id == _intJson(datos['intermediario_id']));
+    formaExp = formasExp
+        .firstWhereOrNull((x) => x.id == _intJson(datos['formaexp_id']));
+
+    asesor1 = await _asegurarAsesor(_intJson(datos['asesor_id']));
+    asesor2 = await _asegurarAsesor(_intJson(datos['asesor2_id']));
+    asesor3 = await _asegurarAsesor(_intJson(datos['asesor3_id']));
+    asesorAd = await _asegurarAsesor(_intJson(datos['asesorad_id']));
+    agencia = await _asegurarAsesor(_intJson(datos['agencia_id']));
+    agenciaAd = await _asegurarAsesor(_intJson(datos['agenciaad_id']));
+
+    final productoId = _intJson(datos['producto_id']);
+    Producto? prod = _todosProductos.firstWhereOrNull((x) => x.id == productoId);
+    if (prod == null && productoId != null) {
+      prod = await _repoCat.obtenerProducto(productoId);
+    }
+    producto = prod;
+
+    final ramoId = _intJson(datos['ramo_id']);
+    ramo = ramos.firstWhereOrNull((x) => x.id == ramoId);
+    if (ramo == null && ramoId != null) {
+      final sel = await _repoCat.obtenerRamo(ramoId);
+      if (sel != null) {
+        ramos = [...ramos, sel]..sort((a, b) => a.nombreRamo.compareTo(b.nombreRamo));
+        ramo = ramos.firstWhereOrNull((x) => x.id == ramoId);
+      }
+    }
+
+    final asegId = _intJson(datos['aseg_id']);
+    if (asegId != null) {
+      aseguradora = aseguradoras.firstWhereOrNull((a) => a.id == asegId);
+      if (aseguradora == null) {
+        final sel = await _repoCat.obtenerAseguradora(asegId);
+        if (sel != null) {
+          aseguradoras = [...aseguradoras, sel]
+            ..sort((a, b) => a.nombreAseg.compareTo(b.nombreAseg));
+          aseguradora = aseguradoras.firstWhereOrNull((a) => a.id == asegId);
+        }
+      }
+    } else if (producto != null) {
+      aseguradora =
+          aseguradoras.firstWhereOrNull((a) => a.id == producto!.aseguradoraId);
+    }
+
+    final formaPagoId = _intJson(datos['forma_pago_id']);
+    if (formaPagoId != null) {
+      formaPago = formasPago.firstWhereOrNull((x) => x.id == formaPagoId);
+    }
+    final estadoId = datos['estado_poliza_id'] as String?;
+    if (estadoId != null) {
+      estadoPoliza = estadosPoliza.firstWhereOrNull((x) => x.id == estadoId);
     }
   }
 
@@ -1078,9 +1232,6 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       return;
     }
 
-    final prima = _parseNumero(_primaCtrl.text) ?? 0;
-    final valorPoliza = _parseNumero(_valorPolizaCtrl.text) ?? 0;
-
     setState(() => _guardando = true);
 
     try {
@@ -1099,50 +1250,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         }
       }
 
-      final porcomAsesor = _parseNumero(_porcomAsesor1Ctrl.text);
-
-      final data = <String, dynamic>{
-        'nro_poliza':
-            _nroCtrl.text.trim().isEmpty ? null : _nroCtrl.text.trim(),
-        'cliente_id': _idValido(cliente?.id),
-        'asesor_id': _idValido(asesor1?.id),
-        'intermediario_id': _idValido(intermediario?.id),
-        'ramo_id': _idValido(ramo?.id),
-        'producto_id': _idValido(producto?.id),
-        'fexp_poliza': fExp?.toIso8601String(),
-        'fini_poliza': fIni?.toIso8601String(),
-        'ffin_poliza': fFin?.toIso8601String(),
-        'prima_poliza': prima,
-        'valor_poliza': valorPoliza,
-        'vlraseg_poliza': _parseNumero(_vlrAsegCtrl.text),
-        'vlrbasecom_poliza': _parseNumero(_vlrBaseComCtrl.text),
-        'porccom_poliza': _parseNumero(_porcComCtrl.text),
-        'porcom_agencia': _parseNumero(_porcomAgenciaCtrl.text),
-        'vlrcom_poliza': _parseNumero(_vlrComCtrl.text),
-        'vlrcomfija_poliza': _parseNumero(_vlrComFijaCtrl.text),
-        'porcomadic_poliza': _parseNumero(_porcomAdicCtrl.text),
-        'vlrcomadic_poliza': _parseNumero(_vlrComAdicCtrl.text),
-        'porcom_asesor1': porcomAsesor,
-        'agencia_id': _idValido(agencia?.id),
-        'forma_pago_id': _idValido(formaPago?.id),
-        'estado_poliza_id': estadoPoliza?.id,
-        'vlrprimapagada_poliza': _parseNumero(_vlrPrimaPagadaCtrl.text),
-        'asesor2_id': _idValido(asesor2?.id),
-        'porcom_asesor2': _parseNumero(_porcomAsesor2Ctrl.text),
-        'asesor3_id': _idValido(asesor3?.id),
-        'porcom_asesor3': _parseNumero(_porcomAsesor3Ctrl.text),
-        'asesorad_id': _idValido(asesorAd?.id),
-        'porcom_asesorad': _parseNumero(_porcomAsesoradCtrl.text),
-        'agenciaad_id': _idValido(agenciaAd?.id),
-        'porcom_agenciaad': _parseNumero(_porcomAgenciaadCtrl.text),
-        'bien_asegurado':
-            _bienCtrl.text.trim().isEmpty ? null : _bienCtrl.text.trim(),
-        'obs_poliza':
-            _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim(),
-        'formaexp_id': _idValido(formaExp?.id),
-        'aseg_id': _idValido(aseguradora?.id),
-        'usuario_id': Sesion.usuarioId,
-      };
+      final data = _mapaActual();
 
       if (esEdicion) {
         final originalId = widget.poliza!.id;
@@ -1155,12 +1263,90 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         await _repoPol.crearPoliza(data);
       }
 
+      // Si se venía retomando un borrador o una predigitada por IA, ya
+      // quedó guardada como póliza real — la bandeja de pendientes no la
+      // necesita más. Si esto falla no pasa nada grave, queda una fila
+      // huérfana que se puede borrar a mano desde "Pendientes".
+      if (widget.polizaPendiente != null) {
+        try {
+          await _repoPend.eliminar(widget.polizaPendiente!.id);
+        } catch (_) {}
+      }
+
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       _toast('Error guardando: $e');
     } finally {
       if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  /// Mismo shape que arma _guardar() para insertar/actualizar en `polizas`
+  /// — se reusa para el snapshot que se guarda en un borrador.
+  Map<String, dynamic> _mapaActual() {
+    return <String, dynamic>{
+      'nro_poliza': _nroCtrl.text.trim().isEmpty ? null : _nroCtrl.text.trim(),
+      'cliente_id': _idValido(cliente?.id),
+      'asesor_id': _idValido(asesor1?.id),
+      'intermediario_id': _idValido(intermediario?.id),
+      'ramo_id': _idValido(ramo?.id),
+      'producto_id': _idValido(producto?.id),
+      'fexp_poliza': fExp?.toIso8601String(),
+      'fini_poliza': fIni?.toIso8601String(),
+      'ffin_poliza': fFin?.toIso8601String(),
+      'prima_poliza': _parseNumero(_primaCtrl.text) ?? 0,
+      'valor_poliza': _parseNumero(_valorPolizaCtrl.text) ?? 0,
+      'vlraseg_poliza': _parseNumero(_vlrAsegCtrl.text),
+      'vlrbasecom_poliza': _parseNumero(_vlrBaseComCtrl.text),
+      'porccom_poliza': _parseNumero(_porcComCtrl.text),
+      'porcom_agencia': _parseNumero(_porcomAgenciaCtrl.text),
+      'vlrcom_poliza': _parseNumero(_vlrComCtrl.text),
+      'vlrcomfija_poliza': _parseNumero(_vlrComFijaCtrl.text),
+      'porcomadic_poliza': _parseNumero(_porcomAdicCtrl.text),
+      'vlrcomadic_poliza': _parseNumero(_vlrComAdicCtrl.text),
+      'porcom_asesor1': _parseNumero(_porcomAsesor1Ctrl.text),
+      'agencia_id': _idValido(agencia?.id),
+      'forma_pago_id': _idValido(formaPago?.id),
+      'estado_poliza_id': estadoPoliza?.id,
+      'vlrprimapagada_poliza': _parseNumero(_vlrPrimaPagadaCtrl.text),
+      'asesor2_id': _idValido(asesor2?.id),
+      'porcom_asesor2': _parseNumero(_porcomAsesor2Ctrl.text),
+      'asesor3_id': _idValido(asesor3?.id),
+      'porcom_asesor3': _parseNumero(_porcomAsesor3Ctrl.text),
+      'asesorad_id': _idValido(asesorAd?.id),
+      'porcom_asesorad': _parseNumero(_porcomAsesoradCtrl.text),
+      'agenciaad_id': _idValido(agenciaAd?.id),
+      'porcom_agenciaad': _parseNumero(_porcomAgenciaadCtrl.text),
+      'bien_asegurado':
+          _bienCtrl.text.trim().isEmpty ? null : _bienCtrl.text.trim(),
+      'obs_poliza': _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim(),
+      'formaexp_id': _idValido(formaExp?.id),
+      'aseg_id': _idValido(aseguradora?.id),
+      'usuario_id': Sesion.usuarioId,
+    };
+  }
+
+  /// A diferencia de "Guardar", esto no exige ningún campo obligatorio —
+  /// guarda lo que haya en ese momento para retomarlo después.
+  Future<void> _guardarBorrador() async {
+    if (_guardando || _guardandoBorrador) return;
+    setState(() => _guardandoBorrador = true);
+    try {
+      final datos = _mapaActual();
+      final idExistente = widget.polizaPendiente?.id;
+      if (idExistente != null) {
+        await _repoPend.actualizar(idExistente, estado: 'borrador', datos: datos);
+      } else {
+        await _repoPend.crear(estado: 'borrador', datos: datos, origen: 'manual');
+      }
+      if (!mounted) return;
+      _toast('Guardado como borrador.');
+      Navigator.pop(context, true);
+    } catch (e) {
+      _toast('Error guardando el borrador: $e');
+    } finally {
+      if (mounted) setState(() => _guardandoBorrador = false);
     }
   }
 
@@ -1295,6 +1481,21 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
               icon: const Icon(Icons.auto_awesome_outlined),
               label: const Text('Importar desde PDF/imagen'),
             ),
+          if (!esEdicion && _guardandoBorrador)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (!esEdicion)
+            TextButton.icon(
+              onPressed: _guardando ? null : _guardarBorrador,
+              icon: const Icon(Icons.description_outlined),
+              label: const Text('Guardar borrador'),
+            ),
           if (_guardando)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1306,7 +1507,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
             )
           else
             TextButton.icon(
-              onPressed: _guardar,
+              onPressed: _guardandoBorrador ? null : _guardar,
               icon: const Icon(Icons.save),
               label: const Text('Guardar'),
             ),
@@ -1471,28 +1672,43 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
                 // ── Cliente ───────────────────────────────────────────────────
                 _seccion('Cliente', [
-                  BuscadorDropdown<Cliente>(
-                    label: 'Cliente *',
-                    value: cliente,
-                    items: cliente != null ? [cliente!] : [],
-                    itemLabel: (c) => c.nombreCliente,
-                    itemSubtitle: (c) {
-                      final partes = [
-                        if ((c.tipodocCliente ?? '').isNotEmpty) c.tipodocCliente!,
-                        if ((c.docCliente ?? '').isNotEmpty) c.docCliente!,
-                      ];
-                      return partes.isEmpty ? null : partes.join(' ');
-                    },
-                    itemsLoader: (q) => _repoCat.buscarClientes(q),
-                    onChanged: (v) => setState(() => cliente = v),
-                    validator: (x) => x == null ? 'Requerido' : null,
-                    onCrear: (ctx) async {
-                      final nuevoId = await Navigator.of(ctx).push<int>(
-                        MaterialPageRoute(builder: (_) => const FormCliente()),
-                      );
-                      if (nuevoId != null) return await _asegurarCliente(nuevoId);
-                      return null;
-                    },
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: BuscadorDropdown<Cliente>(
+                          label: 'Cliente *',
+                          value: cliente,
+                          items: cliente != null ? [cliente!] : [],
+                          itemLabel: (c) => c.nombreCliente,
+                          itemSubtitle: (c) {
+                            final partes = [
+                              if ((c.tipodocCliente ?? '').isNotEmpty) c.tipodocCliente!,
+                              if ((c.docCliente ?? '').isNotEmpty) Fmt.doc(c.docCliente),
+                            ];
+                            return partes.isEmpty ? null : partes.join(' ');
+                          },
+                          itemsLoader: (q) => _repoCat.buscarClientes(q),
+                          onChanged: (v) => setState(() => cliente = v),
+                          validator: (x) => x == null ? 'Requerido' : null,
+                          onCrear: (ctx) async {
+                            final nuevoId = await Navigator.of(ctx).push<int>(
+                              MaterialPageRoute(builder: (_) => const FormCliente()),
+                            );
+                            if (nuevoId != null) return await _asegurarCliente(nuevoId);
+                            return null;
+                          },
+                        ),
+                      ),
+                      if (cliente != null) ...[
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined),
+                          tooltip: 'Editar datos de este cliente',
+                          onPressed: _editarClienteActual,
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 12),
                   _fila3(
