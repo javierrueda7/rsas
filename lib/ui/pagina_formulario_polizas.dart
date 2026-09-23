@@ -220,6 +220,20 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   /// Todos los productos activos (de cualquier aseguradora/ramo) — sirve
   /// para derivar qué ramos tiene cada aseguradora sin ir a la red.
   List<Producto> _todosProductos = [];
+
+  // Aprendizaje de correcciones IA (ver ia_aprendizaje_producto): si el
+  // producto que terminó eligiendo el usuario al guardar es distinto del
+  // que había sugerido la importación por IA, se registra la corrección.
+  int? _productoSugeridoPorIA;
+  String? _textoProductoParaAprendizaje;
+  int? _aseguradoraIdEnSugerenciaIA;
+
+  // Aprendizaje del rol de cliente (ver ia_aprendizaje_rol_cliente): qué
+  // candidato (Tomador/Asegurado/Beneficiario) dio el match automático,
+  // para reforzarlo si el usuario lo confirma tal cual al guardar.
+  int? _clienteIdSugeridoPorIA;
+  String? _rolClienteSugeridoPorIA;
+  int? _aseguradoraIdEnSugerenciaCliente;
   List<FormaPagoLite> formasPago = [];
   List<EstadoPolizaLite> estadosPoliza = [];
   List<IntermediarioLite> intermediarios = [];
@@ -352,13 +366,19 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   /// aseguradora elegida, muestra todos. Siempre incluye el ramo ya
   /// seleccionado (si hay), para no ocultar una selección válida por datos
   /// de catálogo inconsistentes.
-  List<Ramo> _calcularRamosDisponibles(Aseguradora? aseg) {
+  /// [mantenerActual] preserva el Ramo ya seleccionado en la lista aunque
+  /// no tenga productos bajo la aseguradora dada — sirve para no perder el
+  /// dato al CARGAR una póliza ya guardada (edición, borrador, IA), pero
+  /// NO debe usarse cuando el usuario cambia de Aseguradora a mano: ahí el
+  /// Ramo/Producto de la aseguradora anterior no pertenecen a la nueva y
+  /// tienen que limpiarse de verdad, no quedar "colados" en la lista.
+  List<Ramo> _calcularRamosDisponibles(Aseguradora? aseg, {bool mantenerActual = true}) {
     if (aseg == null) return ramos;
     final idsConProducto = _todosProductos
         .where((p) => p.aseguradoraId == aseg.id)
         .map((p) => p.ramoId)
         .toSet();
-    if (ramo != null) idsConProducto.add(ramo!.id);
+    if (mantenerActual && ramo != null) idsConProducto.add(ramo!.id);
     final filtrados = ramos.where((r) => idsConProducto.contains(r.id)).toList();
     // Si la aseguradora todavía no tiene ningún producto cargado, no
     // bloqueamos el formulario con un dropdown vacío — mostramos todos.
@@ -804,15 +824,33 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
     setState(() => _importando = true);
     try {
-      final datos = await _repoIA.extraerPoliza(bytes, mimeType);
+      // Ya cacheado (RepositorioCatalogos._cache), no pega dos veces a la red.
+      final catalogo = await _repoCat.catalogoProductosParaIA();
+      final datos = await _repoIA.extraerPoliza(bytes, mimeType,
+          catalogoProductos: catalogo);
       if (!mounted) return;
       final completados = await _aplicarDatosExtraidos(datos);
       final huboCliente = cliente != null;
-      final avisoCliente = huboCliente
-          ? ''
-          : ' Cliente extraído: "${datos['nombre_cliente'] ?? '—'}" '
-              '(doc "${datos['doc_cliente'] ?? '—'}") — no se encontró en la base, '
-              'buscalo a mano.';
+      String avisoCliente = '';
+      if (!huboCliente) {
+        // Cliente nuevo, ningún documento matcheó — si para esta
+        // aseguradora ya se confirmó antes que el cliente real suele venir
+        // de un rol puntual (Tomador/Asegurado/Beneficiario), se sugiere
+        // ese nombre en vez de siempre asumir el Tomador.
+        var rolSugerido = 'tomador';
+        if (aseguradora != null) {
+          final preferido = await _repoCat.rolClientePreferido(aseguradora!.id);
+          if (preferido != null) rolSugerido = preferido;
+        }
+        final (nombreSugerido, docSugerido) = switch (rolSugerido) {
+          'asegurado' => (datos['nombre_asegurado'], datos['doc_asegurado']),
+          'beneficiario' => (datos['nombre_beneficiario'], datos['doc_beneficiario']),
+          _ => (datos['nombre_cliente'], datos['doc_cliente']),
+        };
+        avisoCliente = ' Cliente extraído: "${nombreSugerido ?? '—'}" '
+            '(doc "${docSugerido ?? '—'}") — no se encontró en la base, '
+            'buscalo a mano.';
+      }
       _toast(completados > 0
           ? 'Se completaron $completados campo(s) automáticamente. Revisá antes de guardar.$avisoCliente'
           : 'No se pudo identificar ningún dato en el documento.');
@@ -836,13 +874,23 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       return v is num ? v : null;
     }
 
+    // Se calcula antes del await de cliente porque el aprendizaje de rol
+    // necesita saber la aseguradora — es síncrono, no hace falta esperar.
+    final matchAsegPrevio =
+        _matchPorNombre(aseguradoras, (a) => a.nombreAseg, texto('nombre_aseguradora'));
+
     // La búsqueda de cliente pega al servidor — se resuelve antes del
     // setState para no mezclar await con la actualización de estado.
-    final matchCliente = await _buscarClienteExtraido([
-      (texto('nombre_cliente'), texto('doc_cliente')),
-      (texto('nombre_asegurado'), texto('doc_asegurado')),
-      (texto('nombre_beneficiario'), texto('doc_beneficiario')),
+    final (matchCliente, rolMatcheado) = await _buscarClienteExtraido([
+      ('tomador', texto('nombre_cliente'), texto('doc_cliente')),
+      ('asegurado', texto('nombre_asegurado'), texto('doc_asegurado')),
+      ('beneficiario', texto('nombre_beneficiario'), texto('doc_beneficiario')),
     ]);
+    if (matchCliente != null && rolMatcheado != null && matchAsegPrevio != null) {
+      _clienteIdSugeridoPorIA = matchCliente.id;
+      _rolClienteSugeridoPorIA = rolMatcheado;
+      _aseguradoraIdEnSugerenciaCliente = matchAsegPrevio.id;
+    }
 
     setState(() {
       final nro = texto('nro_poliza');
@@ -851,8 +899,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         completados++;
       }
 
-      final matchAseg = _matchPorNombre(
-          aseguradoras, (a) => a.nombreAseg, texto('nombre_aseguradora'));
+      final matchAseg = matchAsegPrevio;
       if (matchAseg != null) {
         aseguradora = matchAseg;
         ramosDisponibles = _calcularRamosDisponibles(aseguradora);
@@ -920,10 +967,35 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       final candidatosProd = _todosProductos
           .where((p) => p.aseguradoraId == aseguradora!.id)
           .toList();
-      final matchProd = _matchPorNombre(
+      final textoProd = texto('nombre_producto') ?? texto('nombre_ramo') ?? '';
+      final textoProdNorm = _normalizarTexto(textoProd);
+
+      // Aprendizaje: si antes alguien ya corrigió a mano lo que la IA
+      // sugería para este mismo texto de esta aseguradora, se usa
+      // directamente esa corrección en vez de volver a adivinar.
+      Producto? matchAprendido;
+      if (textoProdNorm.isNotEmpty) {
+        try {
+          final prodIdAprendido = await _repoCat.buscarProductoAprendido(
+              aseguradora!.id, textoProdNorm);
+          if (prodIdAprendido != null) {
+            matchAprendido = candidatosProd
+                .firstWhereOrNull((p) => p.id == prodIdAprendido);
+          }
+        } catch (_) {}
+      }
+
+      final matchProd = matchAprendido ??
+          _matchPorNombre(
               candidatosProd, (p) => p.nombreProd, texto('nombre_producto')) ??
           _matchPorNombre(
               candidatosProd, (p) => p.nombreProd, texto('nombre_ramo'));
+
+      if (matchProd != null) {
+        _productoSugeridoPorIA = matchProd.id;
+        _textoProductoParaAprendizaje = textoProdNorm;
+        _aseguradoraIdEnSugerenciaIA = aseguradora!.id;
+      }
 
       if (matchProd != null && mounted) {
         final matchRamoDerivado =
@@ -984,19 +1056,25 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   /// cliente de la correduría figure como Asegurado en vez de Tomador según
   /// cómo esté armado ese producto. Solo si NINGÚN documento matchea se cae
   /// al nombre del primer candidato (el Tomador) como sugerencia.
-  Future<Cliente?> _buscarClienteExtraido(
-      List<(String? nombre, String? doc)> candidatos) async {
+  /// [candidatos] va con su rol ('tomador'/'asegurado'/'beneficiario') para
+  /// poder registrar después, si el usuario confirma este cliente al
+  /// guardar, cuál rol resultó ser el correcto para esta aseguradora (ver
+  /// ia_aprendizaje_rol_cliente). Devuelve el cliente encontrado y el rol
+  /// que dio el match, o (null, null) si no encontró nada.
+  Future<(Cliente?, String?)> _buscarClienteExtraido(
+      List<(String rol, String? nombre, String? doc)> candidatos) async {
     try {
-      for (final (_, doc) in candidatos) {
+      for (final (rol, _, doc) in candidatos) {
         final docLimpio =
             (doc ?? '').replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
         if (docLimpio.isEmpty) continue;
         // Match exacto contra doc_cliente_norm (solo dígitos/letras, sin
         // puntos ni guión — ver fix_doc_cliente_normalizado.sql).
         final match = await _repoCat.buscarClientePorDocExacto(docLimpio);
-        if (match != null) return match;
+        if (match != null) return (match, rol);
       }
-      final nombre = candidatos.isNotEmpty ? candidatos.first.$1 : null;
+      final primero = candidatos.isNotEmpty ? candidatos.first : null;
+      final nombre = primero?.$2;
       if (nombre != null && nombre.isNotEmpty) {
         // El documento puede traer el nombre en otro orden que la base
         // ("APELLIDOS, NOMBRE" vs "Nombre Apellidos") — un ilike de la
@@ -1005,14 +1083,15 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         // por conjunto de palabras, sin importar el orden.
         final palabras = _palabras(_normalizarTexto(nombre)).toList()
           ..sort((a, b) => b.length.compareTo(a.length));
-        if (palabras.isEmpty) return null;
+        if (palabras.isEmpty) return (null, null);
         final res = await _repoCat.buscarClientes(palabras.first, limit: 20);
-        return _matchPorNombre(res, (c) => c.nombreCliente, nombre);
+        final matchNombre = _matchPorNombre(res, (c) => c.nombreCliente, nombre);
+        return (matchNombre, matchNombre != null ? primero!.$1 : null);
       }
     } catch (_) {
       // Si falla la búsqueda, se deja para que el usuario elija a mano.
     }
-    return null;
+    return (null, null);
   }
 
   T? _matchPorNombre<T>(
@@ -1254,6 +1333,35 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           _toast('Ya existe una póliza con el número "$nroPolizaTrim".');
           return;
         }
+      }
+
+      // Aprendizaje: si la IA había sugerido un producto para este texto y
+      // el usuario terminó eligiendo otro (misma aseguradora que cuando se
+      // sugirió), se guarda la corrección para la próxima vez.
+      if (_productoSugeridoPorIA != null &&
+          _textoProductoParaAprendizaje != null &&
+          producto != null &&
+          producto!.id != _productoSugeridoPorIA &&
+          aseguradora?.id == _aseguradoraIdEnSugerenciaIA) {
+        await _repoCat.registrarAprendizajeProducto(
+          _aseguradoraIdEnSugerenciaIA!,
+          _textoProductoParaAprendizaje!,
+          producto!.id,
+        );
+      }
+
+      // El cliente confirmado al guardar sigue siendo el que matcheó
+      // automáticamente por un rol puntual (Tomador/Asegurado/Beneficiario)
+      // — refuerza que ese rol es el correcto para esta aseguradora.
+      if (_clienteIdSugeridoPorIA != null &&
+          _rolClienteSugeridoPorIA != null &&
+          _aseguradoraIdEnSugerenciaCliente != null &&
+          cliente?.id == _clienteIdSugeridoPorIA &&
+          aseguradora?.id == _aseguradoraIdEnSugerenciaCliente) {
+        await _repoCat.reforzarAprendizajeRolCliente(
+          _aseguradoraIdEnSugerenciaCliente!,
+          _rolClienteSugeridoPorIA!,
+        );
       }
 
       final data = _mapaActual();
@@ -1621,7 +1729,11 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                         onChanged: (v) async {
                           setState(() {
                             aseguradora = v;
-                            ramosDisponibles = _calcularRamosDisponibles(v);
+                            // mantenerActual: false — el Ramo/Producto de la
+                            // aseguradora anterior no pertenecen a esta, no
+                            // hay que preservarlos en la lista.
+                            ramosDisponibles =
+                                _calcularRamosDisponibles(v, mantenerActual: false);
                             if (ramo != null &&
                                 !ramosDisponibles.any((r) => r.id == ramo!.id)) {
                               ramo = null;

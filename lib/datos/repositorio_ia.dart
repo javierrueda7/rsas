@@ -17,12 +17,19 @@ class RepositorioIA {
   /// Envía el archivo de una póliza (PDF o imagen) a la Edge Function
   /// `extraer-poliza`, que le pide a Gemini que extraiga los datos.
   /// Devuelve el mapa con los campos reconocidos (puede venir con valores
-  /// null cuando el documento no los trae).
+  /// null cuando el documento no los trae). [catalogoProductos] (aseguradora
+  /// + ramo + producto, ver RepositorioCatalogos.catalogoProductosParaIA)
+  /// es opcional — si se pasa, la IA lo usa para mapear el documento contra
+  /// las combinaciones reales que ya existen en el sistema.
   Future<Map<String, dynamic>> extraerPoliza(
     Uint8List bytes,
-    String mimeType,
-  ) async {
-    final data = await _invoke('extraer-poliza', bytes, mimeType);
+    String mimeType, {
+    List<Map<String, String>>? catalogoProductos,
+  }) async {
+    final data = await _invoke('extraer-poliza', bytes, mimeType,
+        extra: catalogoProductos != null
+            ? {'catalogoProductos': catalogoProductos}
+            : null);
     return (data as Map).cast<String, dynamic>();
   }
 
@@ -46,14 +53,16 @@ class RepositorioIA {
   Future<dynamic> _invoke(
     String function,
     Uint8List bytes,
-    String mimeType,
-  ) async {
+    String mimeType, {
+    Map<String, dynamic>? extra,
+  }) async {
     try {
       final res = await _db.functions.invoke(
         function,
         body: {
           'fileBase64': base64Encode(bytes),
           'mimeType': mimeType,
+          if (extra != null) ...extra,
         },
       );
       return res.data;

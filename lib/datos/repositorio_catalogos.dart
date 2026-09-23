@@ -459,6 +459,125 @@ Future<void> eliminarRamo(int id) async {
     return lista;
   }
 
+  /// Catálogo compacto (aseguradora + ramo + producto) para pasarle a la IA
+  /// al importar pólizas — así puede mapear el texto/título del documento
+  /// contra las combinaciones reales que existen en el sistema (aprovecha
+  /// su comprensión semántica: sabe que "RESP. CIVIL EXTRACONTRACTUAL" es
+  /// lo mismo que "Responsabilidad Civil Extracontractual", por ejemplo),
+  /// en vez de depender solo de una comparación de texto literal después.
+  Future<List<Map<String, String>>> catalogoProductosParaIA() async {
+    final productos = await listarProductos(soloActivos: true);
+    final aseguradoras = await listarAseguradoras(soloActivas: true);
+    final ramos = await listarRamos(soloActivos: true);
+    final asegPorId = {for (final a in aseguradoras) a.id: a.nombreAseg};
+    final ramoPorId = {for (final r in ramos) r.id: r.nombreRamo};
+    return productos
+        .map((p) => {
+              'aseguradora': asegPorId[p.aseguradoraId] ?? '',
+              'ramo': ramoPorId[p.ramoId] ?? '',
+              'producto': p.nombreProd,
+            })
+        .where((m) => m['aseguradora']!.isNotEmpty && m['ramo']!.isNotEmpty)
+        .toList();
+  }
+
+  /// Si antes alguien corrigió el producto que la IA sugirió para este
+  /// mismo texto (de esta misma aseguradora) DOS VECES O MÁS, devuelve
+  /// directamente el producto correcto — sin pasar por el matcheo difuso
+  /// de nuevo. Exige que se haya repetido (no solo la primera corrección)
+  /// para no dejarse guiar por un error puntual del digitador — recién se
+  /// aplica automático cuando ya es un patrón consistente.
+  Future<int?> buscarProductoAprendido(
+      int aseguradoraId, String textoExtraidoNorm) async {
+    if (textoExtraidoNorm.trim().isEmpty) return null;
+    final res = await _db
+        .from('ia_aprendizaje_producto')
+        .select('producto_id')
+        .eq('aseguradora_id', aseguradoraId)
+        .eq('texto_extraido', textoExtraidoNorm)
+        .gte('veces', 2)
+        .maybeSingle();
+    if (res == null) return null;
+    return (res['producto_id'] as num).toInt();
+  }
+
+  /// El digitador cambió el producto que la IA había sugerido para este
+  /// texto — se guarda como corrección para la próxima vez. Si ya había
+  /// una corrección para el mismo texto+aseguradora, la más reciente gana
+  /// (por si el error anterior era otro).
+  Future<void> registrarAprendizajeProducto(
+    int aseguradoraId,
+    String textoExtraidoNorm,
+    int productoIdCorrecto,
+  ) async {
+    if (textoExtraidoNorm.trim().isEmpty) return;
+    try {
+      final existente = await _db
+          .from('ia_aprendizaje_producto')
+          .select('id, veces')
+          .eq('aseguradora_id', aseguradoraId)
+          .eq('texto_extraido', textoExtraidoNorm)
+          .maybeSingle();
+      if (existente != null) {
+        await _db.from('ia_aprendizaje_producto').update({
+          'producto_id': productoIdCorrecto,
+          'veces': ((existente['veces'] as num?)?.toInt() ?? 1) + 1,
+          'fultmod': DateTime.now().toIso8601String(),
+        }).eq('id', existente['id']);
+      } else {
+        await _db.from('ia_aprendizaje_producto').insert({
+          'aseguradora_id': aseguradoraId,
+          'texto_extraido': textoExtraidoNorm,
+          'producto_id': productoIdCorrecto,
+        });
+      }
+    } catch (_) {
+      // No es crítico — si falla, simplemente no se aprendió esta vez.
+    }
+  }
+
+  /// Rol (tomador/asegurado/beneficiario) que históricamente resultó ser
+  /// el cliente real para esta aseguradora — solo si ya se confirmó 2+
+  /// veces, para no guiarse por un solo caso. Sirve de prioridad cuando un
+  /// cliente nuevo no matchea por documento contra ningún candidato (no
+  /// hay con qué comparar, porque todavía no existe en la base).
+  Future<String?> rolClientePreferido(int aseguradoraId) async {
+    final res = await _db
+        .from('ia_aprendizaje_rol_cliente')
+        .select('rol')
+        .eq('aseguradora_id', aseguradoraId)
+        .gte('veces', 2)
+        .order('veces', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    return res?['rol'] as String?;
+  }
+
+  /// Se confirmó (al guardar) que el rol usado automáticamente era el
+  /// cliente correcto — refuerza el aprendizaje para esa aseguradora.
+  Future<void> reforzarAprendizajeRolCliente(
+      int aseguradoraId, String rol) async {
+    try {
+      final existente = await _db
+          .from('ia_aprendizaje_rol_cliente')
+          .select('id, veces')
+          .eq('aseguradora_id', aseguradoraId)
+          .eq('rol', rol)
+          .maybeSingle();
+      if (existente != null) {
+        await _db.from('ia_aprendizaje_rol_cliente').update({
+          'veces': ((existente['veces'] as num?)?.toInt() ?? 1) + 1,
+          'fultmod': DateTime.now().toIso8601String(),
+        }).eq('id', existente['id']);
+      } else {
+        await _db.from('ia_aprendizaje_rol_cliente').insert({
+          'aseguradora_id': aseguradoraId,
+          'rol': rol,
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<Producto?> obtenerProducto(int id) async {
     final res = await _db
         .from('productos')

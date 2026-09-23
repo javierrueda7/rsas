@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import 'pagina_carga_masiva_polizas.dart';
 import 'pagina_catalogos.dart';
 import 'pagina_estado_cuenta.dart';
 import 'pagina_polizas_duplicadas.dart';
@@ -10,6 +11,7 @@ import 'pagina_polizas_pendientes.dart';
 import '../datos/poliza.dart';
 import '../datos/repositorio_polizas.dart';
 import '../datos/repositorio_polizas_pendientes.dart';
+import '../datos/servicio_carga_masiva.dart';
 import '../utils/formatters.dart';
 import 'pagina_formulario_polizas.dart';
 import 'theme/app_theme.dart';
@@ -119,12 +121,26 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
 
   final _repoPend = RepositorioPolizasPendientes();
   int _pendientesCount = 0;
+  final _servicioCarga = ServicioCargaMasiva.instance;
 
   @override
   void initState() {
     super.initState();
     _cargar();
     _cargarPendientesCount();
+    _servicioCarga.addListener(_onCambioCargaMasiva);
+  }
+
+  bool _procesandoAntes = false;
+  void _onCambioCargaMasiva() {
+    if (!mounted) return;
+    setState(() {});
+    // Se acaba de terminar un lote — refresca el contador solo, sin
+    // obligar al usuario a volver a la pantalla de carga masiva.
+    if (_procesandoAntes && !_servicioCarga.procesando) {
+      _cargarPendientesCount();
+    }
+    _procesandoAntes = _servicioCarga.procesando;
   }
 
   Future<void> _cargarPendientesCount() async {
@@ -141,6 +157,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
     _clienteDebounce?.cancel();
     _verticalCtrl.dispose();
     _horizontalCtrl.dispose();
+    _servicioCarga.removeListener(_onCambioCargaMasiva);
     super.dispose();
   }
 
@@ -878,6 +895,33 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
               context,
               MaterialPageRoute(builder: (_) => const PaginaPolizasDuplicadas()),
             ),
+          ),
+          if (_servicioCarga.procesando)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PaginaCargaMasivaPolizas()),
+                ),
+                icon: const SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                label: Text(
+                    'Cargando ${_servicioCarga.procesados}/${_servicioCarga.items.length}'),
+              ),
+            ),
+          IconButton(
+            icon: const Icon(Icons.upload_file_outlined),
+            tooltip: 'Carga masiva de pólizas (PDF/imagen con IA)',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PaginaCargaMasivaPolizas()),
+              );
+              _cargarPendientesCount();
+            },
           ),
           IconButton(
             icon: Badge(

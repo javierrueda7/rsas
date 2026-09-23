@@ -136,14 +136,18 @@ Deno.serve(async (req: Request) => {
     return jsonError("Falta configurar GOOGLE_API_KEY en los secrets de Supabase.", 500);
   }
 
-  let body: { fileBase64?: string; mimeType?: string };
+  let body: {
+    fileBase64?: string;
+    mimeType?: string;
+    catalogoProductos?: { aseguradora: string; ramo: string; producto: string }[];
+  };
   try {
     body = await req.json();
   } catch {
     return jsonError("Body inválido, se esperaba JSON.", 400);
   }
 
-  const { fileBase64, mimeType } = body;
+  const { fileBase64, mimeType, catalogoProductos } = body;
   if (!fileBase64 || !mimeType) {
     return jsonError("Faltan fileBase64 y/o mimeType.", 400);
   }
@@ -157,6 +161,18 @@ Deno.serve(async (req: Request) => {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
       `?key=${GOOGLE_API_KEY}`;
+
+    const textoCatalogo = catalogoProductos && catalogoProductos.length > 0
+      ? "\n\nEstos son TODOS los productos que ya existen en el sistema (aseguradora | ramo | " +
+        "producto), uno por línea:\n" +
+        catalogoProductos.map((p) => `${p.aseguradora} | ${p.ramo} | ${p.producto}`).join("\n") +
+        "\n\nSi el documento corresponde a una aseguradora/ramo/producto de esta lista (aunque " +
+        "el documento lo nombre distinto, ej. con siglas o abreviado — usá tu criterio para " +
+        "reconocer que es lo mismo), devolvé nombre_aseguradora/nombre_ramo/nombre_producto " +
+        "EXACTAMENTE como aparecen en la lista, para que el sistema los pueda machear sin " +
+        "ambigüedad. Si no encontrás ninguna combinación de la lista que corresponda, devolvé " +
+        "lo que diga el documento tal cual (no inventes que coincide con algo de la lista)."
+      : "";
 
     const res = await fetch(url, {
       method: "POST",
@@ -176,7 +192,8 @@ Deno.serve(async (req: Request) => {
                   "bien los bloques Tomador/Asegurado/Beneficiario cuando el documento los separa — " +
                   "llenar nombre_asegurado/doc_asegurado (y beneficiario) cuando existan como bloques " +
                   "propios es tan importante como llenar nombre_cliente/doc_cliente. Si un dato no " +
-                  "aparece en el documento, dejalo en null — no inventes valores.",
+                  "aparece en el documento, dejalo en null — no inventes valores." +
+                  textoCatalogo,
               },
             ],
           },
