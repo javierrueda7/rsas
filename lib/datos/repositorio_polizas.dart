@@ -114,6 +114,15 @@ class RepositorioPolizas {
     return todos;
   }
 
+  /// Solo las pólizas cuyo nro_poliza está repetido (ver
+  /// vw_polizas_duplicadas, lib/fix_vista_polizas_duplicadas.sql) — el
+  /// filtro corre en la base, no trae todo el catálogo al cliente.
+  Future<List<Poliza>> listarDuplicados() async {
+    final res = await _db.from('vw_polizas_duplicadas').select();
+    final rows = (res as List).cast<Map<String, dynamic>>();
+    return rows.map(Poliza.fromMap).toList();
+  }
+
   Future<Poliza?> obtenerPoliza(int id) async {
     final res = await _db
         .from(_tabla)

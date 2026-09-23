@@ -31,10 +31,13 @@ class _PaginaPolizasDuplicadasState extends State<PaginaPolizasDuplicadas> {
     _cargar();
   }
 
-  Future<void> _cargar({bool forzar = false}) async {
+  Future<void> _cargar() async {
     setState(() { _cargando = true; _error = null; });
     try {
-      final todas = await _repo.listarTodos(forzar: forzar);
+      // vw_polizas_duplicadas ya filtra en la base — solo trae las pólizas
+      // cuyo número está repetido, no el catálogo completo (mucho más
+      // rápido que el listarTodos() que se usaba antes acá).
+      final todas = await _repo.listarDuplicados();
       final porNumero = <String, List<Poliza>>{};
       for (final p in todas) {
         final nro = (p.nroPoliza ?? '').trim();
@@ -59,7 +62,10 @@ class _PaginaPolizasDuplicadasState extends State<PaginaPolizasDuplicadas> {
       context,
       MaterialPageRoute(builder: (_) => PaginaFormularioPolizas(poliza: p)),
     );
-    _cargar(forzar: true);
+    // vw_polizas_duplicadas es una consulta chica (solo las pólizas
+    // repetidas), así que recargar acá siempre — haya cambiado algo o no —
+    // ya es rápido, sin necesitar un caché propio.
+    _cargar();
   }
 
   @override
@@ -74,7 +80,7 @@ class _PaginaPolizasDuplicadasState extends State<PaginaPolizasDuplicadas> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Recargar',
-            onPressed: _cargando ? null : () => _cargar(forzar: true),
+            onPressed: _cargando ? null : _cargar,
           ),
         ],
       ),

@@ -352,7 +352,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         .map((p) => p.ramoId)
         .toSet();
     if (ramo != null) idsConProducto.add(ramo!.id);
-    return ramos.where((r) => idsConProducto.contains(r.id)).toList();
+    final filtrados = ramos.where((r) => idsConProducto.contains(r.id)).toList();
+    // Si la aseguradora todavía no tiene ningún producto cargado, no
+    // bloqueamos el formulario con un dropdown vacío — mostramos todos.
+    return filtrados.isEmpty ? ramos : filtrados;
   }
 
   void _aplicarDefaultsDesdeProducto() {
