@@ -24,6 +24,10 @@ class _PaginaPolizasDuplicadasState extends State<PaginaPolizasDuplicadas> {
   bool _cargando = true;
   String? _error;
   List<List<Poliza>> _grupos = [];
+  /// Números (normalizados) que el usuario tiene desplegados — se preserva
+  /// entre recargas para que revisar una póliza y volver no vuelva a
+  /// compactar todo el listado.
+  final Set<String> _expandidos = {};
 
   @override
   void initState() {
@@ -123,10 +127,20 @@ class _PaginaPolizasDuplicadasState extends State<PaginaPolizasDuplicadas> {
 
   Widget _grupoCard(List<Poliza> grupo) {
     final cs = Theme.of(context).colorScheme;
+    final norm = RepositorioPolizas.normalizarNroPoliza(grupo.first.nroPoliza ?? '');
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(4),
         child: ExpansionTile(
+          key: PageStorageKey(norm),
+          initiallyExpanded: _expandidos.contains(norm),
+          onExpansionChanged: (abierto) {
+            if (abierto) {
+              _expandidos.add(norm);
+            } else {
+              _expandidos.remove(norm);
+            }
+          },
           title: Text(
             grupo.first.nroPoliza ?? '—',
             style: const TextStyle(fontWeight: FontWeight.bold),
@@ -145,6 +159,7 @@ class _PaginaPolizasDuplicadasState extends State<PaginaPolizasDuplicadas> {
               title: Text('#${p.id} — ${p.nombreCliente ?? '—'}'),
               subtitle: Text(
                 '${p.nombreAseg ?? '—'} · ${p.nombreRamo ?? '—'} · '
+                '${(p.bienAsegurado ?? '').isNotEmpty ? '${p.bienAsegurado} · ' : ''}'
                 'Prima: \$ ${Fmt.money(p.primaPoliza)}'
                 '${p.nroPoliza != null ? ' · Nro. exacto: "${p.nroPoliza}"' : ''}',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),

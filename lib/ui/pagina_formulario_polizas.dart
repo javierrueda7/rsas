@@ -605,8 +605,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         );
         if (asesor1 != null) _porcomAsesor1Ctrl.text = _fmtNum(100);
 
-        final siguienteId = await _repoPol.obtenerSiguienteId();
-        _idCtrl.text = siguienteId.toString();
+        // El código real se asigna solo al guardar (ver _guardar) — mostrar
+        // acá un preview del "siguiente id" es justo lo que causaba que dos
+        // personas digitando a la vez anotaran un código que después no
+        // coincidía con el real.
 
         // Retomando un borrador guardado a medio llenar — pisa los defaults
         // de arriba con lo que ya se había digitado. La predigitada por IA
@@ -836,8 +838,11 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
     // La búsqueda de cliente pega al servidor — se resuelve antes del
     // setState para no mezclar await con la actualización de estado.
-    final matchCliente = await _buscarClienteExtraido(
-        texto('nombre_cliente'), texto('doc_cliente'));
+    final matchCliente = await _buscarClienteExtraido([
+      (texto('nombre_cliente'), texto('doc_cliente')),
+      (texto('nombre_asegurado'), texto('doc_asegurado')),
+      (texto('nombre_beneficiario'), texto('doc_beneficiario')),
+    ]);
 
     setState(() {
       final nro = texto('nro_poliza');
@@ -972,25 +977,26 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     return completados;
   }
 
-  Future<Cliente?> _buscarClienteExtraido(String? nombre, String? doc) async {
-    final docLimpio = (doc ?? '').replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
+  /// [candidatos] va en orden de prioridad (Tomador, Asegurado, Beneficiario)
+  /// pero la prioridad real es del DOCUMENTO: se prueba cada uno contra la
+  /// base y gana el primero que ya exista como cliente real — sin importar
+  /// qué rol le haya puesto la aseguradora en el PDF, porque puede que el
+  /// cliente de la correduría figure como Asegurado en vez de Tomador según
+  /// cómo esté armado ese producto. Solo si NINGÚN documento matchea se cae
+  /// al nombre del primer candidato (el Tomador) como sugerencia.
+  Future<Cliente?> _buscarClienteExtraido(
+      List<(String? nombre, String? doc)> candidatos) async {
     try {
-      if (docLimpio.isNotEmpty) {
-        // El doc extraído viene sin puntos ("74184458"), pero en la base
-        // suele estar con puntos de miles ("74.184.458") — un ilike de la
-        // cadena completa no encuentra ese substring porque el punto corta
-        // la coincidencia. Los últimos 3 dígitos sí quedan siempre juntos
-        // (el punto va cada 3 dígitos contados desde la derecha), así que
-        // buscamos por eso y filtramos el match exacto acá.
-        final sufijo = docLimpio.length > 3
-            ? docLimpio.substring(docLimpio.length - 3)
-            : docLimpio;
-        final res = await _repoCat.buscarClientes(sufijo, limit: 200);
-        final match = res.firstWhereOrNull((c) =>
-            (c.docCliente ?? '').replaceAll(RegExp(r'[^0-9A-Za-z]'), '') ==
-            docLimpio);
+      for (final (_, doc) in candidatos) {
+        final docLimpio =
+            (doc ?? '').replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
+        if (docLimpio.isEmpty) continue;
+        // Match exacto contra doc_cliente_norm (solo dígitos/letras, sin
+        // puntos ni guión — ver fix_doc_cliente_normalizado.sql).
+        final match = await _repoCat.buscarClientePorDocExacto(docLimpio);
         if (match != null) return match;
       }
+      final nombre = candidatos.isNotEmpty ? candidatos.first.$1 : null;
       if (nombre != null && nombre.isNotEmpty) {
         // El documento puede traer el nombre en otro orden que la base
         // ("APELLIDOS, NOMBRE" vs "Nombre Apellidos") — un ilike de la
@@ -1087,7 +1093,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       maxLines: lines,
       readOnly: readOnly,
       keyboardType: num
-          ? const TextInputType.numberWithOptions(decimal: true)
+          ? const TextInputType.numberWithOptions(decimal: true, signed: true)
           : null,
       inputFormatters: (num && !readOnly && lines == 1)
           ? [_ColMoneyInputFormatter(maxDec: maxDec)]
@@ -1251,6 +1257,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       }
 
       final data = _mapaActual();
+      int? idReal;
 
       if (esEdicion) {
         final originalId = widget.poliza!.id;
@@ -1260,7 +1267,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           data..remove('usuario_id'),
         );
       } else {
-        await _repoPol.crearPoliza(data);
+        idReal = await _repoPol.crearPoliza(data);
       }
 
       // Si se venía retomando un borrador o una predigitada por IA, ya
@@ -1274,12 +1281,53 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       }
 
       if (!mounted) return;
+      if (idReal != null) {
+        await _mostrarConfirmacionGuardado(idReal);
+      }
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       _toast('Error guardando: $e');
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  /// Recién acá se conoce el código real de la póliza — antes de guardar
+  /// no se muestra ningún preview a propósito, porque con varias personas
+  /// digitando a la vez el "siguiente id" que verían podía no coincidir
+  /// con el que terminaba quedando.
+  Future<void> _mostrarConfirmacionGuardado(int idReal) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Póliza guardada'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Código: $idReal',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 20)),
+            const SizedBox(height: 12),
+            Text('Nro. Póliza: ${_nroCtrl.text.trim().isEmpty ? '—' : _nroCtrl.text.trim()}'),
+            Text('Cliente: ${cliente?.nombreCliente ?? '—'}'),
+            Text('Aseguradora: ${aseguradora?.nombreAseg ?? '—'}'),
+            Text('Prima: \$ ${_primaCtrl.text}'),
+            const SizedBox(height: 12),
+            const Text('Anotá el código antes de cerrar este mensaje.',
+                style: TextStyle(fontSize: 12)),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Listo, ya lo anoté'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Mismo shape que arma _guardar() para insertar/actualizar en `polizas`
@@ -1527,11 +1575,11 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
                 _seccion('Identificación y Vigencia', [
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     SizedBox(
-                      width: 110,
+                      width: 130,
                       child: _campo('Código', _idCtrl,
                           num: true,
                           readOnly: true,
-                          helper: 'Auto'),
+                          helper: esEdicion ? 'Auto' : 'Al guardar'),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

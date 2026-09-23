@@ -126,20 +126,18 @@ class RepositorioPolizas {
     return rows.map(Poliza.fromMap).toList();
   }
 
-  /// Solo un preview para mostrar en el campo "Código" de una póliza nueva
-  /// antes de guardar — el id real lo asigna la base al insertar (puede
-  /// diferir si hay una inserción concurrente entre medio).
-  Future<int> obtenerSiguienteId() async {
+  /// Todas las pólizas de un cliente puntual — usado por el botón "Ver
+  /// pólizas" en el catálogo de Clientes. Consulta directa por cliente_id
+  /// (indexado, ver fix_indices_rendimiento.sql), no depende del caché de
+  /// listarTodos().
+  Future<List<Poliza>> listarPorCliente(int clienteId) async {
     final res = await _db
-        .from(_tabla)
-        .select('id')
-        .order('id', ascending: false)
-        .limit(1)
-        .maybeSingle();
-
-    if (res == null) return 1;
-    final ultimoId = (res['id'] as num?)?.toInt() ?? 0;
-    return ultimoId + 1;
+        .from(_vista)
+        .select()
+        .eq('cliente_id', clienteId)
+        .order('fcreado', ascending: false);
+    final rows = (res as List).cast<Map<String, dynamic>>();
+    return rows.map(Poliza.fromMap).toList();
   }
 
   Future<Poliza?> obtenerPoliza(int id) async {
@@ -167,8 +165,11 @@ class RepositorioPolizas {
       query = query.neq('id', excluirId);
     }
 
-    final res = await query.maybeSingle();
-    return res != null;
+    // .limit(1) en vez de .maybeSingle(): hoy hay grupos con más de un
+    // duplicado ya existentes (ver PaginaPolizasDuplicadas), y
+    // .maybeSingle() falla si la consulta devuelve más de una fila.
+    final res = await query.limit(1);
+    return (res as List).isNotEmpty;
   }
 
   String _normalizarNro(String s) => normalizarNroPoliza(s);
@@ -180,9 +181,17 @@ class RepositorioPolizas {
   static String normalizarNroPoliza(String s) =>
       s.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
 
-  Future<void> crearPoliza(Map<String, dynamic> data) async {
-    await _db.from(_tabla).insert(_limpiarMapa(data));
+  /// Crea la póliza y devuelve el id real asignado por la base — recién
+  /// ahí se sabe con certeza cuál es (dos personas digitando a la vez no
+  /// pueden chocar: Postgres asigna el id de forma atómica).
+  Future<int> crearPoliza(Map<String, dynamic> data) async {
+    final res = await _db
+        .from(_tabla)
+        .insert(_limpiarMapa(data))
+        .select('id')
+        .single();
     _cacheTodos = null;
+    return (res['id'] as num).toInt();
   }
 
   Future<void> actualizarPoliza(int id, Map<String, dynamic> data) async {

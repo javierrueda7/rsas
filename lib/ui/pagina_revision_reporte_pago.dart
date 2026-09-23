@@ -15,11 +15,15 @@ import 'widgets/buscador_dropdown.dart';
 class _MoneyFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue nv) {
-    final raw = nv.text.replaceAll(RegExp(r'[^0-9,]'), '');
+    // Admite negativos — se usan para reversar comisiones cuando se
+    // cancela una póliza ya pagada.
+    final raw = nv.text.replaceAll(RegExp(r'[^0-9,\-]'), '');
     if (raw.isEmpty) return nv.copyWith(text: '');
     final parts = raw.split(',');
-    final entNum = int.tryParse(parts[0]) ?? 0;
-    var fmt = _miles(entNum);
+    final enteraTxt = parts[0].replaceAll(RegExp(r'[^0-9\-]'), '');
+    final negativo = enteraTxt.startsWith('-');
+    final entNum = int.tryParse(enteraTxt.replaceAll('-', '')) ?? 0;
+    var fmt = '${negativo ? '-' : ''}${_miles(entNum)}';
     if (parts.length > 1) {
       final dec = parts[1].length > 2 ? parts[1].substring(0, 2) : parts[1];
       fmt += ',$dec';

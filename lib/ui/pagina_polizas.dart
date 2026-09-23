@@ -469,13 +469,31 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    p.nombreCliente ?? '—',
-                    style: const TextStyle(fontSize: 13),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          p.nombreCliente ?? '—',
+                          style: const TextStyle(fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (p.clienteId != null)
+                        SizedBox(
+                          width: 38,
+                          child: Text('#${p.clienteId}',
+                              textAlign: TextAlign.right,
+                              overflow: TextOverflow.clip,
+                              softWrap: false,
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: Theme.of(context).colorScheme.outline)),
+                        ),
+                    ],
                   ),
                   if ((p.docCliente ?? '').isNotEmpty)
                     Text(
-                      Fmt.doc(p.docCliente),
+                      '${(p.tipodocCliente ?? '').isNotEmpty ? '${p.tipodocCliente} ' : ''}${Fmt.doc(p.docCliente)}',
                       style: TextStyle(
                         fontSize: 11,
                         color: Theme.of(context).colorScheme.outline,
@@ -687,13 +705,37 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
             child: Tooltip(
               message: [
                 p.nombreCliente ?? '—',
-                if ((p.docCliente ?? '').isNotEmpty) Fmt.doc(p.docCliente),
-              ].join('\n'),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text(p.nombreCliente ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                if (p.clienteId != null) 'Código: ${p.clienteId}',
                 if ((p.docCliente ?? '').isNotEmpty)
-                  Text(Fmt.doc(p.docCliente), style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft), overflow: TextOverflow.ellipsis),
-              ]),
+                  '${(p.tipodocCliente ?? '').isNotEmpty ? '${p.tipodocCliente} ' : ''}${Fmt.doc(p.docCliente)}',
+              ].join('\n'),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Row(children: [
+                  Expanded(
+                    child: Text(p.nombreCliente ?? '—', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                  ),
+                  if (p.clienteId != null) ...[
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 30,
+                      child: Text('#${p.clienteId}',
+                          textAlign: TextAlign.right,
+                          overflow: TextOverflow.clip,
+                          softWrap: false,
+                          style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.outline)),
+                    ),
+                  ],
+                ]),
+                if ((p.docCliente ?? '').isNotEmpty)
+                  Text(
+                    '${(p.tipodocCliente ?? '').isNotEmpty ? '${p.tipodocCliente} ' : ''}${Fmt.doc(p.docCliente)}',
+                    style: const TextStyle(fontSize: 11, color: AppTheme.inkSoft),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ]),
+              ),
             ),
           ),
           SizedBox(

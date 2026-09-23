@@ -41,20 +41,56 @@ const RESPONSE_SCHEMA = {
       type: "STRING",
       nullable: true,
       description:
-        "Nombre del TOMADOR de la póliza (quien la contrata y paga la prima) — es el " +
-        "cliente real del intermediario de seguros. En pólizas de cumplimiento/garantía " +
-        "el Tomador (ej: un contratista, persona natural) suele ser DISTINTO del " +
-        "Asegurado/Beneficiario (normalmente la entidad estatal protegida) — en ese caso " +
-        "usá el nombre del TOMADOR, no el del asegurado/beneficiario. Solo si el " +
-        "documento no distingue Tomador de Asegurado (son la misma persona/campo), usá ese.",
+        "Nombre del TOMADOR de la póliza (quien la contrata y paga la prima) — normalmente " +
+        "es el cliente real del intermediario de seguros. Buscá específicamente la " +
+        "sección/etiqueta 'TOMADOR' o 'DATOS DEL TOMADOR' del documento — normalmente es " +
+        "un bloque propio, separado y antes de la sección 'ASEGURADO' o 'DATOS DEL " +
+        "ASEGURADO Y BENEFICIARIO'. Esto es solo un candidato — quien decide cuál de los " +
+        "candidatos (Tomador/Asegurado/Beneficiario) es el cliente real de verdad es la " +
+        "app, comparando cada documento contra su base de clientes ya registrados, así " +
+        "que no hace falta acertar perfecto acá: con que quede claro cuál bloque es cuál " +
+        "alcanza. Solo usá el Asegurado si el documento no tiene ningún bloque TOMADOR " +
+        "separado (son la misma persona/campo).",
     },
     doc_cliente: {
       type: "STRING",
       nullable: true,
       description:
-        "Número de documento del TOMADOR de la póliza (cédula, NIT, etc.), solo dígitos " +
-        "— mismo criterio que nombre_cliente: si Tomador y Asegurado/Beneficiario son " +
-        "personas distintas, usá el documento del Tomador.",
+        "Número de documento del TOMADOR (ver nombre_cliente), solo dígitos y letras " +
+        "(sin puntos ni espacios, pero SÍ conservá el guion del dígito de verificación " +
+        "de un NIT si lo tiene, ej. '901983472-9').",
+    },
+    nombre_asegurado: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Nombre del ASEGURADO de la póliza (bloque 'ASEGURADO' o 'DATOS DEL ASEGURADO'), " +
+        "SOLO cuando es una persona/entidad distinta del Tomador. Es el segundo candidato " +
+        "a cliente real — la app decide cuál de los dos (Tomador o Asegurado) coincide " +
+        "con un cliente ya existente en su base. Si Tomador y Asegurado son la misma " +
+        "persona/campo, dejá este campo vacío.",
+    },
+    doc_asegurado: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Número de documento del ASEGURADO (ver nombre_asegurado), mismo formato que " +
+        "doc_cliente. Vacío si Tomador y Asegurado son la misma persona/campo.",
+    },
+    nombre_beneficiario: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Nombre del BENEFICIARIO de la póliza (bloque 'BENEFICIARIO'), SOLO cuando es una " +
+        "persona/entidad distinta del Tomador y del Asegurado. Tercer candidato a cliente " +
+        "real, mismo criterio que nombre_asegurado.",
+    },
+    doc_beneficiario: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Número de documento del BENEFICIARIO (ver nombre_beneficiario), mismo formato " +
+        "que doc_cliente.",
     },
     nombre_aseguradora: { type: "STRING", nullable: true, description: "Nombre de la compañía aseguradora que emite la póliza" },
     nombre_ramo: {
@@ -136,8 +172,11 @@ Deno.serve(async (req: Request) => {
                   "Este es un documento de póliza de seguros emitido por una aseguradora colombiana. " +
                   "Extraé los datos según el schema. Prestá especial atención a nro_poliza: seguí " +
                   "exactamente las instrucciones de su descripción sobre cómo armar el número completo " +
-                  "cuando el documento tiene un ANEXO. Si un dato no aparece en el documento, dejalo en " +
-                  "null — no inventes valores.",
+                  "cuando el documento tiene un ANEXO. Prestá especial atención también a distinguir " +
+                  "bien los bloques Tomador/Asegurado/Beneficiario cuando el documento los separa — " +
+                  "llenar nombre_asegurado/doc_asegurado (y beneficiario) cuando existan como bloques " +
+                  "propios es tan importante como llenar nombre_cliente/doc_cliente. Si un dato no " +
+                  "aparece en el documento, dejalo en null — no inventes valores.",
               },
             ],
           },

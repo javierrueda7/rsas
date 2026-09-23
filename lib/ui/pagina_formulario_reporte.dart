@@ -27,11 +27,15 @@ class _ColMoneyFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
       TextEditingValue old, TextEditingValue nv) {
-    final raw = nv.text.replaceAll(RegExp(r'[^0-9,]'), '');
+    // Admite negativos — se usan para reversar comisiones cuando se
+    // cancela una póliza ya pagada.
+    final raw = nv.text.replaceAll(RegExp(r'[^0-9,\-]'), '');
     if (raw.isEmpty) return nv.copyWith(text: '');
     final parts = raw.split(',');
-    final entNum = int.tryParse(parts[0]) ?? 0;
-    String fmt = _miles(entNum);
+    final enteraTxt = parts[0].replaceAll(RegExp(r'[^0-9\-]'), '');
+    final negativo = enteraTxt.startsWith('-');
+    final entNum = int.tryParse(enteraTxt.replaceAll('-', '')) ?? 0;
+    String fmt = '${negativo ? '-' : ''}${_miles(entNum)}';
     if (parts.length > 1) {
       final dec = parts[1].length > 2 ? parts[1].substring(0, 2) : parts[1];
       fmt += ',$dec';
@@ -577,7 +581,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
                       child: TextFormField(
                         controller: _ctrlPrimaManual,
                         inputFormatters: [_ColMoneyFormatter()],
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(signed: true),
                         decoration: const InputDecoration(
                           labelText: 'Vlr Prima (manual)',
                           border: OutlineInputBorder(),
@@ -590,7 +594,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
                       child: TextFormField(
                         controller: _ctrlComManual,
                         inputFormatters: [_ColMoneyFormatter()],
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(signed: true),
                         decoration: const InputDecoration(
                           labelText: 'Vlr Comisión (manual)',
                           border: OutlineInputBorder(),
@@ -1101,7 +1105,7 @@ class _DialogAbonoState extends State<_DialogAbono> {
                     child: TextFormField(
                       controller: _ctrlPrima,
                       inputFormatters: [_ColMoneyFormatter()],
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(signed: true),
                       onChanged: (_) => _recalcular(),
                       decoration: const InputDecoration(
                           labelText: 'Vlr Prima Póliza',
@@ -1116,7 +1120,7 @@ class _DialogAbonoState extends State<_DialogAbono> {
                     child: TextFormField(
                       controller: _ctrlAbono,
                       inputFormatters: [_ColMoneyFormatter()],
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(signed: true),
                       onChanged: (_) => _recalcular(),
                       decoration: InputDecoration(
                         labelText: 'Vlr Abono Prima *',
@@ -1149,7 +1153,7 @@ class _DialogAbonoState extends State<_DialogAbono> {
                     child: TextFormField(
                       controller: _ctrlVlrCom,
                       inputFormatters: [_ColMoneyFormatter()],
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(signed: true),
                       decoration: const InputDecoration(
                           labelText: 'Vlr Comisión',
                           border: OutlineInputBorder(),
@@ -1176,7 +1180,7 @@ class _DialogAbonoState extends State<_DialogAbono> {
                     child: TextFormField(
                       controller: _ctrlVlrAd,
                       inputFormatters: [_ColMoneyFormatter()],
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(signed: true),
                       decoration: const InputDecoration(
                           labelText: 'Vlr Com. Adicional',
                           border: OutlineInputBorder(),

@@ -78,16 +78,16 @@ Future<List<Cliente>> listarTodosClientes({
 /// Búsqueda server-side sin JOIN — para la lista de catálogo.
 Future<List<Cliente>> buscarClientesCompleto(String query) async {
   final q = query.trim();
-  // doc_cliente se guarda sin puntos (ver fix_doc_cliente_sin_puntos.sql) —
+  // Contra doc_cliente_norm (solo dígitos/letras, sin puntos ni guión) —
   // si buscan pegando el número tal como aparece en el documento (con
-  // puntos), igual tiene que encontrarlo.
-  final qDoc = q.replaceAll('.', '');
+  // puntos o con el guión del NIT), igual tiene que encontrarlo.
+  final qDoc = q.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
   dynamic req = _db.from('clientes').select(_selectClienteSinJoin);
 
   if (q.isNotEmpty) {
     req = req.or(
       'nombre_cliente.ilike.%$q%,'
-      'doc_cliente.ilike.%$qDoc%,'
+      'doc_cliente_norm.ilike.%$qDoc%,'
       'tel_cliente.ilike.%$q%,'
       'correo_cliente.ilike.%$q%',
     );
@@ -102,13 +102,16 @@ Future<List<Cliente>> buscarClientesCompleto(String query) async {
 /// Devuelve máximo [limit] resultados. Si [query] está vacío devuelve los primeros [limit].
 Future<List<Cliente>> buscarClientes(String query, {int limit = 60}) async {
   final q = query.trim();
-  final qDoc = q.replaceAll('.', '');
+  // doc_cliente_norm es solo dígitos/letras en mayúsculas (sin puntos ni
+  // guión) — evita que un guión de NIT en medio de la búsqueda haga fallar
+  // el ilike (ver fix_doc_cliente_normalizado.sql).
+  final qDoc = q.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
   dynamic req = _db
       .from('clientes')
       .select('id, nombre_cliente, tipodoc_cliente, doc_cliente, estado_cliente');
 
   if (q.isNotEmpty) {
-    req = req.or('nombre_cliente.ilike.%$q%,doc_cliente.ilike.%$qDoc%');
+    req = req.or('nombre_cliente.ilike.%$q%,doc_cliente_norm.ilike.%$qDoc%');
   }
 
   final res = await req
@@ -124,6 +127,30 @@ Future<List<Cliente>> buscarClientes(String query, {int limit = 60}) async {
     docCliente: r['doc_cliente'] as String?,
     estadoCliente: r['estado_cliente'] as bool? ?? true,
   )).toList();
+}
+
+/// Match exacto y confiable contra doc_cliente_norm — usado al importar
+/// pólizas con IA, donde antes se buscaba por los últimos 3 caracteres del
+/// documento (frágil: fallaba siempre que esos 3 caracteres caían sobre el
+/// guión de un NIT, que es casi siempre).
+Future<Cliente?> buscarClientePorDocExacto(String docNormalizado) async {
+  if (docNormalizado.isEmpty) return null;
+  final res = await _db
+      .from('clientes')
+      .select('id, nombre_cliente, tipodoc_cliente, doc_cliente, estado_cliente')
+      .eq('doc_cliente_norm', docNormalizado)
+      .limit(1);
+  final rows = (res as List).cast<Map<String, dynamic>>();
+  if (rows.isEmpty) return null;
+  final r = rows.first;
+  return Cliente(
+    id: r['id'] as int,
+    nombreCliente: r['nombre_cliente'] as String,
+    tipopersCliente: 'N',
+    tipodocCliente: r['tipodoc_cliente'] as String?,
+    docCliente: r['doc_cliente'] as String?,
+    estadoCliente: r['estado_cliente'] as bool? ?? true,
+  );
 }
 
 Future<Cliente?> obtenerCliente(int id) async {
@@ -157,9 +184,44 @@ Future<Cliente?> obtenerCliente(int id) async {
   return Cliente.fromMap(res as Map<String, dynamic>);
 }
 
-Future<int> obtenerSiguienteIdCliente() async {
-  final res = await _db.from('clientes').select('id').order('id', ascending: false).limit(1);
-  return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
+/// Un mismo número de documento puede repetirse entre tipos distintos
+/// (una CC y un NIT con el mismo número, por ejemplo), pero no dentro del
+/// mismo tipo. doc_cliente ya se guarda sin puntos (ver
+/// fix_doc_cliente_sin_puntos.sql), así que compara tal cual.
+Future<bool> existeDocCliente(String? tipoDoc, String doc, {int? excluirId}) async {
+  final docLimpio = doc.trim();
+  if (docLimpio.isEmpty) return false;
+
+  dynamic query = _db.from('clientes').select('id').eq('doc_cliente', docLimpio);
+  final tipo = (tipoDoc ?? '').trim();
+  query = tipo.isEmpty
+      ? query.filter('tipodoc_cliente', 'is', null)
+      : query.eq('tipodoc_cliente', tipo);
+  if (excluirId != null) {
+    query = query.neq('id', excluirId);
+  }
+
+  final res = await query.limit(1);
+  return (res as List).isNotEmpty;
+}
+
+/// Solo los clientes con el mismo tipo+número de documento que otro — ver
+/// vw_clientes_duplicados, lib/fix_clientes_duplicados.sql.
+Future<List<Cliente>> listarClientesDuplicados() async {
+  final res = await _db.from('vw_clientes_duplicados').select();
+  final rows = (res as List).cast<Map<String, dynamic>>();
+  return rows.map(Cliente.fromMap).toList();
+}
+
+/// Mueve todas las pólizas de [idsMalos] hacia [idBueno] y borra los
+/// clientes sobrantes — todo en una transacción del lado del servidor
+/// (fusionar_clientes en fix_clientes_duplicados.sql), no se puede quedar
+/// a medias.
+Future<void> fusionarClientes(int idBueno, List<int> idsMalos) async {
+  await _db.rpc('fusionar_clientes', params: {
+    'p_id_bueno': idBueno,
+    'p_ids_malos': idsMalos,
+  });
 }
 
 /// Crea el cliente y devuelve el ID real asignado por la base.

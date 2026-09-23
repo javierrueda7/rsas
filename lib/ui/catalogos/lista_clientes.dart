@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
 import '../../utils/formatters.dart';
+import '../pagina_polizas_de_cliente.dart';
 import '../theme/app_theme.dart';
 import 'form_cliente.dart';
+import 'pagina_clientes_duplicados.dart';
 
 class ListaClientes extends StatefulWidget {
   const ListaClientes({super.key});
@@ -217,6 +219,18 @@ class _ListaClientesState extends State<ListaClientes> {
     ).then((_) => _cargar());
   }
 
+  void _verPolizas(Cliente c) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaginaPolizasDeCliente(
+          clienteId: c.id,
+          nombreCliente: c.nombreCliente,
+        ),
+      ),
+    );
+  }
+
   Widget _vistaMovil(List<Cliente> data) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
@@ -255,7 +269,13 @@ class _ListaClientesState extends State<ListaClientes> {
             ),
             trailing: PopupMenuButton<String>(
               onSelected: (v) {
-                if (v == 'edit') { _abrirEditar(c); } else { _eliminar(c); }
+                if (v == 'edit') {
+                  _abrirEditar(c);
+                } else if (v == 'polizas') {
+                  _verPolizas(c);
+                } else {
+                  _eliminar(c);
+                }
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(
@@ -264,6 +284,14 @@ class _ListaClientesState extends State<ListaClientes> {
                     Icon(Icons.edit_outlined, size: 18),
                     SizedBox(width: 10),
                     Text('Editar'),
+                  ]),
+                ),
+                PopupMenuItem(
+                  value: 'polizas',
+                  child: Row(children: [
+                    Icon(Icons.description_outlined, size: 18),
+                    SizedBox(width: 10),
+                    Text('Ver pólizas'),
                   ]),
                 ),
                 PopupMenuItem(
@@ -289,7 +317,7 @@ class _ListaClientesState extends State<ListaClientes> {
   static const _wTel = 130.0;
   static const _wCorreo = 200.0;
   static const _wMunic = 180.0;
-  static const _wAcciones = 90.0;
+  static const _wAcciones = 130.0;
 
   Widget _encabezado() {
     final cs = Theme.of(context).colorScheme;
@@ -354,6 +382,7 @@ class _ListaClientesState extends State<ListaClientes> {
           SizedBox(
             width: _wAcciones,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(tooltip: 'Ver pólizas', icon: const Icon(Icons.description_outlined, size: 18), onPressed: () => _verPolizas(c)),
               IconButton(tooltip: 'Editar', icon: const Icon(Icons.edit, size: 18), onPressed: () => _abrirEditar(c)),
               IconButton(tooltip: 'Eliminar', icon: const Icon(Icons.delete_outline, size: 18), onPressed: () => _eliminar(c)),
             ]),
@@ -405,6 +434,17 @@ class _ListaClientesState extends State<ListaClientes> {
       appBar: AppBar(
         title: const Text('Clientes'),
         actions: [
+          IconButton(
+            tooltip: 'Clientes duplicados',
+            icon: const Icon(Icons.content_copy_outlined),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PaginaClientesDuplicados()),
+              );
+              _cargar();
+            },
+          ),
           IconButton(
             tooltip: 'Refrescar',
             icon: const Icon(Icons.refresh),
