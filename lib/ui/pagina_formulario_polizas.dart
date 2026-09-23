@@ -557,6 +557,8 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           (i) => i.nombre.toUpperCase().contains('STELLA'),
         );
 
+        final siguienteId = await _repoPol.obtenerSiguienteId();
+        _idCtrl.text = siguienteId.toString();
       }
 
       ramosDisponibles = _calcularRamosDisponibles(aseguradora);

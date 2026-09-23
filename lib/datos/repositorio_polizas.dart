@@ -123,6 +123,22 @@ class RepositorioPolizas {
     return rows.map(Poliza.fromMap).toList();
   }
 
+  /// Solo un preview para mostrar en el campo "Código" de una póliza nueva
+  /// antes de guardar — el id real lo asigna la base al insertar (puede
+  /// diferir si hay una inserción concurrente entre medio).
+  Future<int> obtenerSiguienteId() async {
+    final res = await _db
+        .from(_tabla)
+        .select('id')
+        .order('id', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    if (res == null) return 1;
+    final ultimoId = (res['id'] as num?)?.toInt() ?? 0;
+    return ultimoId + 1;
+  }
+
   Future<Poliza?> obtenerPoliza(int id) async {
     final res = await _db
         .from(_tabla)
