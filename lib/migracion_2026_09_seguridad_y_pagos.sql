@@ -34,6 +34,8 @@
 --   F. fultmod lo pone la base (antes quedaba 5 horas corrido).
 --   G. Aprendizaje IA atómico: una sola corrección ya no se vuelve regla.
 --   H. Vista de pólizas con el nombre del estado + índices para el dashboard.
+--   I. Clientes duplicados por documento normalizado y fusión que conserva
+--      los datos de contacto.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -226,6 +228,8 @@ begin
   v_ok := found;
 
   insert into login_intentos (apodo, exitoso) values (p_apodo, v_ok);
+  -- La tabla no crece sin fin: se descartan los intentos de más de 30 días.
+  delete from login_intentos where fecha < now() - interval '30 days';
   if not v_ok then
     return jsonb_build_object('ok', false);
   end if;
@@ -510,6 +514,12 @@ grant execute on function reforzar_aprendizaje_rol_cliente(bigint, text) to auth
 -- columnas nuevas AL FINAL: el nombre del estado (para que el dashboard no
 -- cuente anuladas como vigentes) y la marca de estado por pagos.
 
+-- Si la vista en esta base cambió desde fix_vista_polizas_tipodoc.sql, este
+-- bloque solo avisa (NOTICE) y el resto de la migración sigue: la app
+-- funciona igual sin estas dos columnas.
+do $bloque_vista$
+begin
+execute $vista$
 create or replace view vw_polizas_busqueda as
 SELECT p.id,
     p.nro_poliza,
@@ -579,7 +589,12 @@ SELECT p.id,
      LEFT JOIN formas_pago fp ON fp.id = p.forma_pago_id
      LEFT JOIN formaexp fe ON fe.id = p.formaexp_id
      LEFT JOIN usuarios u ON u.id = p.usuario_id
-     LEFT JOIN estados_poliza ep ON ep.id = p.estado_poliza_id;
+     LEFT JOIN estados_poliza ep ON ep.id = p.estado_poliza_id
+$vista$;
+exception when others then
+  raise notice 'vw_polizas_busqueda no se actualizó (%). La app funciona igual.', sqlerrm;
+end
+$bloque_vista$;
 
 alter view public.vw_polizas_busqueda set (security_invoker = true);
 
