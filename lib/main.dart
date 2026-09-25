@@ -61,8 +61,33 @@ class AppPolizas extends StatelessWidget {
       locale: const Locale('es', 'CO'),
       // Todo texto de la app se puede seleccionar y copiar (números de
       // póliza, documentos, valores) sin tener que abrir el formulario.
-      builder: (context, child) => SelectionArea(child: child!),
+      builder: (context, child) => _SeleccionGlobal(child: child!),
       home: PaginaLogin(appEnv: appEnv),
     );
   }
+}
+
+/// SelectionArea para toda la app. Va por encima del Navigator, donde
+/// todavía no hay un Overlay (lo necesita para el menú de copiar), así que
+/// se le da uno propio. La entrada se reconstruye cuando cambia [child].
+class _SeleccionGlobal extends StatefulWidget {
+  final Widget child;
+  const _SeleccionGlobal({required this.child});
+
+  @override
+  State<_SeleccionGlobal> createState() => _SeleccionGlobalState();
+}
+
+class _SeleccionGlobalState extends State<_SeleccionGlobal> {
+  late final OverlayEntry _entrada =
+      OverlayEntry(builder: (_) => SelectionArea(child: widget.child));
+
+  @override
+  void didUpdateWidget(covariant _SeleccionGlobal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _entrada.markNeedsBuild();
+  }
+
+  @override
+  Widget build(BuildContext context) => Overlay(initialEntries: [_entrada]);
 }
