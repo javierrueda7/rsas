@@ -48,7 +48,8 @@ class _PaginaPolizasDuplicadasState extends State<PaginaPolizasDuplicadas> {
         if (nro.isEmpty) continue;
         final norm = RepositorioPolizas.normalizarNroPoliza(nro);
         if (norm.isEmpty) continue;
-        porNumero.putIfAbsent(norm, () => []).add(p);
+        // Mismo número en aseguradoras distintas no es un duplicado.
+        porNumero.putIfAbsent('${p.asegId ?? 0}|$norm', () => []).add(p);
       }
       final grupos = porNumero.values.where((g) => g.length > 1).toList()
         ..sort((a, b) => b.length.compareTo(a.length));

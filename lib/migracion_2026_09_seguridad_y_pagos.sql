@@ -36,6 +36,7 @@
 --   H. Vista de pólizas con el nombre del estado + índices para el dashboard.
 --   I. Clientes duplicados por documento normalizado y fusión que conserva
 --      los datos de contacto.
+--   J. Pólizas duplicadas = mismo número en la MISMA aseguradora.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -679,6 +680,36 @@ $$;
 
 revoke execute on function fusionar_clientes(bigint, bigint[]) from public, anon;
 grant execute on function fusionar_clientes(bigint, bigint[]) to authenticated;
+
+
+-- ═══ J. Pólizas duplicadas: mismo número DENTRO de la misma aseguradora ═══
+-- Dos aseguradoras distintas pueden usar el mismo número de póliza (lo
+-- confirmó el negocio), así que eso no es un duplicado.
+
+do $bloque_dup$
+begin
+execute $vista$
+create or replace view vw_polizas_duplicadas as
+select v.*
+from vw_polizas_busqueda v
+where v.id in (
+  select p.id
+  from polizas p
+  where (coalesce(p.aseg_id, 0), p.nro_poliza_norm) in (
+    select coalesce(aseg_id, 0), nro_poliza_norm
+    from polizas
+    where nro_poliza_norm <> ''
+    group by coalesce(aseg_id, 0), nro_poliza_norm
+    having count(*) > 1
+  )
+)
+$vista$;
+exception when others then
+  raise notice 'vw_polizas_duplicadas no se actualizó (%).', sqlerrm;
+end
+$bloque_dup$;
+
+alter view public.vw_polizas_duplicadas set (security_invoker = true);
 
 
 -- ═══ Verificación (debe devolver filas coherentes) ═════════════════════════

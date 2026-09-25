@@ -221,13 +221,15 @@ class RepositorioPolizas {
 
   /// Compara ignorando espacios/separadores (via la columna generada
   /// nro_poliza_norm, ver lib/fix_nro_poliza_normalizado.sql) — "1 0987 2"
-  /// y "109872" se consideran el mismo número.
-  Future<bool> existeNroPoliza(String nroPoliza, {int? excluirId}) async {
+  /// y "109872" se consideran el mismo número. Solo dentro de la misma
+  /// aseguradora: dos aseguradoras distintas pueden usar el mismo número.
+  Future<bool> existeNroPoliza(String nroPoliza, {int? excluirId, int? aseguradoraId}) async {
     final normalizado = normalizarNroPoliza(nroPoliza);
     if (normalizado.isEmpty) return false;
 
     dynamic query =
         _db.from(_tabla).select('id').eq('nro_poliza_norm', normalizado);
+    if (aseguradoraId != null) query = query.eq('aseg_id', aseguradoraId);
 
     if (excluirId != null) {
       query = query.neq('id', excluirId);

@@ -519,6 +519,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         _idCtrl.text = p.id.toString();
         _nroCtrl.text = p.nroPoliza ?? '';
         _nroPolizaOriginal = p.nroPoliza ?? '';
+        _asegOriginalId = p.asegId;
 
         _bienCtrl.text = p.bienAsegurado ?? '';
         _vlrAsegCtrl.text = _fmtMoney(p.vlrasegPoliza);
@@ -1141,6 +1142,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   /// — se usa para detectar si el usuario realmente cambió el número (y no
   /// solo el espaciado) y así evitar re-chequear duplicados preexistentes
   /// contra pólizas que ya se guardaron así antes de este fix.
+  /// Aseguradora con la que se cargó la póliza: si cambia, se vuelve a
+  /// revisar el número repetido (la unicidad es por aseguradora).
+  int? _asegOriginalId;
+
   String _normalizarNroLocal(String s) =>
       s.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
 
@@ -1348,14 +1353,17 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       final nroPolizaTrim = _nroCtrl.text.trim();
       final nroPolizaCambio = !esEdicion ||
           _normalizarNroLocal(nroPolizaTrim) !=
-              _normalizarNroLocal(_nroPolizaOriginal ?? '');
+              _normalizarNroLocal(_nroPolizaOriginal ?? '') ||
+          aseguradora?.id != _asegOriginalId;
       if (nroPolizaTrim.isNotEmpty && nroPolizaCambio) {
         final existeNro = await _repoPol.existeNroPoliza(
           nroPolizaTrim,
           excluirId: esEdicion ? widget.poliza!.id : null,
+          aseguradoraId: aseguradora?.id,
         );
         if (existeNro) {
-          _toast('Ya existe una póliza con el número "$nroPolizaTrim".');
+          _toast('Ya existe una póliza de ${aseguradora?.nombreAseg ?? 'esta aseguradora'} '
+              'con el número "$nroPolizaTrim".');
           return;
         }
       }
