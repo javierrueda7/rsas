@@ -600,6 +600,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         estadoPoliza =
             _todosEstados.firstWhereOrNull((x) => x.id == p.estadoPolizaId);
         _estadoOriginalId = p.estadoPolizaId;
+        _primaPagadaOriginal = _parseNumero(_vlrPrimaPagadaCtrl.text);
         _incluirInactivosSeleccionados();
       } else {
         estadoPoliza = estadosPoliza.firstWhereOrNull((e) => e.id == 'I');
@@ -1378,6 +1379,9 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         // Al editar no se modifica quién la creó originalmente.
         data.remove('usuario_id');
         if (estadoPoliza?.id == _estadoOriginalId) data.remove('estado_poliza_id');
+        if (data['vlrprimapagada_poliza'] == _primaPagadaOriginal) {
+          data.remove('vlrprimapagada_poliza');
+        }
         await _repoPol.actualizarPoliza(originalId, data);
       } else {
         idReal = await _repoPol.crearPoliza(data);
@@ -1643,6 +1647,11 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   /// envía si el usuario lo cambió: así no pisa un COMPLETA que la base
   /// puso por pagos mientras el formulario estaba abierto.
   String? _estadoOriginalId;
+
+  /// Prima pagada con la que se cargó la póliza (ya parseada del campo). Igual
+  /// que el estado: solo se envía si el usuario la cambió, para no pisar los
+  /// abonos que la base sumó mientras el formulario estaba abierto.
+  num? _primaPagadaOriginal;
 
   Widget _selectorEstado() {
     if (estadosPoliza.isEmpty) return const SizedBox.shrink();
