@@ -9,10 +9,9 @@
 // eso pasa, se intenta desproteger automáticamente con la contraseña
 // estándar con la que la aseguradora los envía, antes de mandarlo a Gemini.
 
-import qpdfInit from "npm:@neslinesli93/qpdf-wasm@0.3.0";
+import { decryptPDF, isEncrypted } from "npm:@pdfsmaller/pdf-decrypt";
 import * as XLSX from "npm:xlsx@0.18.5";
 import officeCrypto from "npm:officecrypto-tool@0.0.7";
-import { QPDF_WASM_BASE64 } from "./qpdf_wasm_base64.ts";
 
 const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
 const GEMINI_MODEL = "gemini-3.6-flash";
@@ -33,70 +32,16 @@ function bytesABase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-function base64ABytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
-}
-
-// `supabase functions deploy` solo sube el módulo TS (no otros archivos
-// sueltos del directorio, como un .wasm) — por eso el binario de qpdf va
-// embebido como base64 en qpdf_wasm_base64.ts, importado como módulo, en
-// vez de leerlo de un archivo aparte con locateFile.
-const QPDF_WASM_BYTES = base64ABytes(QPDF_WASM_BASE64);
-
-/// Un PDF cifrado tiene un diccionario /Encrypt en su estructura — buscarlo
-/// como texto es más liviano que invocar qpdf solo para "preguntar".
-function pdfEstaProtegido(bytes: Uint8Array): boolean {
-  const texto = new TextDecoder("latin1").decode(bytes);
-  return texto.includes("/Encrypt");
-}
-
-/// Quita la contraseña de un PDF cifrado usando qpdf compilado a WASM.
-/// Si algo falla (contraseña incorrecta, wasm no disponible, etc.) tira,
-/// para que el llamador decida cómo avisarle al usuario.
-/// Convierte cualquier cosa que se pueda "throw" (Error, ExitStatus de
-/// Emscripten, string, lo que sea) en un mensaje legible.
-function describirError(e: unknown): string {
-  if (e instanceof Error) return `${e.name}: ${e.message}`;
-  if (e && typeof e === "object") {
-    const o = e as Record<string, unknown>;
-    const props = ["name", "message", "status", "code"]
-      .filter((k) => k in o)
-      .map((k) => `${k}=${o[k]}`)
-      .join(", ");
-    return props || Object.prototype.toString.call(e);
-  }
-  return String(e);
-}
-
+/// Quita la contraseña de un PDF cifrado. Se probó primero con qpdf
+/// compilado a WASM (@neslinesli93/qpdf-wasm) pero esa build fallaba
+/// consistentemente con "can't find startxref" al leer el archivo de
+/// vuelta del sistema de archivos virtual (bug de la librería/build, no
+/// del archivo — el tamaño escrito coincidía exacto con el original) sin
+/// dar más detalle util incluso revisando los logs del servidor. Esta
+/// librería es JS puro (usa Web Crypto API de Deno, sin WASM ni sistema
+/// de archivos virtual de por medio), mucho más simple y confiable.
 async function desprotegerPdf(bytes: Uint8Array): Promise<Uint8Array> {
-  let salida = "";
-  // Nombres únicos por llamada: si el runtime reutiliza el isolate (y con
-  // él, algún estado global del módulo wasm) entre invocaciones, un
-  // /input.pdf o /output.pdf fijo puede chocar con restos de una llamada
-  // anterior — de ahí el "ErrnoError" intermitente.
-  const sufijo = crypto.randomUUID();
-  const rutaIn = `/input-${sufijo}.pdf`;
-  const rutaOut = `/output-${sufijo}.pdf`;
-  try {
-    const qpdf = await qpdfInit({
-      wasmBinary: QPDF_WASM_BYTES,
-      print: (s: string) => { salida += s + "\n"; },
-      printErr: (s: string) => { salida += s + "\n"; },
-    });
-    qpdf.FS.writeFile(rutaIn, bytes);
-    qpdf.callMain([
-      `--password=${PASSWORD_CONOCIDA}`,
-      "--decrypt",
-      rutaIn,
-      rutaOut,
-    ]);
-    return qpdf.FS.readFile(rutaOut) as Uint8Array;
-  } catch (e) {
-    throw new Error(`qpdf falló (${describirError(e)}): ${salida || "(sin salida)"}`);
-  }
+  return await decryptPDF(bytes, PASSWORD_CONOCIDA);
 }
 
 const MIME_XLSX =
@@ -132,21 +77,40 @@ const LINEA_SCHEMA = {
       type: "STRING",
       nullable: true,
       description:
-        "Número de póliza COMPLETO de esa línea, en formato SEGMENTO1-SEGMENTO2-...-ANEXO " +
-        "— todos los segmentos del número unidos con GUIONES (si el documento usa " +
-        "espacios como separador, igual unilos con guion, nunca dejes espacios), y el " +
-        "número de ANEXO agregado siempre al final como último segmento, incluso si es " +
-        "'0' (ej: '400-97-994000000046-6', o 'B-100071475-0' si el anexo es 0).",
+        "Número/código de póliza EXACTAMENTE como aparece en esa fila del reporte (columna " +
+        "'Póliza', 'Poliza', o similar) — estos reportes casi nunca traen el número completo " +
+        "con todos los segmentos que trae la póliza original, solo un núcleo numérico (ej. " +
+        "'994000000193', '101011263', '105005925'). NO inventes segmentos ni armes el formato " +
+        "completo con guiones — copiá tal cual el valor de esa columna. El matching contra la " +
+        "póliza real lo hace el sistema por documento del cliente + este núcleo, no hace falta " +
+        "reconstruir nada acá.",
     },
-    nombre_cliente: { type: "STRING", nullable: true, description: "Nombre del asegurado/tomador" },
-    vlrprima_poliza: { type: "NUMBER", nullable: true, description: "Valor de la prima de esa póliza, número plano" },
-    vlrabono_prima: { type: "NUMBER", nullable: true, description: "Valor abonado/pagado de la prima en este corte, número plano" },
-    porccomision: { type: "NUMBER", nullable: true, description: "Porcentaje de comisión aplicado" },
-    vlrcomision: { type: "NUMBER", nullable: true, description: "Valor de la comisión, número plano" },
-    porccomad: { type: "NUMBER", nullable: true, description: "Porcentaje de comisión adicional, si aplica" },
-    vlrcomad: { type: "NUMBER", nullable: true, description: "Valor de comisión adicional, número plano" },
-    num_factura: { type: "STRING", nullable: true, description: "Número de factura, si aparece" },
-    fecha_pago: { type: "STRING", nullable: true, description: "Fecha del pago/abono, formato YYYY-MM-DD" },
+    doc_cliente: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Número de documento del cliente de esa línea (columna 'Docum', 'Doc. Tomador', " +
+        "'Documento', o el número que acompañe al nombre del asegurado/tomador) — SOLO " +
+        "dígitos, sin puntos. Es el dato MÁS IMPORTANTE de la línea: el sistema usa el " +
+        "documento para encontrar con certeza a qué cliente/póliza corresponde, mucho más " +
+        "confiable que el nombre o el número de póliza solos. Si la columna trae nombre y " +
+        "documento juntos en el mismo texto, separalos: el documento va acá, el nombre en " +
+        "nombre_cliente.",
+    },
+    nombre_cliente: { type: "STRING", nullable: true, description: "Nombre del asegurado/tomador de esa línea" },
+    nombre_ramo: {
+      type: "STRING",
+      nullable: true,
+      description: "Ramo de esa línea tal como aparece en el reporte (columna 'Ramo', 'Ramo Cial'), texto o código.",
+    },
+    vlrprima_poliza: { type: "NUMBER", nullable: true, description: "Valor de la prima cobrada/base de esa línea, número plano" },
+    vlrabono_prima: { type: "NUMBER", nullable: true, description: "Valor abonado/pagado de la prima en este corte, número plano (mismo valor que vlrprima_poliza si el reporte no distingue ambos)" },
+    porccomision: { type: "NUMBER", nullable: true, description: "Porcentaje de comisión aplicado (columna 'Pje', '% Comision')" },
+    vlrcomision: { type: "NUMBER", nullable: true, description: "Valor de la comisión acreditada de esa línea, número plano" },
+    porccomad: { type: "NUMBER", nullable: true, description: "Porcentaje de comisión adicional, si el reporte trae una columna separada para eso (poco común)" },
+    vlrcomad: { type: "NUMBER", nullable: true, description: "Valor de comisión adicional, si aplica" },
+    num_factura: { type: "STRING", nullable: true, description: "Número de recibo/factura/transacción de esa línea, si aparece (columna 'Recibo', 'Transaccion', 'Formulario')" },
+    fecha_pago: { type: "STRING", nullable: true, description: "Fecha de esa línea (columna 'Fecha', 'Fecha Recibo', 'Fecha Recaudo'), formato YYYY-MM-DD" },
   },
 };
 
@@ -201,11 +165,18 @@ Deno.serve(async (req: Request) => {
 
   const instruccion =
     "Este es un reporte/extracto de comisiones emitido por una aseguradora colombiana a un " +
-    "intermediario de seguros. Contiene una cabecera (aseguradora, fechas del corte/período) y " +
-    "una tabla con varias pólizas y sus pagos de ese corte. Extraé la cabecera y TODAS las " +
-    "líneas/filas de la tabla, una por póliza, según el schema. Si un dato no aparece, dejalo " +
-    "en null — no inventes valores. No omitas ninguna fila de la tabla aunque falten algunos " +
-    "datos en ella.";
+    "intermediario de seguros. Cada aseguradora usa su propio formato (a veces Excel con " +
+    "encabezados de columna claros, a veces PDF con columnas visuales) — identificá las " +
+    "columnas de esta tabla en particular por su encabezado o posición, no asumas un formato " +
+    "fijo. Contiene una cabecera (aseguradora, fechas del corte/período) y una tabla con varias " +
+    "líneas de pólizas y sus pagos de ese corte. Extraé la cabecera y TODAS las líneas/filas de " +
+    "la tabla, una por cada movimiento (incluyendo reversiones/anulaciones, que son líneas " +
+    "aparte con signo contrario — no las omitas ni las canceles entre sí, cada una es una fila " +
+    "independiente). Si un dato no aparece, dejalo en null — no inventes valores. No omitas " +
+    "ninguna fila de la tabla aunque falten algunos datos en ella.\n\n" +
+    "IMPORTANTE sobre negativos: algunos reportes muestran los valores negativos (reversiones) " +
+    "con signo '-' y otros con formato contable entre paréntesis, ej. '(168.093,5)' significa " +
+    "-168093.5 — interpretá ambos formatos como negativos en los campos numéricos.";
 
   // Arma las "parts" del pedido a Gemini: PDF/imagen van como inlineData
   // (Gemini los interpreta visualmente); un XLSX no es algo que Gemini
@@ -219,7 +190,8 @@ Deno.serve(async (req: Request) => {
     } else if (mimeType === "application/pdf") {
       let dataParaGemini = fileBase64;
       const bytes = Uint8Array.from(atob(fileBase64), (c) => c.charCodeAt(0));
-      if (pdfEstaProtegido(bytes)) {
+      const info = await isEncrypted(bytes);
+      if (info.encrypted) {
         const bytesLimpios = await desprotegerPdf(bytes);
         dataParaGemini = bytesABase64(bytesLimpios);
       }

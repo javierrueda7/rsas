@@ -73,7 +73,7 @@ extension _FirstOrNull<E> on Iterable<E> {
 
 /// La importación de reportes de comisiones con IA sigue en pruebas —
 /// oculta hasta validarla más.
-const bool _mostrarImportarReporte = false;
+const bool _mostrarImportarReporte = true;
 
 class FormularioReportePago extends StatefulWidget {
   final ReportePago? reporte;

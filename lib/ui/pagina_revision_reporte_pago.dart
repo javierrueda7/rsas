@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../datos/poliza.dart';
+import '../datos/repositorio_catalogos.dart';
 import '../datos/repositorio_pagos.dart';
 import '../datos/repositorio_polizas.dart';
 import '../utils/formatters.dart';
@@ -119,6 +120,7 @@ class _PaginaRevisionReportePagoState
     extends State<PaginaRevisionReportePago> {
   final _repoPolizas = RepositorioPolizas();
   final _repoPagos = RepositorioPagos();
+  final _repoCat = RepositorioCatalogos();
   final _df = DateFormat('dd/MM/yyyy');
 
   bool _cargando = true;
@@ -143,7 +145,8 @@ class _PaginaRevisionReportePagoState
     for (final linea in widget.lineas) {
       final nro = (linea['nro_poliza'] as String?)?.trim() ?? '';
       final cliente = (linea['nombre_cliente'] as String?)?.trim() ?? '';
-      final poliza = await _buscarPoliza(nro, cliente);
+      final docCliente = (linea['doc_cliente'] as String?)?.trim() ?? '';
+      final poliza = await _buscarPoliza(nro, cliente, docCliente);
 
       final prima = linea['vlrprima_poliza'] as num? ?? poliza?.primaPoliza;
       final abono = linea['vlrabono_prima'] as num? ?? prima;
@@ -180,11 +183,38 @@ class _PaginaRevisionReportePagoState
     }
   }
 
-  Future<Poliza?> _buscarPoliza(String nro, String cliente) async {
+  Future<Poliza?> _buscarPoliza(String nro, String cliente, String docCliente) async {
     try {
+      final normNro = _normalizarNro(nro);
+
+      // 1. Documento del cliente — el dato más confiable, igual criterio
+      // que ya usa la importación de pólizas (ver doc_cliente_norm).
+      if (docCliente.isNotEmpty) {
+        final docNorm = docCliente.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
+        final matchCliente = await _repoCat.buscarClientePorDocExacto(docNorm);
+        if (matchCliente != null) {
+          final polizasCliente = await _repoPolizas.listarPorCliente(matchCliente.id);
+          if (normNro.isNotEmpty) {
+            // El reporte trae solo el núcleo del número, no el formato
+            // completo — "contiene" en vez de igualdad exacta.
+            for (final p in polizasCliente) {
+              if (p.nroPoliza != null &&
+                  _normalizarNro(p.nroPoliza!).contains(normNro)) {
+                return p;
+              }
+            }
+          }
+          // Un solo cliente con una sola póliza activa: match razonable
+          // aunque el número no haya coincidido (puede venir mal tipeado
+          // en el reporte).
+          if (polizasCliente.length == 1) return polizasCliente.first;
+        }
+      }
+
+      // 2. Sin match por documento — lo que ya había: número o nombre por
+      // texto libre.
       if (nro.isNotEmpty) {
         final res = await _repoPolizas.listar(busqueda: nro, limite: 10);
-        final normNro = _normalizarNro(nro);
         for (final p in res) {
           if (p.nroPoliza != null && _normalizarNro(p.nroPoliza!) == normNro) {
             return p;
