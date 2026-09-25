@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../datos/repositorio_catalogos.dart';
@@ -809,6 +810,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     if (result == null || result.files.isEmpty) return;
 
     final file = result.files.single;
+    _nombreArchivoImportado = file.name;
     final bytes = file.bytes;
     final ext = (file.extension ?? '').toLowerCase();
     final mimeType = switch (ext) {
@@ -1448,7 +1450,24 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   /// no se muestra ningún preview a propósito, porque con varias personas
   /// digitando a la vez el "siguiente id" que verían podía no coincidir
   /// con el que terminaba quedando.
+  /// Archivo del que salió la póliza (importado a mano o de la carga
+  /// masiva): se usa para sugerir el nombre "código - archivo original".
+  String? _nombreArchivoImportado;
+
   Future<void> _mostrarConfirmacionGuardado(int idReal) async {
+    final archivo = _nombreArchivoImportado ?? widget.polizaPendiente?.nombreArchivo;
+    final nombreSugerido = archivo == null ? null : '$idReal - $archivo';
+
+    Future<void> copiar(BuildContext ctx, String texto, String aviso) async {
+      await Clipboard.setData(ClipboardData(text: texto));
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text(aviso),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    }
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -1458,23 +1477,45 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Código: $idReal',
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 20)),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('Código: $idReal',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 20)),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Copiar código',
+                icon: const Icon(Icons.copy, size: 18),
+                onPressed: () => copiar(ctx, '$idReal', 'Código $idReal copiado'),
+              ),
+            ]),
             const SizedBox(height: 12),
             Text('Nro. Póliza: ${_nroCtrl.text.trim().isEmpty ? '—' : _nroCtrl.text.trim()}'),
             Text('Cliente: ${cliente?.nombreCliente ?? '—'}'),
             Text('Aseguradora: ${aseguradora?.nombreAseg ?? '—'}'),
             Text('Prima: \$ ${_primaCtrl.text}'),
-            const SizedBox(height: 12),
-            const Text('Anote el código antes de cerrar este mensaje.',
-                style: TextStyle(fontSize: 12)),
+            if (nombreSugerido != null) ...[
+              const SizedBox(height: 12),
+              const Text('Nombre sugerido para el archivo:',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(nombreSugerido, style: const TextStyle(fontSize: 12)),
+            ],
           ],
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () => copiar(ctx, '$idReal', 'Código $idReal copiado'),
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Copiar código'),
+          ),
+          if (nombreSugerido != null)
+            TextButton.icon(
+              onPressed: () => copiar(ctx, nombreSugerido, 'Nombre del archivo copiado'),
+              icon: const Icon(Icons.drive_file_rename_outline, size: 16),
+              label: const Text('Copiar nombre de archivo'),
+            ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Listo, ya lo anoté'),
+            child: const Text('Listo'),
           ),
         ],
       ),

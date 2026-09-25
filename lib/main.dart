@@ -59,6 +59,9 @@ class AppPolizas extends StatelessWidget {
       ],
       supportedLocales: const [Locale('es', 'CO'), Locale('en')],
       locale: const Locale('es', 'CO'),
+      // Todo texto de la app se puede seleccionar y copiar (números de
+      // póliza, documentos, valores) sin tener que abrir el formulario.
+      builder: (context, child) => SelectionArea(child: child!),
       home: PaginaLogin(appEnv: appEnv),
     );
   }
