@@ -299,6 +299,9 @@ set search_path = public
 as $$
 declare
   v_recalculo boolean := coalesce(current_setting('app.recalculo_pago', true), '') = '1';
+  -- '1' = solo recalcular el monto pagado, sin tocar estados (se usa al
+  -- poner al día los datos históricos).
+  v_solo_monto boolean := coalesce(current_setting('app.solo_monto', true), '') = '1';
   v_tiene_abonos boolean;
   v_total numeric;
   v_completa text;
@@ -316,6 +319,10 @@ begin
     from abonos_poliza
    where id_poliza = new.id and estado_pago <> 'A';
   new.vlrprimapagada_poliza := v_total;
+
+  if v_solo_monto then
+    return new;
+  end if;
 
   -- Estado cambiado a mano en esta misma operación: se respeta.
   if not v_recalculo and new.estado_poliza_id is distinct from old.estado_poliza_id then
@@ -418,16 +425,28 @@ group by rp.id, aseg.nombre_aseg, i.nombre_interm;
 
 alter view public.vw_reportes_resumen set (security_invoker = true);
 
--- Pone al día lo pagado de las pólizas que ya tienen abonos (misma regla de
--- siempre: suma de abonos; y las que ya cubren la prima y siguen en I pasan
--- a COMPLETA). Las pólizas sin abonos no se tocan.
+-- Abonos históricos (migrados del sistema anterior): el valor pagado quedó
+-- en vlrprima_poliza y vlrabono_prima en 0 en TODOS (comprobado: el total
+-- guardado de los reportes viejos = suma de vlrprima_poliza). Se copia a
+-- vlrabono_prima, que es la columna con la que la app y la base calculan lo
+-- pagado. Sin esto, la prima pagada de esas pólizas quedaba en 0.
+--
+-- Todo este bloque corre en modo "solo monto": pone al día la prima pagada
+-- y NO cambia estados históricos. Para pasar a COMPLETA las históricas ya
+-- cubiertas, ver el PASO 4 (opcional) de lib/fix_abonos_historicos.sql.
+-- Solo se recalculan (vía trigger) las pólizas cuyos abonos cambian aquí:
+-- una póliza con abonos que valen 0 en ambas columnas conserva la prima
+-- pagada que ya tenía.
 do $$
-declare
-  v_id bigint;
 begin
-  for v_id in select distinct id_poliza from abonos_poliza loop
-    perform recalcular_pago_poliza(v_id);
-  end loop;
+  perform set_config('app.solo_monto', '1', true);
+
+  update abonos_poliza
+     set vlrabono_prima = vlrprima_poliza
+   where vlrabono_prima = 0
+     and vlrprima_poliza <> 0;
+
+  perform set_config('app.solo_monto', '', true);
 end $$;
 
 
