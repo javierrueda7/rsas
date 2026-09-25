@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../datos/abono_poliza.dart';
 import '../datos/repositorio_pagos.dart';
+import '../datos/repositorio_polizas.dart';
 import '../utils/formatters.dart';
 import 'pagina_formulario_reporte.dart';
 import 'pagina_estado_cuenta.dart';
@@ -79,11 +80,14 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
   }
 
   Future<void> _abrirFormulario({ReportePago? reporte}) async {
-    final ok = await Navigator.push<bool>(
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => FormularioReportePago(reporte: reporte)),
     );
-    if (ok == true) _cargar();
+    // Siempre se recarga: al crear un reporte el formulario se reemplaza a
+    // sí mismo y al volver con "atrás" después de agregar abonos no avisa
+    // que hubo cambios, así que la lista quedaba con totales viejos.
+    if (mounted) _cargar();
   }
 
   Future<void> _confirmarEliminar(ReportePago r) async {
@@ -111,6 +115,8 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
     if (ok != true) return;
     try {
       await _repo.eliminarReporte(r.id);
+      // La base recalculó lo pagado de las pólizas de ese reporte.
+      RepositorioPolizas.invalidarCache();
       _snack('Reporte #${r.id} eliminado');
       _cargar();
     } catch (e) {

@@ -6,6 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../datos/abono_poliza.dart';
 import 'formatters.dart';
+import 'numeros_co.dart';
 
 class GeneradorPdf {
   static final _df  = DateFormat('dd/MM/yyyy');
@@ -240,11 +241,11 @@ class GeneradorPdf {
           },
           children: [
             _tablaHeader(
-                ['Prima Total', 'Total Abonado', 'Saldo Pendiente', 'Total Comisión']),
+                ['Prima Total', 'Total Abonado', saldo < 0 ? 'Saldo a Favor' : 'Saldo Pendiente', 'Total Comisión']),
             _tablaFila([
               '\$ ${Fmt.money(primaPoliza)}',
               '\$ ${Fmt.money(totalAbonado)}',
-              '\$ ${Fmt.money(saldo)}',
+              '\$ ${Fmt.money(saldo.abs())}',
               '\$ ${Fmt.money(totalComision)}',
             ]),
           ],
@@ -517,9 +518,10 @@ class GeneradorPdf {
   }
 
   static pw.Widget _tablaHistorialPoliza(List<AbonoPoliza> abonos) {
-    final totAbono = abonos.fold<num>(0, (s, a) => s + a.vlrabonoprima);
-    final totCom   = abonos.fold<num>(0, (s, a) => s + a.vlrcomision);
-    final totComAd = abonos.fold<num>(0, (s, a) => s + a.vlrcomad);
+    final vigentes = abonos.where((a) => a.estadoPago != 'A');
+    final totAbono = sumarDinero(vigentes.map((a) => a.vlrabonoprima));
+    final totCom   = sumarDinero(vigentes.map((a) => a.vlrcomision));
+    final totComAd = sumarDinero(vigentes.map((a) => a.vlrcomad));
 
     return pw.Table(
       border: pw.TableBorder.all(color: _grisClaro, width: 0.5),
@@ -558,8 +560,9 @@ class GeneradorPdf {
   }
 
   static pw.Widget _tablaHistorialReporte(List<AbonoPoliza> abonos) {
-    final totAbono = abonos.fold<num>(0, (s, a) => s + a.vlrabonoprima);
-    final totCom   = abonos.fold<num>(0, (s, a) => s + a.vlrcomision + a.vlrcomad);
+    final vigentes = abonos.where((a) => a.estadoPago != 'A');
+    final totAbono = sumarDinero(vigentes.map((a) => a.vlrabonoprima));
+    final totCom   = sumarDinero(vigentes.map((a) => a.vlrcomision + a.vlrcomad));
 
     return pw.Table(
       border: pw.TableBorder.all(color: _grisClaro, width: 0.5),

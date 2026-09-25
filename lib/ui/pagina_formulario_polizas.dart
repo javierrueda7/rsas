@@ -1,8 +1,8 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show TextInputFormatter, TextEditingValue;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../datos/repositorio_catalogos.dart';
@@ -20,6 +20,7 @@ import 'theme/app_theme.dart';
 import 'widgets/buscador_dropdown.dart';
 import 'widgets/section_card.dart';
 import 'widgets/selector_fecha.dart';
+import '../utils/numeros_co.dart';
 
 extension FirstWhereOrNullExt<E> on Iterable<E> {
   E? firstWhereOrNull(bool Function(E) test) {
@@ -33,91 +34,56 @@ extension FirstWhereOrNullExt<E> on Iterable<E> {
 class FormaPagoLite {
   final int id;
   final String nombre;
+  final bool activo;
 
   FormaPagoLite({
     required this.id,
     required this.nombre,
+    this.activo = true,
   });
 
   factory FormaPagoLite.fromMap(Map<String, dynamic> m) => FormaPagoLite(
         id: (m['id'] as num).toInt(),
         nombre: (m['nombre_forma_pago'] ?? '') as String,
+        activo: m['estado_forma_pago'] != false,
       );
 }
 
 class EstadoPolizaLite {
   final String id;
   final String nombre;
+  final bool activo;
 
   EstadoPolizaLite({
     required this.id,
     required this.nombre,
+    this.activo = true,
   });
 
   factory EstadoPolizaLite.fromMap(Map<String, dynamic> m) => EstadoPolizaLite(
         id: (m['id'] ?? '').toString(),
         nombre: (m['nombre_estado'] ?? '') as String,
+        activo: m['estado_activo'] != false,
       );
 }
 
 class IntermediarioLite {
   final int id;
   final String nombre;
+  final bool activo;
 
   IntermediarioLite({
     required this.id,
     required this.nombre,
+    this.activo = true,
   });
 
   factory IntermediarioLite.fromMap(Map<String, dynamic> m) =>
       IntermediarioLite(
         id: (m['id'] as num).toInt(),
         nombre: (m['nombre_interm'] ?? '') as String,
+        activo: m['estado_interm'] != false,
       );
-}
-
-/// Formatea números al estilo colombiano (1.234.567,89) mientras el usuario escribe.
-class _ColMoneyInputFormatter extends TextInputFormatter {
-  final int maxDec;
-  const _ColMoneyInputFormatter({this.maxDec = 2});
-
-  @override
-  TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
-    final raw = newValue.text;
-    // Solo dígitos, coma y signo negativo
-    final soloDigitos = raw.replaceAll(RegExp(r'[^0-9,\-]'), '');
-    if (soloDigitos.isEmpty) return newValue.copyWith(text: '');
-
-    // Separar parte entera y decimal (coma como separador)
-    final partes = soloDigitos.split(',');
-    final entera = partes[0].replaceAll(RegExp(r'[^0-9\-]'), '');
-    final decimal = partes.length > 1 ? partes[1].replaceAll(RegExp(r'[^0-9]'), '') : null;
-
-    // Formatear miles con punto
-    final enteroNum = int.tryParse(entera.replaceAll('-', '')) ?? 0;
-    final negativo = entera.startsWith('-');
-    final enteroFmt = _formatMiles(enteroNum);
-    final decStr = decimal != null
-        ? ',${decimal.substring(0, decimal.length > maxDec ? maxDec : decimal.length)}'
-        : '';
-    final resultado = '${negativo ? '-' : ''}$enteroFmt$decStr';
-
-    return newValue.copyWith(
-      text: resultado,
-      selection: TextSelection.collapsed(offset: resultado.length),
-    );
-  }
-
-  String _formatMiles(int n) {
-    final s = n.toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-      buf.write(s[i]);
-    }
-    return buf.toString();
-  }
 }
 
 class FormaExpLite {
@@ -300,7 +266,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     if (digits.length <= 4) {
       return '${digits.substring(0, 2)}-${digits.substring(2)}';
     }
-    return '${digits.substring(0, 2)}-${digits.substring(2, 4)}-${digits.substring(4, 8)}';
+    // Con 5 a 7 dígitos el año todavía está incompleto (antes se cortaba
+    // en la posición 8 y la app lanzaba un error en cada tecla).
+    final fin = digits.length < 8 ? digits.length : 8;
+    return '${digits.substring(0, 2)}-${digits.substring(2, 4)}-${digits.substring(4, fin)}';
   }
 
   DateTime? _parseFecha(String v) {
@@ -334,17 +303,14 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     return DateTime(y, m + 1, 0);
   }
 
-  num? _parseNumero(String s) {
-    final limpio = s
-        .replaceAll(RegExp(r'[^0-9,.\-]'), '')
-        .replaceAll('.', '')
-        .replaceAll(',', '.');
-    if (limpio.trim().isEmpty) return null;
-    return num.tryParse(limpio);
-  }
+  // Parser compartido: "12.5" es 12,5 (antes se borraban todos los puntos
+  // y quedaba 125).
+  num? _parseNumero(String s) => parseNumCO(s);
 
-  String _fmtMoney(num? n) => n == null ? '' : Fmt.money(n, dec: 2);
-  String _fmtNum(num? n) => n == null ? '' : Fmt.numCO(n, dec: 2);
+  String _fmtMoney(num? n) => formatearNumCO(n);
+  // Hasta 5 decimales: antes un 33,333% guardado se mostraba 33,33 y al
+  // volver a guardar quedaba redondeado.
+  String _fmtNum(num? n) => formatearNumCO(n, maxDecimales: 5);
 
   void _formatearMoney(TextEditingController ctrl) {
     final n = _parseNumero(ctrl.text);
@@ -428,18 +394,43 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     return v;
   }
 
+  // Todos, activos e inactivos: al editar una póliza con una forma de pago,
+  // estado o intermediario ya desactivado, el valor se conserva (antes se
+  // borraba al guardar o bloqueaba el guardado). Los dropdowns muestran
+  // solo los activos más el que ya tenga la póliza.
+  List<FormaPagoLite> _todasFormasPago = [];
+  List<EstadoPolizaLite> _todosEstados = [];
+  List<IntermediarioLite> _todosIntermediarios = [];
+
   Future<void> _cargarCatalogosExtra() async {
     final results = await Future.wait([
-      _db.from('formas_pago').select().eq('estado_forma_pago', true).order('nombre_forma_pago', ascending: true),
-      _db.from('estados_poliza').select().eq('estado_activo', true).order('nombre_estado', ascending: true),
-      _db.from('intermediarios').select().eq('estado_interm', true).order('nombre_interm', ascending: true),
+      _db.from('formas_pago').select().order('nombre_forma_pago', ascending: true),
+      _db.from('estados_poliza').select().order('nombre_estado', ascending: true),
+      _db.from('intermediarios').select().order('nombre_interm', ascending: true),
       _db.from('formaexp').select().order('nombre_formaexp', ascending: true),
     ]);
 
-    formasPago    = (results[0] as List).cast<Map<String, dynamic>>().map(FormaPagoLite.fromMap).toList();
-    estadosPoliza = (results[1] as List).cast<Map<String, dynamic>>().map(EstadoPolizaLite.fromMap).toList();
-    intermediarios = (results[2] as List).cast<Map<String, dynamic>>().map(IntermediarioLite.fromMap).toList();
-    formasExp     = (results[3] as List).cast<Map<String, dynamic>>().map(FormaExpLite.fromMap).toList();
+    _todasFormasPago = (results[0] as List).cast<Map<String, dynamic>>().map(FormaPagoLite.fromMap).toList();
+    _todosEstados = (results[1] as List).cast<Map<String, dynamic>>().map(EstadoPolizaLite.fromMap).toList();
+    _todosIntermediarios = (results[2] as List).cast<Map<String, dynamic>>().map(IntermediarioLite.fromMap).toList();
+    formasPago     = _todasFormasPago.where((x) => x.activo).toList();
+    estadosPoliza  = _todosEstados.where((x) => x.activo).toList();
+    intermediarios = _todosIntermediarios.where((x) => x.activo).toList();
+    formasExp      = (results[3] as List).cast<Map<String, dynamic>>().map(FormaExpLite.fromMap).toList();
+  }
+
+  /// Después de cargar una póliza: si su valor está inactivo, se agrega a
+  /// la lista del dropdown para que siga visible y se guarde igual.
+  void _incluirInactivosSeleccionados() {
+    if (formaPago != null && !formasPago.any((x) => x.id == formaPago!.id)) {
+      formasPago = [...formasPago, formaPago!];
+    }
+    if (estadoPoliza != null && !estadosPoliza.any((x) => x.id == estadoPoliza!.id)) {
+      estadosPoliza = [...estadosPoliza, estadoPoliza!];
+    }
+    if (intermediario != null && !intermediarios.any((x) => x.id == intermediario!.id)) {
+      intermediarios = [...intermediarios, intermediario!];
+    }
   }
 
   Future<Asesor?> _asegurarAsesor(int? id) async {
@@ -560,7 +551,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         _fFinCtrl.text = fFin == null ? '' : _formatearFecha(fFin!);
 
         cliente = await _asegurarCliente(p.clienteId);
-        intermediario = intermediarios.firstWhereOrNull((x) => x.id == p.intermediarioId);
+        intermediario = _todosIntermediarios.firstWhereOrNull((x) => x.id == p.intermediarioId);
         formaExp = formasExp.firstWhereOrNull((x) => x.id == p.formaexpId);
 
         asesor1 = await _asegurarAsesor(p.asesorId);
@@ -603,9 +594,11 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           aseguradora = aseguradoras.firstWhereOrNull((a) => a.id == asegId);
         }
 
-        formaPago = formasPago.firstWhereOrNull((x) => x.id == p.formaPagoId);
+        formaPago = _todasFormasPago.firstWhereOrNull((x) => x.id == p.formaPagoId);
         estadoPoliza =
-            estadosPoliza.firstWhereOrNull((x) => x.id == p.estadoPolizaId);
+            _todosEstados.firstWhereOrNull((x) => x.id == p.estadoPolizaId);
+        _estadoOriginalId = p.estadoPolizaId;
+        _incluirInactivosSeleccionados();
       } else {
         estadoPoliza = estadosPoliza.firstWhereOrNull((e) => e.id == 'I');
         formaPago = formasPago.firstWhereOrNull(
@@ -743,12 +736,13 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
     final formaPagoId = _intJson(datos['forma_pago_id']);
     if (formaPagoId != null) {
-      formaPago = formasPago.firstWhereOrNull((x) => x.id == formaPagoId);
+      formaPago = _todasFormasPago.firstWhereOrNull((x) => x.id == formaPagoId);
     }
     final estadoId = datos['estado_poliza_id'] as String?;
     if (estadoId != null) {
-      estadoPoliza = estadosPoliza.firstWhereOrNull((x) => x.id == estadoId);
+      estadoPoliza = _todosEstados.firstWhereOrNull((x) => x.id == estadoId);
     }
+    _incluirInactivosSeleccionados();
   }
 
   Future<void> _refrescarProductos() async {
@@ -782,6 +776,11 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         final match = productos.firstWhereOrNull((p) => p.id == currentId);
         if (match != null) {
           producto = match;
+        } else if (producto!.ramoId == ramo!.id &&
+            producto!.aseguradoraId == aseguradora!.id) {
+          // Producto ya desactivado pero es el de esta póliza: se conserva
+          // (antes se borraba y había que cambiar el dato histórico).
+          productos = [...productos, producto!];
         } else {
           producto = null;
         }
@@ -864,6 +863,13 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
 
   Future<int> _aplicarDatosExtraidos(Map<String, dynamic> datos) async {
     int completados = 0;
+    // Una importación nueva descarta lo sugerido por la anterior.
+    _productoSugeridoPorIA = null;
+    _textoProductoParaAprendizaje = null;
+    _aseguradoraIdEnSugerenciaIA = null;
+    _clienteIdSugeridoPorIA = null;
+    _rolClienteSugeridoPorIA = null;
+    _aseguradoraIdEnSugerenciaCliente = null;
 
     String? texto(String key) {
       final v = datos[key];
@@ -992,8 +998,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           _matchPorNombre(
               candidatosProd, (p) => p.nombreProd, texto('nombre_ramo'));
 
-      if (matchProd != null) {
-        _productoSugeridoPorIA = matchProd.id;
+      // Se guarda el texto aunque no haya coincidencia: si el usuario elige
+      // el producto a mano, esa elección también se aprende.
+      if (textoProdNorm.isNotEmpty) {
+        _productoSugeridoPorIA = matchProd?.id;
         _textoProductoParaAprendizaje = textoProdNorm;
         _aseguradoraIdEnSugerenciaIA = aseguradora!.id;
       }
@@ -1176,7 +1184,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           ? const TextInputType.numberWithOptions(decimal: true, signed: true)
           : null,
       inputFormatters: (num && !readOnly && lines == 1)
-          ? [_ColMoneyInputFormatter(maxDec: maxDec)]
+          ? [NumeroCOInputFormatter(maxDecimales: maxDec)]
           : null,
       validator: req
           ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null
@@ -1190,6 +1198,19 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         border: const OutlineInputBorder(),
       ),
     );
+  }
+
+  /// F. Fin = F. Inicio + 1 año, solo si F. Fin está vacía o la había
+  /// puesto este mismo cálculo (antes pisaba una F. Fin ya digitada o
+  /// guardada al corregir la F. Inicio).
+  bool _finAutomatica = false;
+
+  void _sugerirFin(DateTime inicio) {
+    if (fFin != null && !_finAutomatica) return;
+    final fin = _addOneYearSafe(inicio);
+    fFin = fin;
+    _fFinCtrl.text = _formatearFecha(fin);
+    _finAutomatica = true;
   }
 
   Widget _fechaCampo(
@@ -1209,21 +1230,27 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           selection: TextSelection.collapsed(offset: f.length),
         );
 
+        if (f.isEmpty) {
+          // Borrar el campo borra la fecha (antes quedaba la anterior y se
+          // guardaba sin que el usuario la viera).
+          setState(() {
+            setFecha(null);
+            if (identical(ctrl, _fFinCtrl)) _finAutomatica = false;
+          });
+          return;
+        }
         final parsed = _parseFecha(f);
         if (parsed != null) {
           setState(() {
             setFecha(parsed);
-            if (autoFin) {
-              final fin = _addOneYearSafe(parsed);
-              fFin = fin;
-              _fFinCtrl.text = _formatearFecha(fin);
-            }
+            if (identical(ctrl, _fFinCtrl)) _finAutomatica = false;
+            if (autoFin) _sugerirFin(parsed);
           });
         }
       },
       validator: (v) {
         final s = (v ?? '').trim();
-        final esFin = label.contains('fin') || label.contains('Fin');
+        final esFin = identical(ctrl, _fFinCtrl);
 
         if (s.isEmpty) return esFin ? 'Requerido' : null;
 
@@ -1252,11 +1279,8 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
               setState(() {
                 ctrl.text = _formatearFecha(sel);
                 setFecha(sel);
-                if (autoFin) {
-                  final fin = _addOneYearSafe(sel);
-                  fFin = fin;
-                  _fFinCtrl.text = _formatearFecha(fin);
-                }
+                if (identical(ctrl, _fFinCtrl)) _finAutomatica = false;
+                if (autoFin) _sugerirFin(sel);
               });
             }
           },
@@ -1293,7 +1317,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     final porcAsesor3 = _parseNumero(_porcomAsesor3Ctrl.text) ?? 0;
     final porcAgencia = _parseNumero(_porcomAgenciaCtrl.text) ?? 0;
     final totalPorcPrincipal = porcAsesor1 + porcAsesor2 + porcAsesor3 + porcAgencia;
-    if (totalPorcPrincipal > 100) {
+    if (totalPorcPrincipal > 100 + 1e-6) {
       _toast('La suma de % de comisiones (Asesor 1 + 2 + 3 + Agencia) es ${totalPorcPrincipal.toStringAsFixed(2)}% y supera el 100%.');
       return;
     }
@@ -1302,7 +1326,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     final porcAsesorad = _parseNumero(_porcomAsesoradCtrl.text) ?? 0;
     final porcAgenciaad = _parseNumero(_porcomAgenciaadCtrl.text) ?? 0;
     final totalPorcAdic = porcAsesorad + porcAgenciaad;
-    if (totalPorcAdic > 100) {
+    if (totalPorcAdic > 100 + 1e-6) {
       _toast('La suma de % adicionales (Asesor adic. + Agencia adic.) es ${totalPorcAdic.toStringAsFixed(2)}% y supera el 100%.');
       return;
     }
@@ -1312,8 +1336,9 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     final comFija = _parseNumero(_vlrComFijaCtrl.text) ?? 0;
     final comDistrib = _parseNumero(_comDistribCtrl.text) ?? 0;
     final maxComDistrib = vlrCom + comFija;
-    if (comDistrib > maxComDistrib) {
-      _toast('La Com. a distribuir ($comDistrib) no puede ser mayor a Vlr Com + Com Fija ($maxComDistrib).');
+    if (comDistrib > maxComDistrib + 0.005) {
+      _toast('La Com. a distribuir (\$ ${Fmt.money(comDistrib, dec: 2)}) no puede ser mayor a '
+          'Vlr Com + Com Fija (\$ ${Fmt.money(maxComDistrib, dec: 2)}).');
       return;
     }
 
@@ -1335,48 +1360,20 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         }
       }
 
-      // Aprendizaje: si la IA había sugerido un producto para este texto y
-      // el usuario terminó eligiendo otro (misma aseguradora que cuando se
-      // sugirió), se guarda la corrección para la próxima vez.
-      if (_productoSugeridoPorIA != null &&
-          _textoProductoParaAprendizaje != null &&
-          producto != null &&
-          producto!.id != _productoSugeridoPorIA &&
-          aseguradora?.id == _aseguradoraIdEnSugerenciaIA) {
-        await _repoCat.registrarAprendizajeProducto(
-          _aseguradoraIdEnSugerenciaIA!,
-          _textoProductoParaAprendizaje!,
-          producto!.id,
-        );
-      }
-
-      // El cliente confirmado al guardar sigue siendo el que matcheó
-      // automáticamente por un rol puntual (Tomador/Asegurado/Beneficiario)
-      // — refuerza que ese rol es el correcto para esta aseguradora.
-      if (_clienteIdSugeridoPorIA != null &&
-          _rolClienteSugeridoPorIA != null &&
-          _aseguradoraIdEnSugerenciaCliente != null &&
-          cliente?.id == _clienteIdSugeridoPorIA &&
-          aseguradora?.id == _aseguradoraIdEnSugerenciaCliente) {
-        await _repoCat.reforzarAprendizajeRolCliente(
-          _aseguradoraIdEnSugerenciaCliente!,
-          _rolClienteSugeridoPorIA!,
-        );
-      }
-
       final data = _mapaActual();
       int? idReal;
 
       if (esEdicion) {
         final originalId = widget.poliza!.id;
-        // Al editar no se modifica quién la creó originalmente
-        await _repoPol.actualizarPoliza(
-          originalId,
-          data..remove('usuario_id'),
-        );
+        // Al editar no se modifica quién la creó originalmente.
+        data.remove('usuario_id');
+        if (estadoPoliza?.id == _estadoOriginalId) data.remove('estado_poliza_id');
+        await _repoPol.actualizarPoliza(originalId, data);
       } else {
         idReal = await _repoPol.crearPoliza(data);
       }
+
+      _registrarAprendizajeIA();
 
       // Si se venía retomando un borrador o una predigitada por IA, ya
       // quedó guardada como póliza real — la bandeja de pendientes no la
@@ -1399,6 +1396,44 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  /// Aprendizaje de la importación con IA, solo con la póliza ya guardada
+  /// (antes se registraba antes de guardar y un reintento por error contaba
+  /// doble). No bloquea: si falla, simplemente no se aprende esta vez.
+  void _registrarAprendizajeIA() {
+    // El usuario dejó un producto distinto al sugerido — o eligió uno
+    // cuando la IA no encontró ninguno — para este texto de la aseguradora.
+    if (_textoProductoParaAprendizaje != null &&
+        producto != null &&
+        producto!.id != _productoSugeridoPorIA &&
+        aseguradora?.id == _aseguradoraIdEnSugerenciaIA) {
+      unawaited(_repoCat.registrarAprendizajeProducto(
+        _aseguradoraIdEnSugerenciaIA!,
+        _textoProductoParaAprendizaje!,
+        producto!.id,
+      ));
+    }
+
+    // El cliente confirmado sigue siendo el que matcheó automáticamente por
+    // un rol puntual (Tomador/Asegurado/Beneficiario): refuerza ese rol.
+    if (_clienteIdSugeridoPorIA != null &&
+        _rolClienteSugeridoPorIA != null &&
+        _aseguradoraIdEnSugerenciaCliente != null &&
+        cliente?.id == _clienteIdSugeridoPorIA &&
+        aseguradora?.id == _aseguradoraIdEnSugerenciaCliente) {
+      unawaited(_repoCat.reforzarAprendizajeRolCliente(
+        _aseguradoraIdEnSugerenciaCliente!,
+        _rolClienteSugeridoPorIA!,
+      ));
+    }
+
+    _productoSugeridoPorIA = null;
+    _textoProductoParaAprendizaje = null;
+    _aseguradoraIdEnSugerenciaIA = null;
+    _clienteIdSugeridoPorIA = null;
+    _rolClienteSugeridoPorIA = null;
+    _aseguradoraIdEnSugerenciaCliente = null;
   }
 
   /// Recién acá se conoce el código real de la póliza — antes de guardar
@@ -1563,6 +1598,11 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     );
   }
 
+  /// Estado con el que se cargó la póliza. Al editar, el estado solo se
+  /// envía si el usuario lo cambió: así no pisa un COMPLETA que la base
+  /// puso por pagos mientras el formulario estaba abierto.
+  String? _estadoOriginalId;
+
   Widget _selectorEstado() {
     if (estadosPoliza.isEmpty) return const SizedBox.shrink();
     return Wrap(
@@ -1677,6 +1717,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
             key: _formKey,
             child: ListView(
               padding: AppLayout.pagePadding,
+              // Mantiene construidos todos los campos: un ListView normal
+              // desmonta los que salen de la pantalla y el validate() de
+              // "Guardar" (botón de abajo) no revisaba los de arriba.
+              cacheExtent: 100000,
               children: [
 
                 // ── Fila 1: Código · Nro Póliza · Fechas ─────────────────────

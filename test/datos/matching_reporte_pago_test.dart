@@ -75,7 +75,7 @@ void main() {
       expect(r.poliza!.id, 9);
     });
     test('mismo número+anexo registrado dos veces → ambigua', () {
-      final r = resolverMatch(nucleo: '5', anexo: '0', candidatos: [_p(1, '5-0'), _p(2, '5-0')]);
+      final r = resolverMatch(nucleo: '105005925', anexo: '0', candidatos: [_p(1, '105005925-0'), _p(2, '105005925-0')]);
       expect(r.estado, EstadoMatch.ambigua);
     });
   });
@@ -106,6 +106,29 @@ void main() {
     test('candidatos repetidos no generan falsa ambigüedad', () {
       final p = _p(1, '994000000193-6');
       final r = resolverMatch(nucleo: '994000000193', anexo: '6', candidatos: [p, p]);
+      expect(r.estado, EstadoMatch.exacta);
+    });
+  });
+
+  group('ajustes de la revisión', () {
+    test('número y anexo pegados nunca es exacta', () {
+      final r = resolverMatch(nucleo: '100071475', anexo: '1', candidatos: [_p(1, '1000714751')]);
+      expect(r.estado, EstadoMatch.revisar);
+      expect(r.seIncluyeSolo, isFalse);
+    });
+    test('número muy corto solo coincide con el número completo', () {
+      expect(anexoSiCorresponde('400-97-994000000046-6', '97'), isNull);
+      expect(anexoSiCorresponde('400-97-994000000046-6', '400'), isNull);
+      expect(anexoSiCorresponde('97', '97'), '');
+    });
+    test('segmento con letras pegadas', () {
+      expect(anexoSiCorresponde('AUT12345-1', '12345'), '1');
+    });
+    test('documento con o sin dígito de verificación', () {
+      expect(mismoDocumento('900159756', '900159756-1'), isTrue);
+      expect(mismoDocumento('900159756', '900159757'), isFalse);
+      final r = resolverMatch(
+          nucleo: '994000000046', anexo: '0', docCliente: '900159756', candidatos: [_p(1, '994000000046-0', doc: '900159756-1')]);
       expect(r.estado, EstadoMatch.exacta);
     });
   });

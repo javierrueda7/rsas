@@ -1,7 +1,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/filtros_busqueda.dart';
 import 'abono_poliza.dart';
 import 'sesion.dart';
 
+/// Lo pagado de cada póliza, su paso a/desde COMPLETA y los totales de cada
+/// reporte los calcula la base (triggers y vista vw_reportes_resumen, ver
+/// lib/migracion_2026_09_seguridad_y_pagos.sql) en la misma operación que
+/// crea, edita o borra el abono — la app ya no los recalcula a mano.
 class RepositorioPagos {
   final SupabaseClient _db = Supabase.instance.client;
 
@@ -33,7 +38,7 @@ class RepositorioPagos {
     final q = busqueda.trim();
     dynamic req = _db.from(_vistaReportes).select(_colsReporte);
     if (q.isNotEmpty) {
-      req = req.or('nombre_aseg.ilike.%$q%,nombre_interm.ilike.%$q%');
+      req = req.or('${ilikeContiene('nombre_aseg', q)},${ilikeContiene('nombre_interm', q)}');
     }
     final res = await req.order('fecha_rep', ascending: false).limit(limite);
     return (res as List).cast<Map<String, dynamic>>().map(ReportePago.fromMap).toList();
@@ -55,30 +60,12 @@ class RepositorioPagos {
   }
 
   Future<void> actualizarReporte(int id, Map<String, dynamic> data) async {
-    data['fultmod'] = DateTime.now().toIso8601String();
+    data['fultmod'] = DateTime.now().toUtc().toIso8601String();
     await _db.from(_tablaReportes).update(data).eq('id', id);
   }
 
   Future<void> eliminarReporte(int id) async {
     await _db.from(_tablaReportes).delete().eq('id', id);
-  }
-
-  /// Recalcula vlrsumprima_rep y vlrsumcom_rep sumando los abonos vigentes.
-  /// Si el llamador ya tiene la lista fresca a mano (ej. recién la volvió a
-  /// cargar para refrescar la pantalla), puede pasarla en [abonosYaCargados]
-  /// para no traerla de nuevo de la base.
-  Future<void> recalcularTotales(
-    int idReporte, {
-    List<AbonoPoliza>? abonosYaCargados,
-  }) async {
-    final abonos = abonosYaCargados ?? await listarAbonosPorReporte(idReporte);
-    final sumPrima = abonos.fold<num>(0, (s, a) => s + a.vlrabonoprima);
-    final sumCom   = abonos.fold<num>(0, (s, a) => s + a.vlrcomision + a.vlrcomad);
-    await _db.from(_tablaReportes).update({
-      'vlrsumprima_rep': sumPrima,
-      'vlrsumcom_rep': sumCom,
-      'fultmod': DateTime.now().toIso8601String(),
-    }).eq('id', idReporte);
   }
 
   // ── ABONOS ─────────────────────────────────────────────────────────────────
@@ -117,46 +104,11 @@ class RepositorioPagos {
   }
 
   Future<void> actualizarAbono(int id, Map<String, dynamic> data) async {
-    data['fultmod'] = DateTime.now().toIso8601String();
+    data['fultmod'] = DateTime.now().toUtc().toIso8601String();
     await _db.from(_tablaAbonos).update(data).eq('id', id);
   }
 
   Future<void> eliminarAbono(int id) async {
     await _db.from(_tablaAbonos).delete().eq('id', id);
-  }
-
-  // ── Estado de la póliza según sus pagos ─────────────────────────────────────
-
-  /// Recalcula lo abonado a una póliza (sumando TODOS sus abonos, de
-  /// cualquier reporte) y, si ya cubre la prima, la marca como "COMPLETA".
-  /// Se llama después de crear/editar/eliminar un abono, sea a mano o por
-  /// importación con IA — nunca se hace downgrade automático de un estado ya
-  /// puesto a mano (ANULADA, REVISADA, VENCIDA), solo se avanza a COMPLETA.
-  Future<void> actualizarEstadoPolizaSegunPagos(int idPoliza) async {
-    final poliza = await _db
-        .from('polizas')
-        .select('prima_poliza, estado_poliza_id')
-        .eq('id', idPoliza)
-        .maybeSingle();
-    if (poliza == null) return;
-
-    final prima = (poliza['prima_poliza'] as num?) ?? 0;
-    final abonos = await listarAbonosPorPoliza(idPoliza);
-    final totalAbonado = abonos.fold<num>(0, (s, a) => s + a.vlrabonoprima);
-
-    final data = <String, dynamic>{'vlrprimapagada_poliza': totalAbonado};
-
-    if (prima > 0 && totalAbonado >= prima) {
-      final completa = await _db
-          .from('estados_poliza')
-          .select('id')
-          .ilike('nombre_estado', 'COMPLETA')
-          .maybeSingle();
-      if (completa != null) {
-        data['estado_poliza_id'] = completa['id'];
-      }
-    }
-
-    await _db.from('polizas').update(data).eq('id', idPoliza);
   }
 }

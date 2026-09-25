@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../datos/abono_poliza.dart';
@@ -15,6 +14,7 @@ import '../datos/repositorio_pagos.dart';
 import '../datos/repositorio_polizas.dart';
 import '../datos/sesion.dart';
 import '../utils/formatters.dart';
+import '../utils/numeros_co.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
 import 'widgets/stat_card.dart';
@@ -22,42 +22,6 @@ import 'pagina_estado_cuenta.dart';
 import 'pagina_revision_reporte_pago.dart';
 import 'widgets/buscador_dropdown.dart';
 import 'widgets/selector_fecha.dart';
-
-// ── Formateo moneda colombiana mientras escribe ───────────────────────────────
-class _ColMoneyFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-      TextEditingValue old, TextEditingValue nv) {
-    // Admite negativos — se usan para reversar comisiones cuando se
-    // cancela una póliza ya pagada.
-    final raw = nv.text.replaceAll(RegExp(r'[^0-9,\-]'), '');
-    if (raw.isEmpty) return nv.copyWith(text: '');
-    final parts = raw.split(',');
-    final enteraTxt = parts[0].replaceAll(RegExp(r'[^0-9\-]'), '');
-    final negativo = enteraTxt.startsWith('-');
-    final entNum = int.tryParse(enteraTxt.replaceAll('-', '')) ?? 0;
-    String fmt = '${negativo ? '-' : ''}${_miles(entNum)}';
-    if (parts.length > 1) {
-      final dec = parts[1].length > 2 ? parts[1].substring(0, 2) : parts[1];
-      fmt += ',$dec';
-    }
-    return nv.copyWith(
-        text: fmt, selection: TextSelection.collapsed(offset: fmt.length));
-  }
-
-  static String _miles(int n) {
-    final s = n.toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-      buf.write(s[i]);
-    }
-    return buf.toString();
-  }
-}
-
-num _parseCO(String s) =>
-    num.tryParse(s.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
 
 extension _FirstOrNull<E> on Iterable<E> {
   E? firstOrNull(bool Function(E) test) {
@@ -72,9 +36,6 @@ extension _FirstOrNull<E> on Iterable<E> {
 // FormularioReportePago
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// La importación de reportes de comisiones con IA sigue en pruebas —
-/// oculta hasta validarla más.
-const bool _mostrarImportarReporte = true;
 
 class FormularioReportePago extends StatefulWidget {
   final ReportePago? reporte;
@@ -127,8 +88,10 @@ class _FormularioReporteState extends State<FormularioReportePago> {
   int? get _idReporte => widget.reporte?.id;
 
   // Totales calculados de los abonos cargados
-  num get _sumaPrima => _abonos.fold(0, (s, a) => s + a.vlrabonoprima);
-  num get _sumaCom   => _abonos.fold(0, (s, a) => s + a.vlrcomision + a.vlrcomad);
+  // Anulados (estado A) no suman, igual que en la base.
+  Iterable<AbonoPoliza> get _abonosVigentes => _abonos.where((a) => a.estadoPago != 'A');
+  num get _sumaPrima => sumarDinero(_abonosVigentes.map((a) => a.vlrabonoprima));
+  num get _sumaCom   => sumarDinero(_abonosVigentes.map((a) => a.vlrcomision + a.vlrcomad));
 
   @override
   void initState() {
@@ -200,39 +163,49 @@ class _FormularioReporteState extends State<FormularioReportePago> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _guardando = true);
     try {
-      // Aprendizaje: si para este mismo texto de cabecera (misma
-      // aseguradora que cuando se importó) el usuario terminó confirmando/
-      // corrigiendo un Intermediario distinto al sugerido (incluyendo el
-      // caso de que no se haya sugerido ninguno), se guarda para la
-      // próxima vez.
-      if (_textoIntermParaAprendizaje != null &&
-          _asegIdEnSugerenciaInterm != null &&
-          _intermediario != null &&
-          _intermediario!.id != _intermSugeridoPorIA &&
-          _aseguradora?.id == _asegIdEnSugerenciaInterm) {
-        await _repoCatalogos.registrarAprendizajeIntermediario(
-          _asegIdEnSugerenciaInterm!,
-          _textoIntermParaAprendizaje!,
-          _intermediario!.id,
-        );
-      }
-
+      // Los totales calculados (suma de abonos) ya no se mandan: los
+      // calcula la vista vw_reportes_resumen desde los abonos, así no pueden
+      // quedar desfasados ni pisar lo que agregó otro usuario.
       final data = {
         'fecha_rep':        _fechaRep.toIso8601String().substring(0, 10),
         'aseg_id':          _aseguradora?.id,
         'interm_id':        _intermediario?.id,
         'fini_rep':         _finiRep?.toIso8601String().substring(0, 10),
         'ffin_rep':         _ffinRep?.toIso8601String().substring(0, 10),
-        'vlrprima_rep':     _parseCO(_ctrlPrimaManual.text),
-        'vlrcom_rep':       _parseCO(_ctrlComManual.text),
-        'vlrsumprima_rep':  _sumaPrima,
-        'vlrsumcom_rep':    _sumaCom,
+        'vlrprima_rep':     parseNumCO(_ctrlPrimaManual.text) ?? 0,
+        'vlrcom_rep':       parseNumCO(_ctrlComManual.text) ?? 0,
         'estado_rep':       _estadoRep,
         'obs_rep':          _ctrlObs.text.trim().isEmpty ? null : _ctrlObs.text.trim(),
         'usuario_id':       Sesion.usuarioId,
       };
+      final int idGuardado;
       if (_esNuevo) {
-        final id = await _repoPagos.crearReporte(data);
+        idGuardado = await _repoPagos.crearReporte(data);
+      } else {
+        idGuardado = _idReporte!;
+        await _repoPagos.actualizarReporte(idGuardado, data);
+      }
+
+      // Aprendizaje, solo con el reporte ya guardado (antes corría antes y,
+      // si el guardado fallaba y se reintentaba, contaba doble): si para
+      // este texto de cabecera el usuario dejó un Intermediario distinto al
+      // sugerido (o eligió uno cuando no se sugirió ninguno), se registra.
+      if (_textoIntermParaAprendizaje != null &&
+          _asegIdEnSugerenciaInterm != null &&
+          _intermediario != null &&
+          _intermediario!.id != _intermSugeridoPorIA &&
+          _aseguradora?.id == _asegIdEnSugerenciaInterm) {
+        final texto = _textoIntermParaAprendizaje!;
+        _textoIntermParaAprendizaje = null;
+        unawaited(_repoCatalogos.registrarAprendizajeIntermediario(
+          _asegIdEnSugerenciaInterm!,
+          texto,
+          _intermediario!.id,
+        ));
+      }
+
+      if (_esNuevo) {
+        final id = idGuardado;
         if (!mounted) return;
 
         // Si se había importado un documento antes de guardar, las líneas
@@ -262,12 +235,9 @@ class _FormularioReporteState extends State<FormularioReportePago> {
           MaterialPageRoute(
               builder: (_) => FormularioReportePago(reporte: nuevo)),
         );
-      } else {
-        await _repoPagos.actualizarReporte(_idReporte!, data);
-        if (mounted) {
-          _snack('Reporte actualizado');
-          Navigator.pop(context, true);
-        }
+      } else if (mounted) {
+        _snack('Reporte actualizado');
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) _snack('Error: $e', error: true);
@@ -279,7 +249,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
   // ── Acciones de abono ─────────────────────────────────────────────────────
   Future<void> _abrirDialogoAbono({AbonoPoliza? abono}) async {
     if (_idReporte == null) {
-      _snack('Guarda primero el reporte y luego añade pólizas', error: true);
+      _snack('Guarde primero el reporte y luego añada pólizas', error: true);
       return;
     }
     final ok = await showDialog<bool>(
@@ -291,10 +261,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
         repo: _repoPagos,
       ),
     );
-    if (ok == true) {
-      await _cargarAbonos();
-      await _repoPagos.recalcularTotales(_idReporte!, abonosYaCargados: _abonos);
-    }
+    if (ok == true) await _cargarAbonos();
   }
 
   Future<void> _importarDesdeArchivo() async {
@@ -403,7 +370,6 @@ class _FormularioReporteState extends State<FormularioReportePago> {
         );
         if (creoAlgo == true) {
           await _cargarAbonos();
-          await _repoPagos.recalcularTotales(_idReporte!, abonosYaCargados: _abonos);
         }
       } else {
         // Reporte nuevo, todavía sin id: las líneas quedan pendientes hasta
@@ -475,9 +441,8 @@ class _FormularioReporteState extends State<FormularioReportePago> {
     if (ok != true) return;
     try {
       await _repoPagos.eliminarAbono(a.id);
-      await _repoPagos.actualizarEstadoPolizaSegunPagos(a.idPoliza);
       await _cargarAbonos();
-      await _repoPagos.recalcularTotales(_idReporte!, abonosYaCargados: _abonos);
+      await RepositorioPolizas().refrescarEnCache([a.idPoliza]);
     } catch (e) {
       _snack('Error: $e', error: true);
     }
@@ -505,9 +470,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
       appBar: AppBar(
         title: Text(_esNuevo ? 'Nuevo Reporte' : 'Reporte #$_idReporte'),
         actions: [
-          // Oculto por ahora: la importación de reportes de comisiones
-          // sigue en pruebas. Para reactivarla, poner en true.
-          if (_mostrarImportarReporte && _importando)
+          if (_importando)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: SizedBox(
@@ -516,7 +479,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             )
-          else if (_mostrarImportarReporte)
+          else
             TextButton.icon(
               onPressed: _importarDesdeArchivo,
               icon: const Icon(Icons.auto_awesome_outlined),
@@ -652,7 +615,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
                     Expanded(
                       child: TextFormField(
                         controller: _ctrlPrimaManual,
-                        inputFormatters: [_ColMoneyFormatter()],
+                        inputFormatters: const [NumeroCOInputFormatter()],
                         keyboardType: const TextInputType.numberWithOptions(signed: true),
                         decoration: const InputDecoration(
                           labelText: 'Vlr Prima (manual)',
@@ -665,7 +628,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
                     Expanded(
                       child: TextFormField(
                         controller: _ctrlComManual,
-                        inputFormatters: [_ColMoneyFormatter()],
+                        inputFormatters: const [NumeroCOInputFormatter()],
                         keyboardType: const TextInputType.numberWithOptions(signed: true),
                         decoration: const InputDecoration(
                           labelText: 'Vlr Comisión (manual)',
@@ -753,7 +716,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
                           padding: EdgeInsets.all(28),
                           child: Center(
                             child: Text(
-                              'Sin pólizas en este reporte.\nPresiona "Añadir póliza" para comenzar.',
+                              'Sin pólizas en este reporte.\nPresione "Añadir póliza" para comenzar.',
                               textAlign: TextAlign.center,
                             ),
                           ),
@@ -959,6 +922,11 @@ class _DialogAbonoState extends State<_DialogAbono> {
 
   bool get _esNuevo => widget.abono == null;
 
+  // Si el usuario escribió la comisión (ej. la cifra exacta del reporte
+  // de la aseguradora), cambiar el abono o el % ya no la pisa.
+  bool _comEditadaAMano = false;
+  bool _comAdEditadaAMano = false;
+
   @override
   void initState() {
     super.initState();
@@ -967,12 +935,16 @@ class _DialogAbonoState extends State<_DialogAbono> {
     if (a != null) {
       _fechaPago  = a.fechaPago ?? DateTime.now();
       _estadoPago = a.estadoPago;
-      _ctrlPrima.text   = Fmt.money(a.vlrprimaPoliza);
-      _ctrlAbono.text   = Fmt.money(a.vlrabonoprima);
-      _ctrlPorcCom.text = Fmt.numCO(a.porccomision, dec: 2);
-      _ctrlVlrCom.text  = Fmt.money(a.vlrcomision);
-      _ctrlPorcAd.text  = Fmt.numCO(a.porccomad, dec: 2);
-      _ctrlVlrAd.text   = Fmt.money(a.vlrcomad);
+      // Con decimales: antes se redondeaba a pesos y al volver a
+      // guardar el abono quedaba cambiado.
+      _ctrlPrima.text   = formatearNumCO(a.vlrprimaPoliza);
+      _ctrlAbono.text   = formatearNumCO(a.vlrabonoprima);
+      _ctrlPorcCom.text = formatearNumCO(a.porccomision, maxDecimales: 5);
+      _ctrlVlrCom.text  = formatearNumCO(a.vlrcomision);
+      _ctrlPorcAd.text  = formatearNumCO(a.porccomad, maxDecimales: 5);
+      _ctrlVlrAd.text   = formatearNumCO(a.vlrcomad);
+      _comEditadaAMano  = true;
+      _comAdEditadaAMano = true;
       _ctrlFactura.text = a.numFactura ?? '';
       _ctrlObs.text     = a.obsPago ?? '';
       _cargarPolizaInicial(a.idPoliza);
@@ -1004,26 +976,29 @@ class _DialogAbonoState extends State<_DialogAbono> {
   void _onPolizaSeleccionada(Poliza p) {
     setState(() {
       _poliza = p;
-      _ctrlPrima.text   = Fmt.money(p.primaPoliza);
-      _ctrlAbono.text   = Fmt.money(p.primaPoliza);
-      _ctrlPorcCom.text = Fmt.numCO(p.porccomPoliza ?? 0, dec: 2);
+      _ctrlPrima.text   = formatearNumCO(p.primaPoliza);
+      // Sugiere lo que falta por pagar, no la prima completa: con
+      // pagos previos, la prima completa sería un sobrepago.
+      final saldo = p.primaPoliza - (p.vlrprimapagadaPoliza ?? 0);
+      _ctrlAbono.text   = saldo > 0 ? formatearNumCO(saldo) : '';
+      _ctrlPorcCom.text = formatearNumCO(p.porccomPoliza ?? 0, maxDecimales: 5);
       _recalcular();
     });
   }
 
   void _recalcular() {
-    final abono   = _parseCO(_ctrlAbono.text);
-    final pCom    = _parseCO(_ctrlPorcCom.text);
-    final pComAd  = _parseCO(_ctrlPorcAd.text);
-    _ctrlVlrCom.text = Fmt.money(abono * pCom / 100);
-    _ctrlVlrAd.text  = Fmt.money(abono * pComAd / 100);
+    final abono   = (parseNumCO(_ctrlAbono.text) ?? 0);
+    final pCom    = (parseNumCO(_ctrlPorcCom.text) ?? 0);
+    final pComAd  = (parseNumCO(_ctrlPorcAd.text) ?? 0);
+    if (!_comEditadaAMano) _ctrlVlrCom.text = formatearNumCO(abono * pCom / 100);
+    if (!_comAdEditadaAMano) _ctrlVlrAd.text = formatearNumCO(abono * pComAd / 100);
   }
 
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
     if (_poliza == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Selecciona una póliza'),
+        content: Text('Seleccione una póliza'),
         backgroundColor: AppTheme.danger,
       ));
       return;
@@ -1034,12 +1009,12 @@ class _DialogAbonoState extends State<_DialogAbono> {
         'idrep_pago':      widget.idReporte,
         'id_poliza':       _poliza!.id,
         'fecha_pago':      _fechaPago?.toIso8601String().substring(0, 10),
-        'vlrprima_poliza': _parseCO(_ctrlPrima.text),
-        'vlrabono_prima':  _parseCO(_ctrlAbono.text),
-        'porccomision':    _parseCO(_ctrlPorcCom.text),
-        'vlrcomision':     _parseCO(_ctrlVlrCom.text),
-        'porccomad':       _parseCO(_ctrlPorcAd.text),
-        'vlrcomad':        _parseCO(_ctrlVlrAd.text),
+        'vlrprima_poliza': (parseNumCO(_ctrlPrima.text) ?? 0),
+        'vlrabono_prima':  (parseNumCO(_ctrlAbono.text) ?? 0),
+        'porccomision':    (parseNumCO(_ctrlPorcCom.text) ?? 0),
+        'vlrcomision':     (parseNumCO(_ctrlVlrCom.text) ?? 0),
+        'porccomad':       (parseNumCO(_ctrlPorcAd.text) ?? 0),
+        'vlrcomad':        (parseNumCO(_ctrlVlrAd.text) ?? 0),
         'num_factura':     _ctrlFactura.text.trim().isEmpty
             ? null
             : _ctrlFactura.text.trim(),
@@ -1051,7 +1026,8 @@ class _DialogAbonoState extends State<_DialogAbono> {
       } else {
         await widget.repo.actualizarAbono(widget.abono!.id, data);
       }
-      await widget.repo.actualizarEstadoPolizaSegunPagos(_poliza!.id);
+      // Lo pagado y el estado de la póliza los recalcula la base.
+      await _repoPolizas.refrescarEnCache([_poliza!.id]);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
@@ -1096,7 +1072,7 @@ class _DialogAbonoState extends State<_DialogAbono> {
                     onChanged: (p) {
                       if (p != null) _onPolizaSeleccionada(p);
                     },
-                    validator: (v) => v == null ? 'Selecciona una póliza' : null,
+                    validator: (v) => v == null ? 'Seleccione una póliza' : null,
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -1175,9 +1151,8 @@ class _DialogAbonoState extends State<_DialogAbono> {
                   Expanded(
                     child: TextFormField(
                       controller: _ctrlPrima,
-                      inputFormatters: [_ColMoneyFormatter()],
+                      inputFormatters: const [NumeroCOInputFormatter()],
                       keyboardType: const TextInputType.numberWithOptions(signed: true),
-                      onChanged: (_) => _recalcular(),
                       decoration: const InputDecoration(
                           labelText: 'Vlr Prima Póliza',
                           border: OutlineInputBorder(),
@@ -1190,7 +1165,7 @@ class _DialogAbonoState extends State<_DialogAbono> {
                   Expanded(
                     child: TextFormField(
                       controller: _ctrlAbono,
-                      inputFormatters: [_ColMoneyFormatter()],
+                      inputFormatters: const [NumeroCOInputFormatter()],
                       keyboardType: const TextInputType.numberWithOptions(signed: true),
                       onChanged: (_) => _recalcular(),
                       decoration: InputDecoration(
@@ -1211,7 +1186,8 @@ class _DialogAbonoState extends State<_DialogAbono> {
                   Expanded(
                     child: TextFormField(
                       controller: _ctrlPorcCom,
-                      keyboardType: TextInputType.number,
+                      inputFormatters: const [NumeroCOInputFormatter(maxDecimales: 5)],
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onChanged: (_) => _recalcular(),
                       decoration: const InputDecoration(
                           labelText: '% Comisión',
@@ -1223,7 +1199,8 @@ class _DialogAbonoState extends State<_DialogAbono> {
                   Expanded(
                     child: TextFormField(
                       controller: _ctrlVlrCom,
-                      inputFormatters: [_ColMoneyFormatter()],
+                      inputFormatters: const [NumeroCOInputFormatter()],
+                      onChanged: (_) => _comEditadaAMano = true,
                       keyboardType: const TextInputType.numberWithOptions(signed: true),
                       decoration: const InputDecoration(
                           labelText: 'Vlr Comisión',
@@ -1238,7 +1215,8 @@ class _DialogAbonoState extends State<_DialogAbono> {
                   Expanded(
                     child: TextFormField(
                       controller: _ctrlPorcAd,
-                      keyboardType: TextInputType.number,
+                      inputFormatters: const [NumeroCOInputFormatter(maxDecimales: 5)],
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onChanged: (_) => _recalcular(),
                       decoration: const InputDecoration(
                           labelText: '% Com. Adicional',
@@ -1250,7 +1228,8 @@ class _DialogAbonoState extends State<_DialogAbono> {
                   Expanded(
                     child: TextFormField(
                       controller: _ctrlVlrAd,
-                      inputFormatters: [_ColMoneyFormatter()],
+                      inputFormatters: const [NumeroCOInputFormatter()],
+                      onChanged: (_) => _comAdEditadaAMano = true,
                       keyboardType: const TextInputType.numberWithOptions(signed: true),
                       decoration: const InputDecoration(
                           labelText: 'Vlr Com. Adicional',

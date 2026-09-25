@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../datos/abono_poliza.dart';
 import '../datos/repositorio_pagos.dart';
 import '../utils/formatters.dart';
+import '../utils/numeros_co.dart';
 import '../utils/generador_pdf.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
@@ -44,12 +45,16 @@ class _PaginaEstadoCuentaState extends State<PaginaEstadoCuenta> {
   ReportePago?      _reporte;
 
   // Totales
-  num get _totalAbonado  => _abonos.fold(0, (s, a) => s + a.vlrabonoprima);
-  num get _totalComision => _abonos.fold(0, (s, a) => s + a.vlrcomision + a.vlrcomad);
+  // Los abonos anulados (estado A) no suman, igual que en la base. Suma
+  // exacta en centavos (sin error de redondeo de doubles).
+  Iterable<AbonoPoliza> get _vigentes => _abonos.where((a) => a.estadoPago != 'A');
+  num get _totalAbonado  => sumarDinero(_vigentes.map((a) => a.vlrabonoprima));
+  num get _totalComision => sumarDinero(_vigentes.map((a) => a.vlrcomision + a.vlrcomad));
   num get _primaPoliza   => _abonos.isNotEmpty ? (_abonos.first.primaPoliza ?? 0) : 0;
   num get _saldo         => widget.esModoPoliza ? _primaPoliza - _totalAbonado : 0;
+  // Sin tope en 100%: si se pagó de más, se tiene que ver.
   double get _porcPagado => _primaPoliza > 0
-      ? (_totalAbonado / _primaPoliza * 100).clamp(0, 100).toDouble()
+      ? (_totalAbonado / _primaPoliza * 100).toDouble()
       : 0;
 
   // Encabezado para mostrar
@@ -386,7 +391,8 @@ class _ResumenCards extends StatelessWidget {
       ('Total abonado', '\$ ${Fmt.money(totalAbonado)}',
           Icons.payments_outlined, AppTheme.green),
       if (saldo != null)
-        ('Saldo pendiente', '\$ ${Fmt.money(saldo)}',
+        (saldo! < 0 ? 'Saldo a favor' : 'Saldo pendiente',
+            '\$ ${Fmt.money(saldo!.abs())}',
             Icons.pending_actions_outlined,
             saldo! > 0 ? AppTheme.warning : AppTheme.green),
       ('Total comisión', '\$ ${Fmt.money(totalComision)}',
@@ -436,9 +442,10 @@ class _TablaHistorial extends StatelessWidget {
     final hScroll = ScrollController();
 
     // Totales para el pie
-    final totPrima  = abonos.fold<num>(0, (s, a) => s + a.vlrabonoprima);
-    final totCom    = abonos.fold<num>(0, (s, a) => s + a.vlrcomision);
-    final totComAd  = abonos.fold<num>(0, (s, a) => s + a.vlrcomad);
+    final vigentes  = abonos.where((a) => a.estadoPago != 'A');
+    final totPrima  = sumarDinero(vigentes.map((a) => a.vlrabonoprima));
+    final totCom    = sumarDinero(vigentes.map((a) => a.vlrcomision));
+    final totComAd  = sumarDinero(vigentes.map((a) => a.vlrcomad));
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -640,7 +647,7 @@ class _PaginaFacturaState extends State<_PaginaFactura> {
       final bytes = await GeneradorPdf.factura(abono: widget.abono);
       await GeneradorPdf.descargar(
         bytes: bytes,
-        nombre: 'factura_${widget.abono.numFactura ?? widget.abono.id}',
+        nombre: 'factura_${(widget.abono.numFactura ?? '${widget.abono.id}').replaceAll(RegExp(r'[^0-9A-Za-z_-]'), '_')}',
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

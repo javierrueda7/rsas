@@ -1,7 +1,6 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../datos/abono_poliza.dart';
@@ -11,46 +10,19 @@ import '../datos/repositorio_catalogos.dart';
 import '../datos/repositorio_pagos.dart';
 import '../datos/repositorio_polizas.dart';
 import '../utils/formatters.dart';
+import '../utils/numeros_co.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
 import 'widgets/buscador_dropdown.dart';
 import 'widgets/selector_fecha.dart';
 
-class _MoneyFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue nv) {
-    // Admite negativos — se usan para reversar comisiones cuando se
-    // cancela una póliza ya pagada.
-    final raw = nv.text.replaceAll(RegExp(r'[^0-9,\-]'), '');
-    if (raw.isEmpty) return nv.copyWith(text: '');
-    final parts = raw.split(',');
-    final enteraTxt = parts[0].replaceAll(RegExp(r'[^0-9\-]'), '');
-    final negativo = enteraTxt.startsWith('-');
-    final entNum = int.tryParse(enteraTxt.replaceAll('-', '')) ?? 0;
-    var fmt = '${negativo ? '-' : ''}${_miles(entNum)}';
-    if (parts.length > 1) {
-      final dec = parts[1].length > 2 ? parts[1].substring(0, 2) : parts[1];
-      fmt += ',$dec';
-    }
-    return nv.copyWith(text: fmt, selection: TextSelection.collapsed(offset: fmt.length));
-  }
-
-  static String _miles(int n) {
-    final s = n.toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-      buf.write(s[i]);
-    }
-    return buf.toString();
-  }
-}
-
-num _parseCO(String s) =>
-    num.tryParse(s.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
-
 bool _mismoDia(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// Factura/recibo comparable: sin espacios ni separadores ni ceros a la
+/// izquierda ("000123" = "123", "FE-12" = "FE12").
+String _normalizarFactura(String? s) =>
+    normalizarDoc(s ?? '').replaceFirst(RegExp(r'^0+(?=.)'), '');
 
 /// Una línea del documento importado, ya con sus controllers de edición.
 class _LineaRevision {
@@ -63,6 +35,12 @@ class _LineaRevision {
 
   /// Motivo si parece un abono ya cargado antes.
   String? duplicado;
+
+  /// La comisión no venía en el reporte: se calculó con abono × %.
+  bool comisionCalculada;
+
+  /// Error al guardar esta línea (queda en pantalla para reintentar).
+  String? errorGuardado;
 
   final String nroExtraido;
   final String anexoExtraido;
@@ -81,6 +59,7 @@ class _LineaRevision {
     required this.incluir,
     required this.poliza,
     required this.match,
+    required this.comisionCalculada,
     required this.nroExtraido,
     required this.anexoExtraido,
     required this.docExtraido,
@@ -95,7 +74,9 @@ class _LineaRevision {
     required this.fechaPago,
   });
 
-  bool get lista => !manual && match.seIncluyeSolo && duplicado == null;
+  num? get abono => parseNumCO(abonoCtrl.text);
+  bool get sinValor => (abono ?? 0) == 0;
+  bool get lista => !manual && match.seIncluyeSolo && duplicado == null && !sinValor;
 
   void dispose() {
     for (final c in [
@@ -140,8 +121,12 @@ class _PaginaRevisionReportePagoState
 
   bool _cargando = true;
   bool _guardando = false;
+  bool _creoAlgo = false;
   final List<_LineaRevision> _filas = [];
   final Map<int, List<AbonoPoliza>> _abonosPorPoliza = {};
+
+  /// Abonos que el reporte ya tenía antes de esta importación.
+  int _abonosPrevios = 0;
 
   @override
   void initState() {
@@ -158,11 +143,18 @@ class _PaginaRevisionReportePagoState
   }
 
   Future<void> _matchearTodas() async {
+    try {
+      _abonosPrevios = (await _repoPagos.listarAbonosPorReporte(widget.idReporte)).length;
+    } catch (_) {}
+
+    // Las líneas de un mismo cliente o número comparten consultas.
+    final cacheCliente = <String, Future<List<Poliza>>>{};
+    final cacheNumero = <String, Future<List<Poliza>>>{};
     final resultados = await Future.wait(widget.lineas.map((linea) {
       final nro = (linea['nro_poliza'] as String?)?.trim() ?? '';
       final anexo = linea['anexo']?.toString().trim() ?? '';
       final doc = (linea['doc_cliente'] as String?)?.trim() ?? '';
-      return _resolver(nro, anexo, doc, linea['vlrprima_poliza'] as num?);
+      return _resolver(nro, anexo, doc, linea['vlrprima_poliza'] as num?, cacheCliente, cacheNumero);
     }));
 
     for (var i = 0; i < widget.lineas.length; i++) {
@@ -170,27 +162,34 @@ class _PaginaRevisionReportePagoState
       final match = resultados[i];
       final poliza = match.poliza;
 
-      final prima = linea['vlrprima_poliza'] as num? ?? poliza?.primaPoliza;
-      final abono = linea['vlrabono_prima'] as num? ?? prima;
+      final primaLinea = linea['vlrprima_poliza'] as num?;
+      // El abono sale SOLO del reporte. Si no lo trae, la línea queda sin
+      // valor (antes se llenaba con la prima completa de la póliza y se
+      // registraba un pago que nadie reportó).
+      final abono = linea['vlrabono_prima'] as num? ?? primaLinea;
       final porcCom = linea['porccomision'] as num? ?? poliza?.porccomPoliza;
+      var vlrCom = linea['vlrcomision'] as num?;
+      var comisionCalculada = false;
+      if (vlrCom == null && abono != null && porcCom != null) {
+        vlrCom = (abono * porcCom / 100 * 100).round() / 100;
+        comisionCalculada = true;
+      }
 
       _filas.add(_LineaRevision(
-        incluir: match.seIncluyeSolo,
+        incluir: match.seIncluyeSolo && (abono ?? 0) != 0,
         poliza: poliza,
         match: match,
+        comisionCalculada: comisionCalculada,
         nroExtraido: (linea['nro_poliza'] as String?)?.trim() ?? '',
         anexoExtraido: linea['anexo']?.toString().trim() ?? '',
         docExtraido: (linea['doc_cliente'] as String?)?.trim() ?? '',
         clienteExtraido: (linea['nombre_cliente'] as String?)?.trim() ?? '',
-        primaCtrl: TextEditingController(text: prima != null ? Fmt.money(prima) : ''),
-        abonoCtrl: TextEditingController(text: abono != null ? Fmt.money(abono) : ''),
-        porcComCtrl: TextEditingController(text: porcCom != null ? Fmt.numCO(porcCom, dec: 2) : ''),
-        vlrComCtrl: TextEditingController(
-            text: linea['vlrcomision'] != null ? Fmt.money(linea['vlrcomision'] as num) : ''),
-        porcComAdCtrl: TextEditingController(
-            text: linea['porccomad'] != null ? Fmt.numCO(linea['porccomad'] as num, dec: 2) : ''),
-        vlrComAdCtrl: TextEditingController(
-            text: linea['vlrcomad'] != null ? Fmt.money(linea['vlrcomad'] as num) : ''),
+        primaCtrl: TextEditingController(text: formatearNumCO(primaLinea ?? poliza?.primaPoliza)),
+        abonoCtrl: TextEditingController(text: formatearNumCO(abono)),
+        porcComCtrl: TextEditingController(text: formatearNumCO(porcCom, maxDecimales: 5)),
+        vlrComCtrl: TextEditingController(text: formatearNumCO(vlrCom)),
+        porcComAdCtrl: TextEditingController(text: formatearNumCO(linea['porccomad'] as num?, maxDecimales: 5)),
+        vlrComAdCtrl: TextEditingController(text: formatearNumCO(linea['vlrcomad'] as num?)),
         facturaCtrl: TextEditingController(text: (linea['num_factura'] as String?)?.trim() ?? ''),
         fechaPago: _parseFechaISO(linea['fecha_pago']),
       ));
@@ -214,21 +213,28 @@ class _PaginaRevisionReportePagoState
 
   /// Trae de la base las pólizas que podrían corresponder (por número y por
   /// documento del cliente) y deja que [resolverMatch] decida con precisión.
-  Future<ResultadoMatch> _resolver(String nro, String anexo, String doc, num? prima) async {
+  Future<ResultadoMatch> _resolver(
+    String nro,
+    String anexo,
+    String doc,
+    num? prima,
+    Map<String, Future<List<Poliza>>> cacheCliente,
+    Map<String, Future<List<Poliza>>> cacheNumero,
+  ) async {
     var porNumero = <Poliza>[];
     var delCliente = <Poliza>[];
     try {
       final busqueda = normalizarDoc(nro).replaceFirst(RegExp(r'^0+'), '');
       if (busqueda.isNotEmpty) {
-        porNumero = await _repoPolizas.listarPorNroContiene(busqueda);
+        porNumero = await (cacheNumero[busqueda] ??= _repoPolizas.listarPorNroContiene(busqueda));
       }
-      if (doc.isNotEmpty) {
-        final cliente = await _repoCat.buscarClientePorDocExacto(normalizarDoc(doc));
-        if (cliente != null) delCliente = await _repoPolizas.listarPorCliente(cliente.id);
+      final docNorm = normalizarDoc(doc);
+      if (docNorm.isNotEmpty) {
+        delCliente = await (cacheCliente[docNorm] ??= _polizasDelDocumento(docNorm));
       }
     } catch (e) {
       return ResultadoMatch(EstadoMatch.noEncontrada,
-          motivo: 'No se pudo consultar la base ($e). Asignala a mano.');
+          motivo: 'No se pudo consultar la base. Asígnela a mano o reintente la importación.');
     }
     if (nro.isEmpty) {
       return ResultadoMatch(EstadoMatch.noEncontrada,
@@ -246,6 +252,12 @@ class _PaginaRevisionReportePagoState
     );
   }
 
+  Future<List<Poliza>> _polizasDelDocumento(String docNorm) async {
+    final cliente = await _repoCat.buscarClientePorDocExacto(docNorm);
+    if (cliente == null) return [];
+    return _repoPolizas.listarPorCliente(cliente.id);
+  }
+
   /// Marca la línea si ya existe en la base un abono igual (misma póliza,
   /// mismo valor y misma factura — o misma fecha si no hay factura). Evita
   /// cargar dos veces el mismo pago si se importa el reporte de nuevo.
@@ -253,16 +265,16 @@ class _PaginaRevisionReportePagoState
   /// No compara contra otras líneas del mismo reporte: ahí líneas con igual
   /// póliza, valor y transacción son movimientos distintos (ej. Mundial:
   /// emisión +, reversión −, re-emisión + con distinto certificado).
-  Future<void> _verificarDuplicado(_LineaRevision f) async {
+  Future<void> _verificarDuplicado(_LineaRevision f, {bool ajustarIncluir = true}) async {
     f.duplicado = null;
     final p = f.poliza;
     if (p == null) return;
-    final abono = _parseCO(f.abonoCtrl.text);
-    final factura = f.facturaCtrl.text.trim();
+    final abono = f.abono ?? 0;
+    final factura = _normalizarFactura(f.facturaCtrl.text);
 
     bool igual(num valor, String? fac, DateTime? fecha) {
       if ((valor - abono).abs() >= 0.01) return false;
-      if (factura.isNotEmpty) return (fac ?? '').trim() == factura;
+      if (factura.isNotEmpty) return _normalizarFactura(fac) == factura;
       return f.fechaPago != null && fecha != null && _mismoDia(f.fechaPago!, fecha);
     }
 
@@ -279,16 +291,30 @@ class _PaginaRevisionReportePagoState
         }
       }
     } catch (_) {}
-    if (f.duplicado != null) f.incluir = false;
+    if (f.duplicado != null && ajustarIncluir) f.incluir = false;
   }
 
   Future<void> _asignar(_LineaRevision f, Poliza? p) async {
     setState(() {
       f.poliza = p;
       f.manual = true;
-      f.incluir = p != null;
+      f.incluir = p != null && !f.sinValor;
     });
     await _verificarDuplicado(f);
+    if (mounted) setState(() {});
+  }
+
+  /// Al editar abono, % o factura: recalcula la comisión si era calculada y
+  /// vuelve a revisar si quedó igual a un abono ya cargado.
+  Future<void> _alEditarValores(_LineaRevision f) async {
+    if (f.comisionCalculada) {
+      final abono = f.abono;
+      final pct = parseNumCO(f.porcComCtrl.text);
+      if (abono != null && pct != null) {
+        f.vlrComCtrl.text = formatearNumCO((abono * pct / 100 * 100).round() / 100);
+      }
+    }
+    await _verificarDuplicado(f, ajustarIncluir: false);
     if (mounted) setState(() {});
   }
 
@@ -296,11 +322,15 @@ class _PaginaRevisionReportePagoState
 
   Future<void> _guardar() async {
     final aGuardar = _filas.where((f) => f.incluir).toList();
-    final sinPoliza = aGuardar.where((f) => f.poliza == null).toList();
-    if (sinPoliza.isNotEmpty) {
+    final sinPoliza = aGuardar.where((f) => f.poliza == null).length;
+    final sinValor = aGuardar.where((f) => f.sinValor).length;
+    if (sinPoliza > 0 || sinValor > 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            '${sinPoliza.length} línea(s) incluida(s) no tienen póliza asignada. Asignala o destildala.'),
+        content: Text([
+          if (sinPoliza > 0) '$sinPoliza línea(s) incluida(s) sin póliza asignada.',
+          if (sinValor > 0) '$sinValor línea(s) incluida(s) sin valor de abono.',
+          'Corríjalas o destíldelas.',
+        ].join(' ')),
         backgroundColor: AppTheme.danger,
       ));
       return;
@@ -313,39 +343,56 @@ class _PaginaRevisionReportePagoState
     }
 
     setState(() => _guardando = true);
-    var creados = 0;
-    var fallidos = 0;
+    final guardadas = <_LineaRevision>[];
     for (final f in aGuardar) {
       try {
+        f.errorGuardado = null;
+        // Lo pagado de la póliza y su paso a COMPLETA los recalcula la base
+        // en la misma operación (trigger), no la app.
         await _repoPagos.crearAbono({
           'idrep_pago': widget.idReporte,
           'id_poliza': f.poliza!.id,
           'fecha_pago': f.fechaPago?.toIso8601String().substring(0, 10),
-          'vlrprima_poliza': _parseCO(f.primaCtrl.text),
-          'vlrabono_prima': _parseCO(f.abonoCtrl.text),
-          'porccomision': _parseCO(f.porcComCtrl.text),
-          'vlrcomision': _parseCO(f.vlrComCtrl.text),
-          'porccomad': _parseCO(f.porcComAdCtrl.text),
-          'vlrcomad': _parseCO(f.vlrComAdCtrl.text),
+          'vlrprima_poliza': parseNumCO(f.primaCtrl.text) ?? 0,
+          'vlrabono_prima': f.abono ?? 0,
+          'porccomision': parseNumCO(f.porcComCtrl.text) ?? 0,
+          'vlrcomision': parseNumCO(f.vlrComCtrl.text) ?? 0,
+          'porccomad': parseNumCO(f.porcComAdCtrl.text) ?? 0,
+          'vlrcomad': parseNumCO(f.vlrComAdCtrl.text) ?? 0,
           'num_factura': f.facturaCtrl.text.trim().isEmpty ? null : f.facturaCtrl.text.trim(),
           'estado_pago': 'I',
         });
-        await _repoPagos.actualizarEstadoPolizaSegunPagos(f.poliza!.id);
-        creados++;
-      } catch (_) {
-        fallidos++;
+        guardadas.add(f);
+      } catch (e) {
+        f.errorGuardado = 'No se guardó: $e';
       }
     }
 
+    if (guardadas.isNotEmpty) {
+      _creoAlgo = true;
+      await _repoPolizas.refrescarEnCache(guardadas.map((f) => f.poliza!.id));
+    }
     if (!mounted) return;
-    setState(() => _guardando = false);
+
+    final fallidas = aGuardar.length - guardadas.length;
+    setState(() {
+      _guardando = false;
+      // Las guardadas salen de la lista: si algo falló, quedan solo las
+      // pendientes para corregir y reintentar (antes se cerraba la
+      // pantalla y esas líneas se perdían).
+      for (final f in guardadas) {
+        _filas.remove(f);
+        f.dispose();
+      }
+    });
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(fallidos == 0
-          ? 'Se crearon $creados abono(s).'
-          : 'Se crearon $creados abono(s). $fallidos fallaron.'),
-      backgroundColor: fallidos == 0 ? null : AppTheme.warning,
+      content: Text(fallidas == 0
+          ? 'Se crearon ${guardadas.length} abono(s).'
+          : 'Se crearon ${guardadas.length} abono(s). $fallidas no se pudieron guardar: '
+              'siguen en la lista para reintentar.'),
+      backgroundColor: fallidas == 0 ? null : AppTheme.warning,
     ));
-    Navigator.pop(context, creados > 0);
+    if (fallidas == 0) Navigator.pop(context, _creoAlgo);
   }
 
   @override
@@ -354,49 +401,75 @@ class _PaginaRevisionReportePagoState
     final listas = _filas.where((f) => f.lista).length;
     final sinPoliza = _filas.where((f) => f.poliza == null).length;
     final porRevisar = _filas.length - listas - sinPoliza;
+    final incluidas = _filas.where((f) => f.incluir);
+    final sumaAbonos = sumarDinero(incluidas.map((f) => f.abono ?? 0));
+    final sumaComision = sumarDinero(incluidas.map(
+        (f) => (parseNumCO(f.vlrComCtrl.text) ?? 0) + (parseNumCO(f.vlrComAdCtrl.text) ?? 0)));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Revisar importación (${widget.lineas.length} línea(s))'),
-        actions: [
-          if (_guardando)
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-            )
-          else
-            TextButton.icon(
-              onPressed: _cargando ? null : _guardar,
-              icon: const Icon(Icons.save_outlined),
-              label: Text('Guardar $_incluidas abono(s)'),
-            ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : AppLayout.centered(ListView(
-              padding: AppLayout.pagePadding,
-              children: [
-                Text(
-                  'Revisá cada línea antes de guardar. Solo quedan tildadas de entrada las que '
-                  'coinciden exacto (número de póliza + anexo). Las demás necesitan que elijas '
-                  'la póliza o las dejes afuera.',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                ),
-                const SizedBox(height: 10),
-                Wrap(spacing: 8, runSpacing: 6, children: [
-                  _chip('$listas coinciden exacto', cs.secondaryContainer, cs.onSecondaryContainer),
-                  _chip('$porRevisar por revisar', AppTheme.warningContainer, AppTheme.onWarningContainer),
-                  _chip('$sinPoliza sin póliza', cs.errorContainer, cs.onErrorContainer),
-                ]),
-                const SizedBox(height: 16),
-                for (int i = 0; i < _filas.length; i++) ...[
-                  _filaCard(_filas[i]),
+    return PopScope(
+      canPop: !_guardando,
+      onPopInvokedWithResult: (didPop, _) {},
+      child: Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: () => Navigator.pop(context, _creoAlgo)),
+          title: Text('Revisar importación (${_filas.length} línea(s))'),
+          actions: [
+            if (_guardando)
+              const Padding(
+                padding: EdgeInsets.all(14),
+                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else
+              TextButton.icon(
+                onPressed: _cargando ? null : _guardar,
+                icon: const Icon(Icons.save_outlined),
+                label: Text('Guardar $_incluidas abono(s)'),
+              ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: _cargando
+            ? const Center(child: CircularProgressIndicator())
+            : AppLayout.centered(ListView(
+                padding: AppLayout.pagePadding,
+                children: [
+                  if (_abonosPrevios > 0)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.warningContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        'Este reporte ya tiene $_abonosPrevios abono(s) cargados. Si ya había '
+                        'importado este archivo, guardar de nuevo duplicaría los pagos.',
+                        style: const TextStyle(color: AppTheme.onWarningContainer, fontSize: 13),
+                      ),
+                    ),
+                  Text(
+                    'Revise cada línea antes de guardar. Solo quedan tildadas de entrada las que '
+                    'coinciden exacto (número de póliza + anexo). Las demás necesitan que elija '
+                    'la póliza o las deje por fuera.',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                  ),
                   const SizedBox(height: 10),
+                  Wrap(spacing: 8, runSpacing: 6, children: [
+                    _chip('$listas coinciden exacto', cs.secondaryContainer, cs.onSecondaryContainer),
+                    _chip('$porRevisar por revisar', AppTheme.warningContainer, AppTheme.onWarningContainer),
+                    _chip('$sinPoliza sin póliza', cs.errorContainer, cs.onErrorContainer),
+                    _chip('Incluidas: abonos \$ ${Fmt.money(sumaAbonos, dec: 2)} · '
+                        'comisión \$ ${Fmt.money(sumaComision, dec: 2)}',
+                        cs.surfaceContainerHighest, cs.onSurface),
+                  ]),
+                  const SizedBox(height: 16),
+                  for (int i = 0; i < _filas.length; i++) ...[
+                    _filaCard(_filas[i]),
+                    const SizedBox(height: 10),
+                  ],
                 ],
-              ],
-            )),
+              )),
+      ),
     );
   }
 
@@ -438,6 +511,14 @@ class _PaginaRevisionReportePagoState
       if (f.clienteExtraido.isNotEmpty) f.clienteExtraido,
     ].join('  ·  ');
 
+    final avisos = [
+      if (f.errorGuardado != null) f.errorGuardado!,
+      if (f.duplicado != null) f.duplicado!,
+      if (f.sinValor) 'El reporte no trae el valor abonado de esta línea: escríbalo o déjela por fuera.',
+      if (mostrarMotivo) f.match.motivo,
+    ];
+    final avisoRojo = f.errorGuardado != null || f.duplicado != null || f.sinValor;
+
     return Card(
       color: f.incluir ? null : cs.surfaceContainerHighest,
       child: Padding(
@@ -455,6 +536,10 @@ class _PaginaRevisionReportePagoState
                 const SizedBox(width: 6),
                 _chip('Posible duplicado', cs.errorContainer, cs.onErrorContainer),
               ],
+              if (f.comisionCalculada) ...[
+                const SizedBox(width: 6),
+                _chip('Comisión calculada', cs.surfaceContainerHighest, cs.onSurfaceVariant),
+              ],
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -464,14 +549,14 @@ class _PaginaRevisionReportePagoState
                 ),
               ),
             ]),
-            if (mostrarMotivo || f.duplicado != null)
+            if (avisos.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(left: 48, top: 2, bottom: 6),
                 child: Text(
-                  [if (f.duplicado != null) f.duplicado!, if (mostrarMotivo) f.match.motivo].join('\n'),
+                  avisos.join('\n'),
                   style: TextStyle(
                     fontSize: 12,
-                    color: f.duplicado != null ? cs.error : AppTheme.onWarningContainer,
+                    color: avisoRojo ? cs.error : AppTheme.onWarningContainer,
                   ),
                 ),
               ),
@@ -526,12 +611,15 @@ class _PaginaRevisionReportePagoState
               child: Wrap(spacing: 10, runSpacing: 10, children: [
                 _campoFecha(f),
                 _campo('Prima', f.primaCtrl),
-                _campo('Abono', f.abonoCtrl),
-                _campo('% Com.', f.porcComCtrl),
-                _campo('Vlr Com.', f.vlrComCtrl),
-                _campo('% Com. Ad.', f.porcComAdCtrl),
+                _campo('Abono', f.abonoCtrl, alCambiar: () => _alEditarValores(f)),
+                _campo('% Com.', f.porcComCtrl, decimales: 5, alCambiar: () => _alEditarValores(f)),
+                _campo('Vlr Com.', f.vlrComCtrl, alCambiar: () {
+                  f.comisionCalculada = false;
+                  setState(() {});
+                }),
+                _campo('% Com. Ad.', f.porcComAdCtrl, decimales: 5),
                 _campo('Vlr Com. Ad.', f.vlrComAdCtrl),
-                _campo('Factura', f.facturaCtrl, money: false),
+                _campo('Factura', f.facturaCtrl, numero: false, alCambiar: () => _alEditarValores(f)),
               ]),
             ),
           ],
@@ -540,13 +628,22 @@ class _PaginaRevisionReportePagoState
     );
   }
 
-  Widget _campo(String label, TextEditingController ctrl, {bool money = true}) {
+  Widget _campo(
+    String label,
+    TextEditingController ctrl, {
+    bool numero = true,
+    int decimales = 2,
+    VoidCallback? alCambiar,
+  }) {
     return SizedBox(
       width: 140,
       child: TextFormField(
         controller: ctrl,
-        keyboardType: money ? TextInputType.number : TextInputType.text,
-        inputFormatters: money ? [_MoneyFormatter()] : null,
+        keyboardType: numero
+            ? const TextInputType.numberWithOptions(signed: true, decimal: true)
+            : TextInputType.text,
+        inputFormatters: numero ? [NumeroCOInputFormatter(maxDecimales: decimales)] : null,
+        onChanged: alCambiar == null ? null : (_) => alCambiar(),
         style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(
           labelText: label,
@@ -568,7 +665,10 @@ class _PaginaRevisionReportePagoState
             primera: DateTime(2000),
             ultima: DateTime(2100),
           );
-          if (d != null) setState(() => f.fechaPago = d);
+          if (d != null) {
+            f.fechaPago = d;
+            await _alEditarValores(f);
+          }
         },
         child: InputDecorator(
           decoration: const InputDecoration(

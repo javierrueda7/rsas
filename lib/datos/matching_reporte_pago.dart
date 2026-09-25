@@ -69,21 +69,58 @@ String? anexoSiCorresponde(String nroPoliza, String nucleo, {String? anexoReport
   final segs = segmentosNroPoliza(nroPoliza);
   if (segs.isEmpty) return null;
 
+  // Un número de reporte muy corto (ej. "97", "400") coincidiría con
+  // prefijos de sucursal o producto de pólizas sin relación: solo se acepta
+  // si es el número completo.
+  if (n.length < _minLargoNucleo) {
+    return segs.length == 1 && _sinCerosIzq(segs.first) == n ? '' : null;
+  }
+
   for (var i = 0; i < segs.length; i++) {
-    if (_sinCerosIzq(segs[i]) == n) {
+    // "AUT12345" también corresponde al número 12345.
+    final soloDigitos = segs[i].replaceAll(RegExp(r'[A-Z]'), '');
+    if (_sinCerosIzq(segs[i]) == n ||
+        (soloDigitos.isNotEmpty && soloDigitos != segs[i] && _sinCerosIzq(soloDigitos) == n)) {
       return i < segs.length - 1 ? _sinCerosIzq(segs.last) : '';
     }
   }
 
   // Pólizas viejas digitadas sin separadores: "9940000001936" = núcleo +
-  // anexo pegados.
+  // anexo pegados. Ver [_esNumeroPegado]: nunca cuenta como exacta.
   if (segs.length == 1) {
     final todo = _sinCerosIzq(segs.first);
     if (todo == n) return '';
     final a = anexoReporte == null ? '' : normalizarDoc(anexoReporte);
-    if (a.isNotEmpty && todo == '$n$a') return _sinCerosIzq(a);
+    if (a.isNotEmpty && (todo == '$n$a' || todo == '$n${_sinCerosIzq(a)}')) {
+      return _sinCerosIzq(a);
+    }
   }
   return null;
+}
+
+const int _minLargoNucleo = 5;
+
+/// La póliza está registrada como un solo bloque de dígitos que contiene
+/// el número del reporte más el anexo pegado. Puede ser otra póliza
+/// distinta que casualmente empieza igual, así que se manda a revisar.
+bool _esNumeroPegado(String nroPoliza, String nucleo) {
+  final segs = segmentosNroPoliza(nroPoliza);
+  return segs.length == 1 &&
+      _sinCerosIzq(segs.first) != _sinCerosIzq(normalizarDoc(nucleo));
+}
+
+/// Mismo documento, tolerando que uno traiga el dígito de verificación del
+/// NIT y el otro no ("900159756" vs "9001597561" guardado como "900159756-1").
+bool mismoDocumento(String a, String b) {
+  final x = normalizarDoc(a);
+  final y = normalizarDoc(b);
+  if (x.isEmpty || y.isEmpty) return false;
+  if (x == y) return true;
+  final (corto, largo) = x.length < y.length ? (x, y) : (y, x);
+  return largo.length == corto.length + 1 &&
+      largo.startsWith(corto) &&
+      corto.length >= 6 &&
+      RegExp(r'^\d+$').hasMatch(largo);
 }
 
 /// Decide a qué póliza corresponde una línea del reporte.
@@ -134,14 +171,23 @@ ResultadoMatch resolverMatch({
   }
 
   ResultadoMatch confirmarDocumento(Poliza p, EstadoMatch estado, String motivoOk) {
+    if (_esNumeroPegado(p.nroPoliza ?? '', nucleo)) {
+      return ResultadoMatch(
+        EstadoMatch.revisar,
+        poliza: p,
+        candidatos: [p],
+        motivo: 'La póliza ${p.nroPoliza} está registrada con el número y el anexo pegados; '
+            'podría ser otra póliza que empieza igual. Confirme antes de incluirla.',
+      );
+    }
     final docPoliza = p.docCliente == null ? '' : normalizarDoc(p.docCliente!);
-    if (doc.isNotEmpty && docPoliza.isNotEmpty && docPoliza != doc) {
+    if (doc.isNotEmpty && docPoliza.isNotEmpty && !mismoDocumento(docPoliza, doc)) {
       return ResultadoMatch(
         EstadoMatch.revisar,
         poliza: p,
         candidatos: [p],
         motivo: 'El número coincide, pero el documento del reporte ($doc) no es el del '
-            'cliente de la póliza (${p.docCliente}). Confirmá antes de incluirla.',
+            'cliente de la póliza (${p.docCliente}). Confirme antes de incluirla.',
       );
     }
     return ResultadoMatch(estado, poliza: p, motivo: motivoOk);
@@ -158,7 +204,7 @@ ResultadoMatch resolverMatch({
       EstadoMatch.ambigua,
       candidatos: ordenar(todas),
       motivo: 'El reporte no trae anexo y hay ${conNucleo.length} pólizas con el número '
-          '$nucleo. Elegí a cuál corresponde.',
+          '$nucleo. Elija a cuál corresponde.',
     );
   }
 
@@ -171,7 +217,7 @@ ResultadoMatch resolverMatch({
       EstadoMatch.ambigua,
       candidatos: ordenar(exactas),
       motivo: 'Hay ${exactas.length} pólizas registradas con el número $nucleo anexo '
-          '$anexoRep. Elegí la correcta.',
+          '$anexoRep. Elija la correcta.',
     );
   }
 
@@ -182,7 +228,7 @@ ResultadoMatch resolverMatch({
       poliza: sinAnexo.first,
       candidatos: sinAnexo,
       motivo: 'La póliza está registrada sin anexo y el reporte dice anexo $anexoRep. '
-          'Confirmá que sea la misma antes de incluirla.',
+          'Confirme que sea la misma antes de incluirla.',
     );
   }
 
@@ -191,6 +237,6 @@ ResultadoMatch resolverMatch({
     EstadoMatch.anexoNoRegistrado,
     candidatos: ordenar(todas),
     motivo: 'El número $nucleo existe, pero el anexo $anexoRep no está registrado '
-        '(registrados: $registrados). Elegí a cuál asignarlo o dejala afuera.',
+        '(registrados: $registrados). Elija a cuál asignarlo o déjela por fuera.',
   );
 }
