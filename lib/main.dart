@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:seguimiento_polizas/datos/sesion.dart';
 import 'package:seguimiento_polizas/ui/pagina_login.dart';
 import 'package:seguimiento_polizas/ui/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,6 +23,20 @@ Future<void> main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
+  // El token de sesión dura 12 horas: al vencer, vuelve al login en vez de
+  // dejar que cada pantalla falle con "JWT expired".
+  Sesion.alVencer = () {
+    Sesion.navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => PaginaLogin(
+          appEnv: appEnv,
+          mensajeInicial: 'Su sesión venció. Inicie sesión de nuevo.',
+        ),
+      ),
+      (_) => false,
+    );
+  };
+
   runApp(AppPolizas(appEnv: appEnv));
 }
 
@@ -34,6 +49,7 @@ class AppPolizas extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SegurApp',
+      navigatorKey: Sesion.navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       localizationsDelegates: const [

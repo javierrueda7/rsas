@@ -1,74 +1,69 @@
 // Edge Function: extraer-reporte-pago
 //
-// Recibe un PDF o imagen de un reporte de comisiones (extracto de la
-// aseguradora con varias pólizas) y le pide a Gemini que extraiga la lista
-// completa de líneas para revisar/cargar como abonos. La API key de Google
-// vive solo acá (secret de Supabase) — nunca llega al cliente Flutter.
+// Recibe un reporte de comisiones de una aseguradora (PDF, XLSX o imagen,
+// en base64) y le pide a Gemini la cabecera y la lista completa de líneas
+// para revisarlas y cargarlas como abonos. La API key de Google vive solo
+// acá (secret de Supabase).
 //
-// Algunos reportes vienen protegidos con contraseña (PDF cifrado). Cuando
-// eso pasa, se intenta desproteger automáticamente con la contraseña
-// estándar con la que la aseguradora los envía, antes de mandarlo a Gemini.
+// Algunos reportes vienen protegidos con contraseña: se desprotegen con la
+// contraseña estándar (secret REPORTE_PDF_PASSWORD) antes de enviarlos.
 
-import { decryptPDF, isEncrypted } from "npm:@pdfsmaller/pdf-decrypt";
-import * as XLSX from "npm:xlsx@0.18.5";
+import { decryptPDF, isEncrypted } from "npm:@pdfsmaller/pdf-decrypt@1.0.1";
+// SheetJS desde su CDN oficial: la versión publicada en npm (0.18.5) está
+// abandonada y tiene vulnerabilidades conocidas (CVE-2023-30533, CVE-2024-22363).
+import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
 import officeCrypto from "npm:officecrypto-tool@0.0.7";
 
-const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
-const GEMINI_MODEL = "gemini-3.6-flash";
+import {
+  bytesDeBase64,
+  CORS_HEADERS,
+  decodeBase64,
+  encodeBase64,
+  jsonError,
+  jsonOk,
+  llamarGemini,
+  MAX_BYTES_ARCHIVO,
+  usuarioDeLaPeticion,
+} from "../_shared/comun.ts";
 
-// Contraseña estándar de estos reportes (la misma para todos, según Rueda
-// Serrano) — solo se usa si el archivo efectivamente viene protegido. Vive
-// como secret de Supabase, no en el código (ver README de deploy).
 const PASSWORD_CONOCIDA = Deno.env.get("REPORTE_PDF_PASSWORD") ?? "";
 
-/// btoa(String.fromCharCode(...bytes)) revienta el call stack con archivos
-/// grandes (spread de miles de argumentos) — arma el string en trozos.
-function bytesABase64(bytes: Uint8Array): string {
-  const CHUNK = 8192;
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(bin);
-}
+const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-/// Quita la contraseña de un PDF cifrado. Se probó primero con qpdf
-/// compilado a WASM (@neslinesli93/qpdf-wasm) pero esa build fallaba
-/// consistentemente con "can't find startxref" al leer el archivo de
-/// vuelta del sistema de archivos virtual (bug de la librería/build, no
-/// del archivo — el tamaño escrito coincidía exacto con el original) sin
-/// dar más detalle util incluso revisando los logs del servidor. Esta
-/// librería es JS puro (usa Web Crypto API de Deno, sin WASM ni sistema
-/// de archivos virtual de por medio), mucho más simple y confiable.
-async function desprotegerPdf(bytes: Uint8Array): Promise<Uint8Array> {
-  return await decryptPDF(bytes, PASSWORD_CONOCIDA);
-}
+/// Máximo de caracteres de tabla que se envían a la IA desde un Excel (unas
+/// 1.500 filas). Evita un costo desbordado con hojas enormes.
+const MAX_CARACTERES_XLSX = 400_000;
 
-const MIME_XLSX =
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-
-/// Desprotege (si hace falta) y convierte un XLSX a texto plano (una tabla
-/// CSV por hoja) para mandárselo a Gemini como texto en vez de inlineData
-/// — Gemini no entiende el binario de un Excel, pero sí una tabla en texto.
+/// Desprotege (si hace falta) y convierte un XLSX a texto (un CSV por hoja
+/// visible, sin filas vacías): Gemini no lee el binario de un Excel.
 async function leerXlsxComoTexto(bytesOriginales: Uint8Array): Promise<string> {
   let bytes = bytesOriginales;
   if (officeCrypto.isEncrypted(bytes)) {
+    if (!PASSWORD_CONOCIDA) throw new Error("sin contraseña configurada");
     bytes = await officeCrypto.decrypt(bytes, { password: PASSWORD_CONOCIDA });
   }
 
-  const libro = XLSX.read(bytes, { type: "buffer" });
-  return libro.SheetNames.map((nombre) => {
-    const csv = XLSX.utils.sheet_to_csv(libro.Sheets[nombre]);
-    return `--- Hoja: ${nombre} ---\n${csv}`;
-  }).join("\n\n");
-}
+  const libro = XLSX.read(bytes, { type: "array" });
+  const ocultas = new Set(
+    (libro.Workbook?.Sheets ?? [])
+      .filter((s: { Hidden?: number }) => (s.Hidden ?? 0) !== 0)
+      .map((s: { name?: string }) => s.name),
+  );
+  const texto = libro.SheetNames
+    .filter((nombre: string) => !ocultas.has(nombre))
+    .map((nombre: string) => {
+      const csv = XLSX.utils.sheet_to_csv(libro.Sheets[nombre], { blankrows: false, strip: true })
+        .split("\n")
+        .map((fila: string) => fila.replace(/,+$/, ""))
+        .filter((fila: string) => fila.trim() !== "")
+        .join("\n");
+      return `--- Hoja: ${nombre} ---\n${csv}`;
+    })
+    .join("\n\n");
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+  if (texto.length > MAX_CARACTERES_XLSX) throw new Error("excel demasiado grande");
+  return texto;
+}
 
 const LINEA_SCHEMA = {
   type: "OBJECT",
@@ -77,75 +72,84 @@ const LINEA_SCHEMA = {
       type: "STRING",
       nullable: true,
       description:
-        "Número/código de póliza EXACTAMENTE como aparece en esa fila del reporte (columna " +
-        "'Póliza', 'Poliza', o similar) — estos reportes casi nunca traen el número completo " +
-        "con todos los segmentos que trae la póliza original, solo un núcleo numérico (ej. " +
-        "'994000000193', '101011263', '105005925'). NO inventes segmentos ni armes el formato " +
-        "completo con guiones — copiá tal cual el valor de esa columna. El matching contra la " +
-        "póliza real lo hace el sistema por documento del cliente + este núcleo, no hace falta " +
-        "reconstruir nada acá.",
+        "Número de póliza exactamente como aparece en la columna 'Póliza' de esa fila (suele " +
+        "ser solo el núcleo numérico, ej. '994000000193', '101011263'). No le agregue el anexo " +
+        "ni otros segmentos.",
+    },
+    anexo: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Número de anexo/endoso de esa fila, de la columna 'End', 'End.', 'Endoso' o 'Anexo' " +
+        "(suele estar junto a la columna Póliza; ej. '0', '1', '6', '16'). Una misma póliza " +
+        "aparece en varias filas con anexos distintos y cada anexo es un registro distinto: " +
+        "cópielo en cada fila, también cuando es '0'. No use 'Certificado', 'Recibo', " +
+        "'Formulario' ni 'Transacción'. Null si el reporte no tiene columna de anexo.",
     },
     doc_cliente: {
       type: "STRING",
       nullable: true,
       description:
-        "Número de documento del cliente de esa línea (columna 'Docum', 'Doc. Tomador', " +
-        "'Documento', o el número que acompañe al nombre del asegurado/tomador) — SOLO " +
-        "dígitos, sin puntos. Es el dato MÁS IMPORTANTE de la línea: el sistema usa el " +
-        "documento para encontrar con certeza a qué cliente/póliza corresponde, mucho más " +
-        "confiable que el nombre o el número de póliza solos. Si la columna trae nombre y " +
-        "documento juntos en el mismo texto, separalos: el documento va acá, el nombre en " +
-        "nombre_cliente.",
+        "Documento del cliente de la fila (columna 'Docum', 'Doc. Tomador', 'Documento' o el " +
+        "número junto al nombre del asegurado), solo dígitos. Si el nombre y el documento " +
+        "vienen en la misma celda, sepárelos.",
     },
-    nombre_cliente: { type: "STRING", nullable: true, description: "Nombre del asegurado/tomador de esa línea" },
-    nombre_ramo: {
+    nombre_cliente: { type: "STRING", nullable: true, description: "Nombre del asegurado/tomador de la fila." },
+    nombre_ramo: { type: "STRING", nullable: true, description: "Ramo de la fila tal como aparece (texto o código)." },
+    vlrprima_poliza: { type: "NUMBER", nullable: true, description: "Prima cobrada/base de la fila." },
+    vlrabono_prima: {
+      type: "NUMBER",
+      nullable: true,
+      description: "Valor abonado de la prima en este corte; el mismo que vlrprima_poliza si el reporte no los distingue.",
+    },
+    porccomision: { type: "NUMBER", nullable: true, description: "Porcentaje de comisión (columna 'Pje', '% Comisión')." },
+    vlrcomision: { type: "NUMBER", nullable: true, description: "Comisión acreditada de la fila." },
+    porccomad: { type: "NUMBER", nullable: true, description: "Porcentaje de comisión adicional, solo si hay columna aparte." },
+    vlrcomad: { type: "NUMBER", nullable: true, description: "Valor de comisión adicional, solo si hay columna aparte." },
+    num_factura: {
       type: "STRING",
       nullable: true,
-      description: "Ramo de esa línea tal como aparece en el reporte (columna 'Ramo', 'Ramo Cial'), texto o código.",
+      description: "Número de recibo/factura/transacción de la fila (columna 'Recibo', 'Transacción', 'Formulario').",
     },
-    vlrprima_poliza: { type: "NUMBER", nullable: true, description: "Valor de la prima cobrada/base de esa línea, número plano" },
-    vlrabono_prima: { type: "NUMBER", nullable: true, description: "Valor abonado/pagado de la prima en este corte, número plano (mismo valor que vlrprima_poliza si el reporte no distingue ambos)" },
-    porccomision: { type: "NUMBER", nullable: true, description: "Porcentaje de comisión aplicado (columna 'Pje', '% Comision')" },
-    vlrcomision: { type: "NUMBER", nullable: true, description: "Valor de la comisión acreditada de esa línea, número plano" },
-    porccomad: { type: "NUMBER", nullable: true, description: "Porcentaje de comisión adicional, si el reporte trae una columna separada para eso (poco común)" },
-    vlrcomad: { type: "NUMBER", nullable: true, description: "Valor de comisión adicional, si aplica" },
-    num_factura: { type: "STRING", nullable: true, description: "Número de recibo/factura/transacción de esa línea, si aparece (columna 'Recibo', 'Transaccion', 'Formulario')" },
-    fecha_pago: { type: "STRING", nullable: true, description: "Fecha de esa línea (columna 'Fecha', 'Fecha Recibo', 'Fecha Recaudo'), formato YYYY-MM-DD" },
+    fecha_pago: { type: "STRING", nullable: true, description: "Fecha de la fila ('Fecha', 'Fecha Recibo', 'Fecha Recaudo'), YYYY-MM-DD." },
   },
 };
 
 const CABECERA_SCHEMA = {
   type: "OBJECT",
   properties: {
-    nombre_aseguradora: { type: "STRING", nullable: true, description: "Nombre de la compañía aseguradora que emite el reporte" },
+    nombre_aseguradora: { type: "STRING", nullable: true, description: "Aseguradora que emite el reporte." },
     nombre_intermediario: {
       type: "STRING",
       nullable: true,
       description:
-        "Nombre o código del intermediario/corredor de seguros al que se dirige el reporte, tal " +
-        "como aparece impreso en la cabecera del documento (puede incluir un código antes del " +
-        "nombre, ej. '5728 - SERRANO MANTILLA LUZ STELLA') — copiá el texto tal cual sale, no lo " +
-        "reordenes ni lo limpies.",
+        "Intermediario al que va dirigido el reporte, tal como está impreso en la cabecera " +
+        "(puede traer un código antes del nombre, ej. '5728 - SERRANO MANTILLA LUZ STELLA').",
     },
-    fecha_reporte: { type: "STRING", nullable: true, description: "Fecha del reporte/corte, formato YYYY-MM-DD" },
-    fecha_inicio_periodo: { type: "STRING", nullable: true, description: "Fecha de inicio del período que cubre el reporte, formato YYYY-MM-DD. Null si el documento solo trae una fecha de corte y no un rango." },
-    fecha_fin_periodo: { type: "STRING", nullable: true, description: "Fecha de fin del período (o fecha de corte si es una sola fecha), formato YYYY-MM-DD" },
+    fecha_reporte: { type: "STRING", nullable: true, description: "Fecha del reporte, YYYY-MM-DD." },
+    fecha_inicio_periodo: {
+      type: "STRING",
+      nullable: true,
+      description: "Inicio del período, YYYY-MM-DD. Null si el documento solo trae una fecha de corte.",
+    },
+    fecha_fin_periodo: {
+      type: "STRING",
+      nullable: true,
+      description: "Fin del período (o fecha de corte si hay una sola), YYYY-MM-DD.",
+    },
     vlr_prima_total: {
       type: "NUMBER",
       nullable: true,
       description:
-        "Valor TOTAL de prima/saldo del reporte completo, número plano — buscá una fila de " +
-        "totales al final del documento (ej. 'Total Prima', 'Total Saldo', suma general de la " +
-        "columna de prima). Si el documento no trae un total general de prima (solo totales por " +
-        "sección/ramo, o ningún total), dejalo null — no sumes las líneas vos mismo.",
+        "Total GENERAL de prima impreso en el reporte ('Total Prima', 'Total Saldo'). Null si " +
+        "no hay un total general impreso (no sume líneas ni use subtotales por ramo).",
     },
     vlr_comision_total: {
       type: "NUMBER",
       nullable: true,
       description:
-        "Valor TOTAL de comisión acreditada del reporte completo, número plano — buscá una fila " +
-        "de totales al final del documento (ej. 'Total Comisión Acreditada', 'Total Comisión', " +
-        "'Valores Acreditados'). Si no hay un total general, dejalo null — no sumes las líneas vos mismo.",
+        "Total GENERAL de comisión impreso ('Total Comisión Acreditada', 'Valor Comisión'). " +
+        "Null si no hay un total general impreso (no sume líneas).",
     },
   },
 };
@@ -159,149 +163,90 @@ const RESPONSE_SCHEMA = {
   required: ["cabecera", "lineas"],
 };
 
+const INSTRUCCIONES =
+  "Usted extrae reportes de comisiones que las aseguradoras colombianas envían a un " +
+  "intermediario de seguros. Cada aseguradora usa su propio formato: identifique las " +
+  "columnas de este reporte por su encabezado o posición.\n" +
+  "- Extraiga la cabecera y TODAS las filas de pólizas: una línea por movimiento, aunque " +
+  "falten datos. Las reversiones y anulaciones son líneas propias con signo contrario: no " +
+  "las omita ni las compense entre sí.\n" +
+  "- NO incluya en 'lineas' filas de subtotal o total (por ramo, sección o general), ni " +
+  "encabezados repetidos entre páginas.\n" +
+  "- Números en formato colombiano: el punto separa miles y la coma los decimales " +
+  "(1.234.567,89 → 1234567.89). Los negativos pueden venir con '-' o entre paréntesis: " +
+  "'(168.093,5)' → -168093.5.\n" +
+  "- Fechas en día/mes/año (05/03/2026 → 2026-03-05).\n" +
+  "- Si un dato no aparece, devuelva null. Nunca invente valores.";
+
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+  if (req.method !== "POST") return jsonError("Método no permitido.", 405);
 
-  if (req.method !== "POST") {
-    return jsonError("Método no permitido.", 405);
-  }
-
-  if (!GOOGLE_API_KEY) {
-    return jsonError("Falta configurar GOOGLE_API_KEY en los secrets de Supabase.", 500);
+  if (!(await usuarioDeLaPeticion(req))) {
+    return jsonError("Su sesión no es válida o ya venció. Inicie sesión de nuevo.", 401);
   }
 
   let body: { fileBase64?: string; mimeType?: string };
   try {
     body = await req.json();
   } catch {
-    return jsonError("Body inválido, se esperaba JSON.", 400);
+    return jsonError("Petición inválida.", 400);
   }
 
   const { fileBase64, mimeType } = body;
-  if (!fileBase64 || !mimeType) {
-    return jsonError("Faltan fileBase64 y/o mimeType.", 400);
-  }
+  if (!fileBase64 || !mimeType) return jsonError("Falta el archivo.", 400);
 
   const tiposValidos = ["application/pdf", MIME_XLSX, "image/jpeg", "image/png", "image/webp"];
   if (!tiposValidos.includes(mimeType)) {
-    return jsonError(`Tipo de archivo no soportado: ${mimeType}. Usá PDF, XLSX, JPG, PNG o WEBP.`, 400);
+    return jsonError("Tipo de archivo no soportado. Use PDF, XLSX, JPG, PNG o WEBP.", 400);
+  }
+  if (bytesDeBase64(fileBase64) > MAX_BYTES_ARCHIVO) {
+    return jsonError("El archivo pesa más de 15 MB. Use una versión más liviana.", 413);
   }
 
-  const instruccion =
-    "Este es un reporte/extracto de comisiones emitido por una aseguradora colombiana a un " +
-    "intermediario de seguros. Cada aseguradora usa su propio formato (a veces Excel con " +
-    "encabezados de columna claros, a veces PDF con columnas visuales) — identificá las " +
-    "columnas de esta tabla en particular por su encabezado o posición, no asumas un formato " +
-    "fijo. Contiene una cabecera (aseguradora, fechas del corte/período) y una tabla con varias " +
-    "líneas de pólizas y sus pagos de ese corte. Extraé la cabecera y TODAS las líneas/filas de " +
-    "la tabla, una por cada movimiento (incluyendo reversiones/anulaciones, que son líneas " +
-    "aparte con signo contrario — no las omitas ni las canceles entre sí, cada una es una fila " +
-    "independiente). Si un dato no aparece, dejalo en null — no inventes valores. No omitas " +
-    "ninguna fila de la tabla aunque falten algunos datos en ella.\n\n" +
-    "Además, buscá en la cabecera/pie del documento los TOTALES generales del reporte completo " +
-    "(prima y comisión) si el documento los muestra explícitamente en una fila de totales — no " +
-    "los calcules vos sumando las líneas, solo copiá lo que ya viene impreso como total.\n\n" +
-    "IMPORTANTE sobre negativos: algunos reportes muestran los valores negativos (reversiones) " +
-    "con signo '-' y otros con formato contable entre paréntesis, ej. '(168.093,5)' significa " +
-    "-168093.5 — interpretá ambos formatos como negativos en los campos numéricos.";
-
-  // Arma las "parts" del pedido a Gemini: PDF/imagen van como inlineData
-  // (Gemini los interpreta visualmente); un XLSX no es algo que Gemini
-  // pueda "ver", así que se manda como texto (CSV) ya extraído acá.
-  let parts: Record<string, unknown>[];
+  // PDF/imagen van como archivo (Gemini los lee visualmente); un Excel se
+  // manda como texto ya extraído acá.
+  let partes: Record<string, unknown>[];
   try {
     if (mimeType === MIME_XLSX) {
-      const bytes = Uint8Array.from(atob(fileBase64), (c) => c.charCodeAt(0));
-      const textoTabla = await leerXlsxComoTexto(bytes);
-      parts = [{ text: `${instruccion}\n\nContenido del archivo Excel:\n\n${textoTabla}` }];
+      const texto = await leerXlsxComoTexto(decodeBase64(fileBase64));
+      partes = [{ text: `Contenido del archivo Excel:\n\n${texto}` }];
     } else if (mimeType === "application/pdf") {
-      let dataParaGemini = fileBase64;
-      const bytes = Uint8Array.from(atob(fileBase64), (c) => c.charCodeAt(0));
-      const info = await isEncrypted(bytes);
-      if (info.encrypted) {
-        const bytesLimpios = await desprotegerPdf(bytes);
-        dataParaGemini = bytesABase64(bytesLimpios);
+      let data = fileBase64;
+      const bytes = decodeBase64(fileBase64);
+      if ((await isEncrypted(bytes)).encrypted) {
+        if (!PASSWORD_CONOCIDA) {
+          console.error("extraer-reporte-pago: PDF protegido y falta el secret REPORTE_PDF_PASSWORD");
+          return jsonError("El PDF tiene contraseña y no hay una contraseña configurada en el servidor.", 500);
+        }
+        data = encodeBase64(await decryptPDF(bytes, PASSWORD_CONOCIDA));
       }
-      parts = [{ inlineData: { mimeType, data: dataParaGemini } }, { text: instruccion }];
+      partes = [{ inlineData: { mimeType, data } }];
     } else {
-      parts = [{ inlineData: { mimeType, data: fileBase64 } }, { text: instruccion }];
+      partes = [{ inlineData: { mimeType, data: fileBase64 } }];
     }
   } catch (e) {
-    return jsonError(
-      `No se pudo leer el archivo (¿contraseña incorrecta o formato no soportado?): ${e}`,
-      400,
-    );
+    console.error("extraer-reporte-pago: no se pudo leer el archivo", e);
+    const msg = String(e).includes("demasiado grande")
+      ? "El Excel es demasiado grande para leerlo de una vez. Divídalo en partes más pequeñas."
+      : "No se pudo abrir el archivo (¿contraseña distinta o archivo dañado?).";
+    return jsonError(msg, 400);
   }
 
   try {
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
-      `?key=${GOOGLE_API_KEY}`;
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-          // Un reporte con muchas pólizas genera una respuesta larga — con
-          // el límite por defecto, Gemini cortaba la respuesta a mitad del
-          // arreglo de líneas y volvía "lineas: []". No bajar este valor
-          // sin volver a probar con un reporte de varias decenas de filas.
-          maxOutputTokens: 65536,
-        },
-      }),
+    const resultado = await llamarGemini({
+      etiqueta: "extraer-reporte-pago",
+      instrucciones: INSTRUCCIONES,
+      partes,
+      schema: RESPONSE_SCHEMA,
+      // ~150 tokens por línea: alcanza para unas 200 líneas. Si un reporte
+      // lo supera, se avisa al usuario (MAX_TOKENS) en vez de cortar callado.
+      maxOutputTokens: 32768,
     });
-
-    if (!res.ok) {
-      const detalle = await res.text();
-      return jsonError(`Error de Gemini (${res.status}): ${detalle}`, 502);
-    }
-
-    const data = await res.json();
-    const finishReason = data.candidates?.[0]?.finishReason;
-    const textoJson = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textoJson) {
-      return jsonError(
-        `Gemini no devolvió datos estructurados (finishReason: ${finishReason}). Probá con otro archivo o más nítido.`,
-        502,
-      );
-    }
-
-    let extraido: unknown;
-    try {
-      extraido = JSON.parse(textoJson);
-    } catch {
-      return jsonError(
-        `La respuesta de Gemini no fue un JSON válido (finishReason: ${finishReason}, largo: ${textoJson.length}).`,
-        502,
-      );
-    }
-
-    // Si no se detectaron líneas, deja rastro en los logs de la función
-    // (Dashboard → Edge Functions → Logs) con el finishReason, para poder
-    // distinguir "el documento no tenía tabla" de "Gemini cortó la
-    // respuesta" sin tener que reproducir el caso.
-    const lineasCount = (extraido as { lineas?: unknown[] })?.lineas?.length ?? 0;
-    if (lineasCount === 0) {
-      console.log(`extraer-reporte-pago: 0 líneas, finishReason=${finishReason}, largo=${textoJson.length}`);
-    }
-
-    return new Response(JSON.stringify(extraido), {
-      headers: { ...CORS_HEADERS, "content-type": "application/json" },
-    });
+    if (!resultado.ok) return jsonError(resultado.error, resultado.status);
+    return jsonOk(resultado.datos);
   } catch (e) {
-    return jsonError(`Error inesperado: ${e}`, 500);
+    console.error("extraer-reporte-pago: error inesperado", e);
+    return jsonError("No se pudo procesar el archivo. Intente de nuevo.", 500);
   }
 });
-
-function jsonError(mensaje: string, status: number): Response {
-  return new Response(JSON.stringify({ error: mensaje }), {
-    status,
-    headers: { ...CORS_HEADERS, "content-type": "application/json" },
-  });
-}

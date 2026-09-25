@@ -44,3 +44,6 @@ app.*.map.json
 
 # Estado local de la Supabase CLI (link de proyecto, cache de versiones)
 supabase/.temp/
+
+# Notas locales con credenciales: nunca versionar
+README config.txt

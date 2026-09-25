@@ -161,9 +161,9 @@ class _PaginaInicioState extends State<PaginaInicio> {
                 icon: Icons.folder_open_outlined,
                 iconColor: cs.tertiary,
                 title: 'Catálogos',
-                subtitle: usuarioActivo?.rol.toUpperCase() == 'D'
-                    ? 'Clientes, aseguradoras, ramos y productos'
-                    : 'Clientes, asesores, aseguradoras, ramos, productos y más',
+                subtitle: Sesion.esAdmin
+                    ? 'Clientes, asesores, aseguradoras, ramos, productos y más'
+                    : 'Clientes, aseguradoras, ramos y productos',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const PaginaCatalogos()),
@@ -184,7 +184,7 @@ class _PaginaInicioState extends State<PaginaInicio> {
               ),
 
               // ── Reportes de comisiones (no visible para digitadores) ────────
-              if (usuarioActivo?.rol.toUpperCase() != 'D') ...[
+              if (Sesion.veComisiones) ...[
                 const SizedBox(height: 10),
                 _NavCard(
                   icon: Icons.request_quote_outlined,

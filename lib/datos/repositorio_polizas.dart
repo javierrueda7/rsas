@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/filtros_busqueda.dart';
 import 'poliza.dart';
 
 class RepositorioPolizas {
@@ -7,101 +8,154 @@ class RepositorioPolizas {
   static const String _tabla = 'polizas';
   static const String _vista = 'vw_polizas_busqueda';
 
+  /// Columnas que usan las listas (Pólizas, Reportes, duplicados, pólizas
+  /// del cliente, revisión de reportes). La vista tiene ~57; traer solo
+  /// estas reduce la descarga completa a menos de la mitad. El formulario
+  /// de edición usa [obtenerPoliza], que trae todas.
+  static const String _colsLista =
+      'id, nro_poliza, cliente_id, asesor_id, ramo_id, producto_id, aseg_id, '
+      'fexp_poliza, fini_poliza, ffin_poliza, prima_poliza, valor_poliza, '
+      'vlraseg_poliza, porccom_poliza, bien_asegurado, fcreado, fultmod, '
+      'estado_poliza_id, vlrprimapagada_poliza, usuario_id, '
+      'nombre_cliente, doc_cliente, tipodoc_cliente, tel_cliente, '
+      'nombre_asesor, nombre_ramo, nombre_prod, nombre_aseg, '
+      'nombre_usuario, apodo_usuario';
+
+  /// Filtro de búsqueda libre sobre la vista. El texto va escapado: una
+  /// coma o un paréntesis en la búsqueda ya no rompe el filtro.
+  String _filtroBusqueda(String b) {
+    final intId = int.tryParse(b);
+    final bDoc = b.replaceAll('.', '');
+    return [
+      if (intId != null) 'id.eq.$intId',
+      ilikeContiene('nro_poliza', b),
+      ilikeContiene('nombre_cliente', b),
+      if (bDoc.isNotEmpty) ilikeContiene('doc_cliente', bDoc),
+      ilikeContiene('nombre_asesor', b),
+      ilikeContiene('nombre_ramo', b),
+      ilikeContiene('nombre_prod', b),
+      ilikeContiene('nombre_aseg', b),
+      ilikeContiene('nombre_interm', b),
+      ilikeContiene('nombre_forma_pago', b),
+      ilikeContiene('nombre_formaexp', b),
+      ilikeContiene('nombre_usuario', b),
+      ilikeContiene('apodo_usuario', b),
+      ilikeContiene('bien_asegurado', b),
+      ilikeContiene('obs_poliza', b),
+    ].join(',');
+  }
+
   /// Carga rápida: devuelve los [limite] registros más recientes.
   Future<List<Poliza>> listar({
     String busqueda = '',
     int limite = 500,
   }) async {
     final b = busqueda.trim();
-    // doc_cliente se guarda sin puntos — si buscan con puntos igual matchea.
-    final bDoc = b.replaceAll('.', '');
-    dynamic query = _db.from(_vista).select();
-
-    if (b.isNotEmpty) {
-      final intId = int.tryParse(b);
-      final idClause = intId != null ? 'id.eq.$intId,' : '';
-      query = query.or(
-        '$idClause'
-        'nro_poliza.ilike.%$b%,'
-        'nombre_cliente.ilike.%$b%,'
-        'doc_cliente.ilike.%$bDoc%,'
-        'nombre_asesor.ilike.%$b%,'
-        'nombre_ramo.ilike.%$b%,'
-        'nombre_prod.ilike.%$b%,'
-        'nombre_aseg.ilike.%$b%,'
-        'nombre_interm.ilike.%$b%,'
-        'nombre_forma_pago.ilike.%$b%,'
-        'nombre_formaexp.ilike.%$b%,'
-        'nombre_usuario.ilike.%$b%,'
-        'apodo_usuario.ilike.%$b%,'
-        'bien_asegurado.ilike.%$b%,'
-        'obs_poliza.ilike.%$b%',
-      );
-    }
-
-    final res = await query.order('fcreado', ascending: false).limit(limite);
+    dynamic query = _db.from(_vista).select(_colsLista);
+    if (b.isNotEmpty) query = query.or(_filtroBusqueda(b));
+    final res = await query.order('id', ascending: false).limit(limite);
     final rows = (res as List).cast<Map<String, dynamic>>();
     return rows.map(Poliza.fromMap).toList();
   }
 
-  /// Carga completa: trae todas las pólizas en páginas de [_pageSize] filas.
-  /// Llama [onProgreso] después de cada página con el total acumulado.
   static const int _pageSize = 1000;
 
-  /// Cache en memoria del último "traer todas" (solo para busqueda vacía),
-  /// compartido entre pantallas (Pólizas y Reportes usan cada una su propia
-  /// instancia de este repositorio, pero el cache es de clase). Se invalida
-  /// automáticamente al crear/editar/eliminar una póliza.
+  // ── Caché de "todas las pólizas" (compartida por Pólizas y Reportes) ────
   static List<Poliza>? _cacheTodos;
+  static DateTime? _cacheCargadoEn;
+  static Future<List<Poliza>>? _cargaEnCurso;
 
-  /// Trae todas las pólizas. Si ya se cargaron todas antes (busqueda vacía)
-  /// y nada las invalidó, devuelve el resultado en memoria sin ir a la red
-  /// — a menos que [forzar] sea true (ej: botón "Recargar").
+  /// Pasado este tiempo se vuelve a descargar (para ver cambios de otros
+  /// usuarios sin tener que presionar "Recargar").
+  static const Duration vigenciaCache = Duration(minutes: 15);
+
+  /// Cuándo se descargó la copia en memoria (para mostrarlo en pantalla).
+  static DateTime? get cacheCargadoEn => _cacheCargadoEn;
+
+  static void invalidarCache() {
+    _cacheTodos = null;
+    _cacheCargadoEn = null;
+  }
+
+  static bool get _cacheVigente =>
+      _cacheTodos != null &&
+      _cacheCargadoEn != null &&
+      DateTime.now().difference(_cacheCargadoEn!) < vigenciaCache;
+
+  /// Trae de nuevo solo las pólizas [ids] y las reemplaza en la caché, en
+  /// vez de descartar las 32 mil y volver a bajarlas todas después de
+  /// guardar una póliza o un abono.
+  Future<void> refrescarEnCache(Iterable<int> ids) async {
+    final lista = ids.toSet();
+    final cache = _cacheTodos;
+    if (lista.isEmpty || cache == null) return;
+    try {
+      final res = await _db
+          .from(_vista)
+          .select(_colsLista)
+          .inFilter('id', lista.toList());
+      final nuevas = {
+        for (final r in (res as List).cast<Map<String, dynamic>>())
+          (r['id'] as num).toInt(): Poliza.fromMap(r),
+      };
+      final existentes = cache.map((p) => p.id).toSet();
+      _cacheTodos = [
+        ...nuevas.values.where((p) => !existentes.contains(p.id)),
+        for (final p in cache)
+          if (!lista.contains(p.id)) p else if (nuevas[p.id] != null) nuevas[p.id]!,
+      ];
+    } catch (_) {
+      invalidarCache();
+    }
+  }
+
+  /// Trae todas las pólizas (o todas las que coinciden con [busqueda]).
+  /// Sin búsqueda usa la copia en memoria mientras esté vigente, salvo que
+  /// [forzar] sea true (botón "Recargar"). Si otra pantalla ya está
+  /// descargando, espera esa misma descarga en vez de empezar otra.
   Future<List<Poliza>> listarTodos({
     String busqueda = '',
     bool forzar = false,
     void Function(int cargados)? onProgreso,
   }) async {
     final b = busqueda.trim();
-    final bDoc = b.replaceAll('.', '');
+    if (b.isNotEmpty) return _descargarTodas(b, onProgreso);
 
-    if (!forzar && b.isEmpty && _cacheTodos != null) {
+    if (!forzar && _cacheVigente) {
       onProgreso?.call(_cacheTodos!.length);
-      return _cacheTodos!;
+      return List.of(_cacheTodos!);
     }
+    final enCurso = _cargaEnCurso;
+    if (enCurso != null && !forzar) return List.of(await enCurso);
 
+    final carga = _descargarTodas('', onProgreso);
+    _cargaEnCurso = carga;
+    try {
+      final todas = await carga;
+      _cacheTodos = todas;
+      _cacheCargadoEn = DateTime.now();
+      return List.of(todas);
+    } finally {
+      if (identical(_cargaEnCurso, carga)) _cargaEnCurso = null;
+    }
+  }
+
+  /// Pagina por id (keyset): exacto aunque entren pólizas nuevas mientras
+  /// carga. Antes se paginaba con OFFSET ordenando por fecha de creación
+  /// (que se repite), y se podían saltar o repetir filas.
+  Future<List<Poliza>> _descargarTodas(
+    String b,
+    void Function(int cargados)? onProgreso,
+  ) async {
     final List<Poliza> todos = [];
-    int desde = 0;
+    int? ultimoId;
 
     while (true) {
-      dynamic query = _db.from(_vista).select();
+      dynamic query = _db.from(_vista).select(_colsLista);
+      if (b.isNotEmpty) query = query.or(_filtroBusqueda(b));
+      if (ultimoId != null) query = query.lt('id', ultimoId);
 
-      if (b.isNotEmpty) {
-        final intId = int.tryParse(b);
-        final idClause = intId != null ? 'id.eq.$intId,' : '';
-        query = query.or(
-          '$idClause'
-          'nro_poliza.ilike.%$b%,'
-          'nombre_cliente.ilike.%$b%,'
-          'doc_cliente.ilike.%$bDoc%,'
-          'nombre_asesor.ilike.%$b%,'
-          'nombre_ramo.ilike.%$b%,'
-          'nombre_prod.ilike.%$b%,'
-          'nombre_aseg.ilike.%$b%,'
-          'nombre_interm.ilike.%$b%,'
-          'nombre_forma_pago.ilike.%$b%,'
-          'nombre_formaexp.ilike.%$b%,'
-          'nombre_usuario.ilike.%$b%,'
-          'apodo_usuario.ilike.%$b%,'
-          'bien_asegurado.ilike.%$b%,'
-          'obs_poliza.ilike.%$b%',
-        );
-      }
-
-      final res = await query
-          .order('fcreado', ascending: false)
-          .range(desde, desde + _pageSize - 1);
-
+      final res = await query.order('id', ascending: false).limit(_pageSize);
       final rows = (res as List).cast<Map<String, dynamic>>();
       todos.addAll(rows.map(Poliza.fromMap));
 
@@ -109,11 +163,9 @@ class RepositorioPolizas {
       // Cede el hilo para que la UI pueda repintar el contador
       await Future.delayed(Duration.zero);
 
-      if (rows.length < _pageSize) break; // última página
-      desde += _pageSize;
+      if (rows.length < _pageSize) break;
+      ultimoId = todos.last.id;
     }
-
-    if (b.isEmpty) _cacheTodos = todos;
     return todos;
   }
 
@@ -121,28 +173,44 @@ class RepositorioPolizas {
   /// vw_polizas_duplicadas, lib/fix_vista_polizas_duplicadas.sql) — el
   /// filtro corre en la base, no trae todo el catálogo al cliente.
   Future<List<Poliza>> listarDuplicados() async {
-    final res = await _db.from('vw_polizas_duplicadas').select();
+    final res = await _db.from('vw_polizas_duplicadas').select(_colsLista);
     final rows = (res as List).cast<Map<String, dynamic>>();
     return rows.map(Poliza.fromMap).toList();
   }
 
+  /// Pólizas cuyo número contiene [fragmento] — solo en nro_poliza, no en
+  /// el resto de columnas como [listar]. Trae de más a propósito: el filtro
+  /// fino (segmento exacto + anexo) lo hace matching_reporte_pago.dart.
+  Future<List<Poliza>> listarPorNroContiene(String fragmento, {int limite = 200}) async {
+    final f = normalizarAlfanumerico(fragmento);
+    if (f.isEmpty) return [];
+    final res = await _db
+        .from(_vista)
+        .select(_colsLista)
+        .ilike('nro_poliza', '%$f%')
+        .order('id', ascending: false)
+        .limit(limite);
+    return (res as List).cast<Map<String, dynamic>>().map(Poliza.fromMap).toList();
+  }
+
   /// Todas las pólizas de un cliente puntual — usado por el botón "Ver
   /// pólizas" en el catálogo de Clientes. Consulta directa por cliente_id
-  /// (indexado, ver fix_indices_rendimiento.sql), no depende del caché de
-  /// listarTodos().
+  /// (indexado), no depende de la caché de listarTodos().
   Future<List<Poliza>> listarPorCliente(int clienteId) async {
     final res = await _db
         .from(_vista)
-        .select()
+        .select(_colsLista)
         .eq('cliente_id', clienteId)
         .order('fcreado', ascending: false);
     final rows = (res as List).cast<Map<String, dynamic>>();
     return rows.map(Poliza.fromMap).toList();
   }
 
+  /// Póliza completa (todas las columnas y los nombres de cliente, ramo,
+  /// producto, etc. — desde la vista).
   Future<Poliza?> obtenerPoliza(int id) async {
     final res = await _db
-        .from(_tabla)
+        .from(_vista)
         .select()
         .eq('id', id)
         .maybeSingle();
@@ -155,7 +223,7 @@ class RepositorioPolizas {
   /// nro_poliza_norm, ver lib/fix_nro_poliza_normalizado.sql) — "1 0987 2"
   /// y "109872" se consideran el mismo número.
   Future<bool> existeNroPoliza(String nroPoliza, {int? excluirId}) async {
-    final normalizado = _normalizarNro(nroPoliza);
+    final normalizado = normalizarNroPoliza(nroPoliza);
     if (normalizado.isEmpty) return false;
 
     dynamic query =
@@ -172,14 +240,11 @@ class RepositorioPolizas {
     return (res as List).isNotEmpty;
   }
 
-  String _normalizarNro(String s) => normalizarNroPoliza(s);
-
   /// Ignora espacios/guiones/separadores — "1-0987-2" y "1 0987 2" y
   /// "109872" se consideran el mismo número. Pública para que otras
   /// pantallas (ej. la de pólizas duplicadas) agrupen con el mismo
   /// criterio exacto que usa la comparación de duplicados al guardar.
-  static String normalizarNroPoliza(String s) =>
-      s.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
+  static String normalizarNroPoliza(String s) => normalizarAlfanumerico(s);
 
   /// Crea la póliza y devuelve el id real asignado por la base — recién
   /// ahí se sabe con certeza cuál es (dos personas digitando a la vez no
@@ -190,21 +255,22 @@ class RepositorioPolizas {
         .insert(_limpiarMapa(data))
         .select('id')
         .single();
-    _cacheTodos = null;
-    return (res['id'] as num).toInt();
+    final id = (res['id'] as num).toInt();
+    await refrescarEnCache([id]);
+    return id;
   }
 
   Future<void> actualizarPoliza(int id, Map<String, dynamic> data) async {
     await _db.from(_tabla).update({
       ..._limpiarMapa(data),
-      'fultmod': DateTime.now().toIso8601String(),
+      'fultmod': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', id);
-    _cacheTodos = null;
+    await refrescarEnCache([id]);
   }
 
   Future<void> eliminarPoliza(int id) async {
     await _db.from(_tabla).delete().eq('id', id);
-    _cacheTodos = null;
+    _cacheTodos?.removeWhere((p) => p.id == id);
   }
 
   Map<String, dynamic> _limpiarMapa(Map<String, dynamic> data) {

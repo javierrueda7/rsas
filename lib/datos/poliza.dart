@@ -146,6 +146,16 @@ class Poliza {
     return DateTime.tryParse(s);
   }
 
+  /// Para fechas sin hora (expedición, inicio, fin de vigencia). La base
+  /// las guarda como timestamptz a medianoche UTC; si se convirtieran a la
+  /// hora de Colombia (UTC−5) caerían en el día anterior. Se conserva el
+  /// día calendario tal como está guardado.
+  static DateTime? _toFecha(dynamic v) {
+    final d = _toDate(v);
+    if (d == null) return null;
+    return DateTime(d.year, d.month, d.day);
+  }
+
   static String? _toText(dynamic v) {
     if (v == null) return null;
     final s = v.toString().trim();
@@ -159,9 +169,9 @@ class Poliza {
         asesorId: _toInt(m['asesor_id']),
         ramoId: _toInt(m['ramo_id']),
         productoId: _toInt(m['producto_id']),
-        fexpPoliza: _toDate(m['fexp_poliza']),
-        finiPoliza: _toDate(m['fini_poliza']),
-        ffinPoliza: _toDate(m['ffin_poliza']),
+        fexpPoliza: _toFecha(m['fexp_poliza']),
+        finiPoliza: _toFecha(m['fini_poliza']),
+        ffinPoliza: _toFecha(m['ffin_poliza']),
         primaPoliza: _toNum(m['prima_poliza']) ?? 0,
         valorPoliza: _toNum(m['valor_poliza']) ?? 0,
         bienAsegurado: _toText(m['bien_asegurado']),

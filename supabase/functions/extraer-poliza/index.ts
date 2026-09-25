@@ -1,20 +1,18 @@
 // Edge Function: extraer-poliza
 //
-// Recibe un PDF o imagen de una póliza (base64) y le pide a Gemini (Google
-// AI Studio, nivel gratuito) que extraiga los datos estructurados para
-// pre-llenar el formulario de "Nueva póliza" en la app. La API key de
-// Google vive solo acá (secret de Supabase) — nunca llega al cliente
-// Flutter.
+// Recibe un PDF o imagen de una póliza (base64) y le pide a Gemini los datos
+// estructurados para pre-llenar el formulario de "Nueva póliza". La API key
+// de Google vive solo acá (secret de Supabase), nunca llega al cliente.
 
-const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
-const GEMINI_MODEL = "gemini-3.6-flash";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import {
+  bytesDeBase64,
+  CORS_HEADERS,
+  jsonError,
+  jsonOk,
+  llamarGemini,
+  MAX_BYTES_ARCHIVO,
+  usuarioDeLaPeticion,
+} from "../_shared/comun.ts";
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
@@ -23,217 +21,146 @@ const RESPONSE_SCHEMA = {
       type: "STRING",
       nullable: true,
       description:
-        "Número de póliza COMPLETO, en el formato exacto SEGMENTO1-SEGMENTO2-...-ANEXO " +
-        "(todos los segmentos del número, uno detrás de otro, unidos con GUIONES, y el " +
-        "número de ANEXO agregado SIEMPRE al final como un segmento más, incluso cuando " +
-        "el anexo es '0' — el anexo va siempre, no solo cuando es mayor a 0). Los " +
-        "segmentos pueden tener letras y números (ej: 'B', '400', '97', '994000000046'). " +
-        "Si el documento separa los segmentos del número de póliza con espacios en vez " +
-        "de guiones, igual los unís todos con guion en el resultado — NUNCA dejes " +
-        "espacios en el resultado, solo guiones. Ejemplos: 'Póliza No' = '400-97-" +
-        "994000000046', 'ANEXO' = '6' → resultado '400-97-994000000046-6'. " +
-        "'No. PÓLIZA' = 'B-100071475', 'No. ANEXO' = '0' → resultado 'B-100071475-0' " +
-        "(el anexo en 0 igual se agrega). Si el documento no tiene un campo ANEXO " +
-        "separado (no aplica a esa aseguradora), no agregues nada al final y dejá el " +
-        "número tal cual, con guiones en vez de espacios si tenía espacios.",
+        "Número de póliza COMPLETO: todos sus segmentos unidos con guiones y el número de " +
+        "ANEXO siempre al final como último segmento, aunque sea 0. Nunca espacios. " +
+        "Ej.: Póliza '400-97-994000000046' + Anexo '6' → '400-97-994000000046-6'; " +
+        "'B-100071475' + Anexo '0' → 'B-100071475-0'. Si el documento no tiene campo de " +
+        "anexo, el número tal cual (con guiones en lugar de espacios).",
     },
     nombre_cliente: {
       type: "STRING",
       nullable: true,
       description:
-        "Nombre del TOMADOR de la póliza (quien la contrata y paga la prima) — normalmente " +
-        "es el cliente real del intermediario de seguros. Buscá específicamente la " +
-        "sección/etiqueta 'TOMADOR' o 'DATOS DEL TOMADOR' del documento — normalmente es " +
-        "un bloque propio, separado y antes de la sección 'ASEGURADO' o 'DATOS DEL " +
-        "ASEGURADO Y BENEFICIARIO'. Esto es solo un candidato — quien decide cuál de los " +
-        "candidatos (Tomador/Asegurado/Beneficiario) es el cliente real de verdad es la " +
-        "app, comparando cada documento contra su base de clientes ya registrados, así " +
-        "que no hace falta acertar perfecto acá: con que quede claro cuál bloque es cuál " +
-        "alcanza. Solo usá el Asegurado si el documento no tiene ningún bloque TOMADOR " +
-        "separado (son la misma persona/campo).",
+        "Nombre del TOMADOR (bloque 'TOMADOR' o 'DATOS DEL TOMADOR'). Si el documento no " +
+        "tiene un bloque de tomador aparte, el del asegurado.",
     },
     doc_cliente: {
       type: "STRING",
       nullable: true,
       description:
-        "Número de documento del TOMADOR (ver nombre_cliente), solo dígitos y letras " +
-        "(sin puntos ni espacios, pero SÍ conservá el guion del dígito de verificación " +
-        "de un NIT si lo tiene, ej. '901983472-9').",
+        "Documento del tomador, sin puntos ni espacios; conserve el guion del dígito de " +
+        "verificación del NIT si aparece (ej. '901983472-9').",
     },
     nombre_asegurado: {
       type: "STRING",
       nullable: true,
-      description:
-        "Nombre del ASEGURADO de la póliza (bloque 'ASEGURADO' o 'DATOS DEL ASEGURADO'), " +
-        "SOLO cuando es una persona/entidad distinta del Tomador. Es el segundo candidato " +
-        "a cliente real — la app decide cuál de los dos (Tomador o Asegurado) coincide " +
-        "con un cliente ya existente en su base. Si Tomador y Asegurado son la misma " +
-        "persona/campo, dejá este campo vacío.",
+      description: "Nombre del ASEGURADO, solo si es distinto del tomador; si es el mismo, null.",
     },
     doc_asegurado: {
       type: "STRING",
       nullable: true,
-      description:
-        "Número de documento del ASEGURADO (ver nombre_asegurado), mismo formato que " +
-        "doc_cliente. Vacío si Tomador y Asegurado son la misma persona/campo.",
+      description: "Documento del asegurado, mismo formato que doc_cliente; null si es el mismo tomador.",
     },
     nombre_beneficiario: {
       type: "STRING",
       nullable: true,
-      description:
-        "Nombre del BENEFICIARIO de la póliza (bloque 'BENEFICIARIO'), SOLO cuando es una " +
-        "persona/entidad distinta del Tomador y del Asegurado. Tercer candidato a cliente " +
-        "real, mismo criterio que nombre_asegurado.",
+      description: "Nombre del BENEFICIARIO, solo si es distinto del tomador y del asegurado.",
     },
     doc_beneficiario: {
       type: "STRING",
       nullable: true,
-      description:
-        "Número de documento del BENEFICIARIO (ver nombre_beneficiario), mismo formato " +
-        "que doc_cliente.",
+      description: "Documento del beneficiario, mismo formato que doc_cliente.",
     },
-    nombre_aseguradora: { type: "STRING", nullable: true, description: "Nombre de la compañía aseguradora que emite la póliza" },
+    nombre_aseguradora: { type: "STRING", nullable: true, description: "Compañía aseguradora que emite la póliza." },
     nombre_ramo: {
       type: "STRING",
       nullable: true,
       description:
-        "Ramo del seguro (ej: Autos, Vida, Hogar, Todo Riesgo, Accidentes Personales). " +
-        "Muchos documentos NO tienen un campo 'Ramo' en texto plano (a veces solo un " +
-        "código numérico junto a 'RAMO'), así que si no encontrás uno explícito dejalo " +
-        "en null en vez de inventarlo — nombre_producto es más importante, el ramo se " +
-        "puede terminar de resolver a partir de él.",
+        "Ramo del seguro. Si el producto coincide con una fila del catálogo, el ramo de esa " +
+        "fila; si no, el ramo escrito en el documento o null si no aparece.",
     },
     nombre_producto: {
       type: "STRING",
       nullable: true,
       description:
-        "Nombre comercial del producto/plan. Si el documento no tiene un campo explícito " +
-        "'Producto' o 'Plan', usá el título/encabezado que describe el tipo de póliza " +
-        "(ej: si el título dice 'POLIZA SEGURO DE ACCIDENTES ESCOLARES', el producto es " +
-        "'Accidentes Escolares' o 'Seguro de Accidentes Escolares') — ese texto es la " +
-        "pista más confiable para identificar qué producto es, más que el campo 'Ramo'.",
+        "Producto o plan. Si no hay un campo 'Producto'/'Plan', use el título que describe el " +
+        "tipo de póliza (ej. 'POLIZA SEGURO DE ACCIDENTES ESCOLARES' → 'Accidentes Escolares').",
     },
-    fecha_inicio: { type: "STRING", nullable: true, description: "Fecha de inicio de vigencia, formato YYYY-MM-DD" },
-    fecha_fin: { type: "STRING", nullable: true, description: "Fecha de fin de vigencia, formato YYYY-MM-DD" },
-    fecha_expedicion: { type: "STRING", nullable: true, description: "Fecha de expedición/emisión, formato YYYY-MM-DD" },
-    prima: { type: "NUMBER", nullable: true, description: "Valor de la prima, número plano sin separadores de miles ni símbolo de moneda" },
-    valor_asegurado: { type: "NUMBER", nullable: true, description: "Valor asegurado, número plano" },
-    valor_poliza: { type: "NUMBER", nullable: true, description: "Valor total de la póliza, número plano" },
-    bien_asegurado: { type: "STRING", nullable: true, description: "Descripción del bien o riesgo asegurado (ej: placa del vehículo, dirección del inmueble)" },
+    fecha_inicio: { type: "STRING", nullable: true, description: "Inicio de vigencia, YYYY-MM-DD." },
+    fecha_fin: { type: "STRING", nullable: true, description: "Fin de vigencia, YYYY-MM-DD." },
+    fecha_expedicion: { type: "STRING", nullable: true, description: "Fecha de expedición/emisión, YYYY-MM-DD." },
+    prima: { type: "NUMBER", nullable: true, description: "Valor de la prima (campo 'Prima' del documento)." },
+    valor_asegurado: { type: "NUMBER", nullable: true, description: "Valor asegurado." },
+    valor_poliza: { type: "NUMBER", nullable: true, description: "Valor total de la póliza." },
+    bien_asegurado: {
+      type: "STRING",
+      nullable: true,
+      description: "Bien o riesgo asegurado (ej. placa del vehículo, dirección del inmueble, objeto del contrato).",
+    },
   },
 };
 
+const INSTRUCCIONES_BASE =
+  "Usted extrae datos de pólizas de seguros emitidas por aseguradoras colombianas y los " +
+  "devuelve según el schema.\n" +
+  "- Números en formato colombiano: el punto separa miles y la coma los decimales " +
+  "(1.234.567,89 → 1234567.89). Devuelva números planos, sin símbolo de moneda.\n" +
+  "- Fechas en día/mes/año (05/03/2026 → 2026-03-05).\n" +
+  "- Distinga los bloques Tomador, Asegurado y Beneficiario cuando el documento los separa.\n" +
+  "- Si un dato no aparece, devuelva null. Nunca invente valores.";
+
+type Producto = { aseguradora: string; ramo: string; producto: string };
+
+/// Catálogo agrupado por aseguradora y en orden estable: menos tokens que
+/// repetir la aseguradora en cada línea, y el mismo texto en cada llamada
+/// (Gemini cachea el prefijo repetido).
+function textoCatalogo(catalogo: Producto[]): string {
+  if (catalogo.length === 0) return "";
+  const porAseg = new Map<string, string[]>();
+  for (const p of catalogo) {
+    const lista = porAseg.get(p.aseguradora) ?? [];
+    lista.push(`${p.ramo} | ${p.producto}`);
+    porAseg.set(p.aseguradora, lista);
+  }
+  const bloques = [...porAseg.keys()].sort().map((aseg) =>
+    `## ${aseg}\n${[...new Set(porAseg.get(aseg))].sort().join("\n")}`
+  );
+  return "\n\nCatálogo de productos existentes (ramo | producto, agrupados por aseguradora):\n" +
+    bloques.join("\n") +
+    "\n\nSi la póliza corresponde a una aseguradora/producto del catálogo (aunque el documento " +
+    "use siglas o abreviaturas), devuelva nombre_aseguradora, nombre_ramo y nombre_producto " +
+    "EXACTAMENTE como están en el catálogo. Si no corresponde a ninguno, devuelva lo que diga " +
+    "el documento.";
+}
+
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+  if (req.method !== "POST") return jsonError("Método no permitido.", 405);
+
+  if (!(await usuarioDeLaPeticion(req))) {
+    return jsonError("Su sesión no es válida o ya venció. Inicie sesión de nuevo.", 401);
   }
 
-  if (req.method !== "POST") {
-    return jsonError("Método no permitido.", 405);
-  }
-
-  if (!GOOGLE_API_KEY) {
-    return jsonError("Falta configurar GOOGLE_API_KEY en los secrets de Supabase.", 500);
-  }
-
-  let body: {
-    fileBase64?: string;
-    mimeType?: string;
-    catalogoProductos?: { aseguradora: string; ramo: string; producto: string }[];
-  };
+  let body: { fileBase64?: string; mimeType?: string; catalogoProductos?: Producto[] };
   try {
     body = await req.json();
   } catch {
-    return jsonError("Body inválido, se esperaba JSON.", 400);
+    return jsonError("Petición inválida.", 400);
   }
 
   const { fileBase64, mimeType, catalogoProductos } = body;
-  if (!fileBase64 || !mimeType) {
-    return jsonError("Faltan fileBase64 y/o mimeType.", 400);
-  }
+  if (!fileBase64 || !mimeType) return jsonError("Falta el archivo.", 400);
 
   const tiposValidos = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
   if (!tiposValidos.includes(mimeType)) {
-    return jsonError(`Tipo de archivo no soportado: ${mimeType}. Usá PDF, JPG, PNG o WEBP.`, 400);
+    return jsonError("Tipo de archivo no soportado. Use PDF, JPG, PNG o WEBP.", 400);
+  }
+  if (bytesDeBase64(fileBase64) > MAX_BYTES_ARCHIVO) {
+    return jsonError("El archivo pesa más de 15 MB. Use una versión más liviana.", 413);
   }
 
   try {
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
-      `?key=${GOOGLE_API_KEY}`;
-
-    const textoCatalogo = catalogoProductos && catalogoProductos.length > 0
-      ? "\n\nEstos son TODOS los productos que ya existen en el sistema (aseguradora | ramo | " +
-        "producto), uno por línea:\n" +
-        catalogoProductos.map((p) => `${p.aseguradora} | ${p.ramo} | ${p.producto}`).join("\n") +
-        "\n\nSi el documento corresponde a una aseguradora/ramo/producto de esta lista (aunque " +
-        "el documento lo nombre distinto, ej. con siglas o abreviado — usá tu criterio para " +
-        "reconocer que es lo mismo), devolvé nombre_aseguradora/nombre_ramo/nombre_producto " +
-        "EXACTAMENTE como aparecen en la lista, para que el sistema los pueda machear sin " +
-        "ambigüedad. Si no encontrás ninguna combinación de la lista que corresponda, devolvé " +
-        "lo que diga el documento tal cual (no inventes que coincide con algo de la lista)."
-      : "";
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { inlineData: { mimeType, data: fileBase64 } },
-              {
-                text:
-                  "Este es un documento de póliza de seguros emitido por una aseguradora colombiana. " +
-                  "Extraé los datos según el schema. Prestá especial atención a nro_poliza: seguí " +
-                  "exactamente las instrucciones de su descripción sobre cómo armar el número completo " +
-                  "cuando el documento tiene un ANEXO. Prestá especial atención también a distinguir " +
-                  "bien los bloques Tomador/Asegurado/Beneficiario cuando el documento los separa — " +
-                  "llenar nombre_asegurado/doc_asegurado (y beneficiario) cuando existan como bloques " +
-                  "propios es tan importante como llenar nombre_cliente/doc_cliente. Si un dato no " +
-                  "aparece en el documento, dejalo en null — no inventes valores." +
-                  textoCatalogo,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-        },
-      }),
+    const resultado = await llamarGemini({
+      etiqueta: "extraer-poliza",
+      instrucciones: INSTRUCCIONES_BASE + textoCatalogo(catalogoProductos ?? []),
+      partes: [{ inlineData: { mimeType, data: fileBase64 } }],
+      schema: RESPONSE_SCHEMA,
+      maxOutputTokens: 4096,
     });
-
-    if (!res.ok) {
-      const detalle = await res.text();
-      return jsonError(`Error de Gemini (${res.status}): ${detalle}`, 502);
-    }
-
-    const data = await res.json();
-    const textoJson = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textoJson) {
-      return jsonError("Gemini no devolvió datos estructurados. Probá con otro archivo o más nítido.", 502);
-    }
-
-    let extraido: unknown;
-    try {
-      extraido = JSON.parse(textoJson);
-    } catch {
-      return jsonError("La respuesta de Gemini no fue un JSON válido.", 502);
-    }
-
-    return new Response(JSON.stringify(extraido), {
-      headers: { ...CORS_HEADERS, "content-type": "application/json" },
-    });
+    if (!resultado.ok) return jsonError(resultado.error, resultado.status);
+    return jsonOk(resultado.datos);
   } catch (e) {
-    return jsonError(`Error inesperado: ${e}`, 500);
+    console.error("extraer-poliza: error inesperado", e);
+    return jsonError("No se pudo procesar el archivo. Intente de nuevo.", 500);
   }
 });
-
-function jsonError(mensaje: string, status: number): Response {
-  return new Response(JSON.stringify({ error: mensaje }), {
-    status,
-    headers: { ...CORS_HEADERS, "content-type": "application/json" },
-  });
-}

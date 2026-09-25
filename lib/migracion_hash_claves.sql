@@ -110,7 +110,7 @@ order by apodo_usuario;
 -- 2. Probar un login puntual sin pasar por la app (reemplazá apodo/clave).
 --    ilike para no fallar por mayúsculas/minúsculas al diagnosticar.
 select apodo_usuario, estado_usuario,
-       clave_usuario = crypt('JCRS01', clave_usuario) as clave_coincide
+       clave_usuario = crypt('CLAVE_A_PROBAR', clave_usuario) as clave_coincide
 from usuarios
-where apodo_usuario ilike 'javier';
+where apodo_usuario ilike 'APODO_A_PROBAR';
 -- ═══════════════════════════════════════════════════════════════════════════

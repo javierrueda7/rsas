@@ -303,7 +303,6 @@ class Usuario {
   final String nombreUsuario;
   final String rol;
   final int? asesorId;
-  final String? claveUsuario;
   final String? correoUsuario;
   final bool estadoUsuario;
 
@@ -313,7 +312,6 @@ class Usuario {
     required this.nombreUsuario,
     required this.rol,
     this.asesorId,
-    this.claveUsuario,
     this.correoUsuario,
     this.estadoUsuario = true,
   });
@@ -324,7 +322,6 @@ class Usuario {
         nombreUsuario: (m['nombre_usuario'] ?? '') as String,
         rol: (m['rol'] ?? '') as String,
         asesorId: _toIntOrNull(m['asesor_id']),
-        claveUsuario: m['clave_usuario'] as String?,
         correoUsuario: m['correo_usuario'] as String?,
         estadoUsuario: _toBool(m['estado_usuario']),
       );
@@ -334,7 +331,6 @@ class Usuario {
         'nombre_usuario': nombreUsuario,
         'rol': rol,
         'asesor_id': asesorId,
-        'clave_usuario': claveUsuario,
         'correo_usuario': correoUsuario,
         'estado_usuario': estadoUsuario,
       };

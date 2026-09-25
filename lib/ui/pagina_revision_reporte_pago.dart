@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../datos/abono_poliza.dart';
+import '../datos/matching_reporte_pago.dart';
 import '../datos/poliza.dart';
 import '../datos/repositorio_catalogos.dart';
 import '../datos/repositorio_pagos.dart';
@@ -47,23 +49,24 @@ class _MoneyFormatter extends TextInputFormatter {
 num _parseCO(String s) =>
     num.tryParse(s.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
 
-String _normalizar(String s) {
-  var r = s.trim().toUpperCase();
-  const acentos = {'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ñ': 'N'};
-  acentos.forEach((k, v) => r = r.replaceAll(k, v));
-  return r;
-}
-
-/// Para nro_poliza específicamente: ignora espacios/separadores además de
-/// mayúsculas — "1 0987 2" y "109872" deben matchear igual.
-String _normalizarNro(String s) =>
-    s.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
+bool _mismoDia(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
 
 /// Una línea del documento importado, ya con sus controllers de edición.
 class _LineaRevision {
   bool incluir;
   Poliza? poliza;
+  final ResultadoMatch match;
+
+  /// El usuario eligió la póliza a mano (reemplaza el estado automático).
+  bool manual = false;
+
+  /// Motivo si parece un abono ya cargado antes.
+  String? duplicado;
+
   final String nroExtraido;
+  final String anexoExtraido;
+  final String docExtraido;
   final String clienteExtraido;
   final TextEditingController primaCtrl;
   final TextEditingController abonoCtrl;
@@ -77,7 +80,10 @@ class _LineaRevision {
   _LineaRevision({
     required this.incluir,
     required this.poliza,
+    required this.match,
     required this.nroExtraido,
+    required this.anexoExtraido,
+    required this.docExtraido,
     required this.clienteExtraido,
     required this.primaCtrl,
     required this.abonoCtrl,
@@ -88,6 +94,8 @@ class _LineaRevision {
     required this.facturaCtrl,
     required this.fechaPago,
   });
+
+  bool get lista => !manual && match.seIncluyeSolo && duplicado == null;
 
   void dispose() {
     for (final c in [
@@ -101,15 +109,21 @@ class _LineaRevision {
 
 /// Pantalla de revisión de la importación masiva de un reporte de
 /// comisiones: matchea cada línea extraída contra una póliza real y deja
-/// todo editable antes de crear los abonos. Nunca guarda solo.
+/// todo editable antes de crear los abonos. Nunca guarda solo, y solo
+/// deja tildadas de entrada las líneas con coincidencia exacta.
 class PaginaRevisionReportePago extends StatefulWidget {
   final int idReporte;
   final List<Map<String, dynamic>> lineas;
+
+  /// Aseguradora del reporte — descarta pólizas de otra aseguradora que
+  /// casualmente tengan el mismo número.
+  final int? aseguradoraId;
 
   const PaginaRevisionReportePago({
     super.key,
     required this.idReporte,
     required this.lineas,
+    this.aseguradoraId,
   });
 
   @override
@@ -127,6 +141,7 @@ class _PaginaRevisionReportePagoState
   bool _cargando = true;
   bool _guardando = false;
   final List<_LineaRevision> _filas = [];
+  final Map<int, List<AbonoPoliza>> _abonosPorPoliza = {};
 
   @override
   void initState() {
@@ -143,21 +158,30 @@ class _PaginaRevisionReportePagoState
   }
 
   Future<void> _matchearTodas() async {
-    for (final linea in widget.lineas) {
+    final resultados = await Future.wait(widget.lineas.map((linea) {
       final nro = (linea['nro_poliza'] as String?)?.trim() ?? '';
-      final cliente = (linea['nombre_cliente'] as String?)?.trim() ?? '';
-      final docCliente = (linea['doc_cliente'] as String?)?.trim() ?? '';
-      final poliza = await _buscarPoliza(nro, cliente, docCliente);
+      final anexo = linea['anexo']?.toString().trim() ?? '';
+      final doc = (linea['doc_cliente'] as String?)?.trim() ?? '';
+      return _resolver(nro, anexo, doc, linea['vlrprima_poliza'] as num?);
+    }));
+
+    for (var i = 0; i < widget.lineas.length; i++) {
+      final linea = widget.lineas[i];
+      final match = resultados[i];
+      final poliza = match.poliza;
 
       final prima = linea['vlrprima_poliza'] as num? ?? poliza?.primaPoliza;
       final abono = linea['vlrabono_prima'] as num? ?? prima;
       final porcCom = linea['porccomision'] as num? ?? poliza?.porccomPoliza;
 
       _filas.add(_LineaRevision(
-        incluir: poliza != null,
+        incluir: match.seIncluyeSolo,
         poliza: poliza,
-        nroExtraido: nro,
-        clienteExtraido: cliente,
+        match: match,
+        nroExtraido: (linea['nro_poliza'] as String?)?.trim() ?? '',
+        anexoExtraido: linea['anexo']?.toString().trim() ?? '',
+        docExtraido: (linea['doc_cliente'] as String?)?.trim() ?? '',
+        clienteExtraido: (linea['nombre_cliente'] as String?)?.trim() ?? '',
         primaCtrl: TextEditingController(text: prima != null ? Fmt.money(prima) : ''),
         abonoCtrl: TextEditingController(text: abono != null ? Fmt.money(abono) : ''),
         porcComCtrl: TextEditingController(text: porcCom != null ? Fmt.numCO(porcCom, dec: 2) : ''),
@@ -170,6 +194,10 @@ class _PaginaRevisionReportePagoState
         facturaCtrl: TextEditingController(text: (linea['num_factura'] as String?)?.trim() ?? ''),
         fechaPago: _parseFechaISO(linea['fecha_pago']),
       ));
+    }
+
+    for (final f in _filas) {
+      await _verificarDuplicado(f);
     }
     if (mounted) setState(() => _cargando = false);
   }
@@ -184,58 +212,84 @@ class _PaginaRevisionReportePagoState
     }
   }
 
-  Future<Poliza?> _buscarPoliza(String nro, String cliente, String docCliente) async {
+  /// Trae de la base las pólizas que podrían corresponder (por número y por
+  /// documento del cliente) y deja que [resolverMatch] decida con precisión.
+  Future<ResultadoMatch> _resolver(String nro, String anexo, String doc, num? prima) async {
+    var porNumero = <Poliza>[];
+    var delCliente = <Poliza>[];
     try {
-      final normNro = _normalizarNro(nro);
-
-      // 1. Documento del cliente — el dato más confiable, igual criterio
-      // que ya usa la importación de pólizas (ver doc_cliente_norm).
-      if (docCliente.isNotEmpty) {
-        final docNorm = docCliente.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
-        final matchCliente = await _repoCat.buscarClientePorDocExacto(docNorm);
-        if (matchCliente != null) {
-          final polizasCliente = await _repoPolizas.listarPorCliente(matchCliente.id);
-          if (normNro.isNotEmpty) {
-            // El reporte trae solo el núcleo del número, no el formato
-            // completo — "contiene" en vez de igualdad exacta.
-            for (final p in polizasCliente) {
-              if (p.nroPoliza != null &&
-                  _normalizarNro(p.nroPoliza!).contains(normNro)) {
-                return p;
-              }
-            }
-          }
-          // Un solo cliente con una sola póliza activa: match razonable
-          // aunque el número no haya coincidido (puede venir mal tipeado
-          // en el reporte).
-          if (polizasCliente.length == 1) return polizasCliente.first;
-        }
+      final busqueda = normalizarDoc(nro).replaceFirst(RegExp(r'^0+'), '');
+      if (busqueda.isNotEmpty) {
+        porNumero = await _repoPolizas.listarPorNroContiene(busqueda);
       }
-
-      // 2. Sin match por documento — lo que ya había: número o nombre por
-      // texto libre.
-      if (nro.isNotEmpty) {
-        final res = await _repoPolizas.listar(busqueda: nro, limite: 10);
-        for (final p in res) {
-          if (p.nroPoliza != null && _normalizarNro(p.nroPoliza!) == normNro) {
-            return p;
-          }
-        }
+      if (doc.isNotEmpty) {
+        final cliente = await _repoCat.buscarClientePorDocExacto(normalizarDoc(doc));
+        if (cliente != null) delCliente = await _repoPolizas.listarPorCliente(cliente.id);
       }
-      if (cliente.isNotEmpty) {
-        final res = await _repoPolizas.listar(busqueda: cliente, limite: 10);
-        final normCliente = _normalizar(cliente);
-        for (final p in res) {
-          if (p.nombreCliente != null &&
-              _normalizar(p.nombreCliente!) == normCliente) {
-            return p;
-          }
-        }
-      }
-    } catch (_) {
-      // Si falla la búsqueda, la línea queda "no encontrada" para revisar a mano.
+    } catch (e) {
+      return ResultadoMatch(EstadoMatch.noEncontrada,
+          motivo: 'No se pudo consultar la base ($e). Asignala a mano.');
     }
-    return null;
+    if (nro.isEmpty) {
+      return ResultadoMatch(EstadoMatch.noEncontrada,
+          candidatos: delCliente,
+          motivo: 'Esta línea del reporte no trae número de póliza.');
+    }
+    return resolverMatch(
+      nucleo: nro,
+      anexo: anexo.isEmpty ? null : anexo,
+      docCliente: doc,
+      aseguradoraId: widget.aseguradoraId,
+      primaLinea: prima,
+      candidatos: [...porNumero, ...delCliente],
+      polizasDelCliente: delCliente,
+    );
+  }
+
+  /// Marca la línea si ya existe en la base un abono igual (misma póliza,
+  /// mismo valor y misma factura — o misma fecha si no hay factura). Evita
+  /// cargar dos veces el mismo pago si se importa el reporte de nuevo.
+  ///
+  /// No compara contra otras líneas del mismo reporte: ahí líneas con igual
+  /// póliza, valor y transacción son movimientos distintos (ej. Mundial:
+  /// emisión +, reversión −, re-emisión + con distinto certificado).
+  Future<void> _verificarDuplicado(_LineaRevision f) async {
+    f.duplicado = null;
+    final p = f.poliza;
+    if (p == null) return;
+    final abono = _parseCO(f.abonoCtrl.text);
+    final factura = f.facturaCtrl.text.trim();
+
+    bool igual(num valor, String? fac, DateTime? fecha) {
+      if ((valor - abono).abs() >= 0.01) return false;
+      if (factura.isNotEmpty) return (fac ?? '').trim() == factura;
+      return f.fechaPago != null && fecha != null && _mismoDia(f.fechaPago!, fecha);
+    }
+
+    try {
+      final existentes =
+          _abonosPorPoliza[p.id] ??= await _repoPagos.listarAbonosPorPoliza(p.id);
+      for (final a in existentes) {
+        if (igual(a.vlrabonoprima, a.numFactura, a.fechaPago)) {
+          f.duplicado = 'Ya existe un abono igual para esta póliza '
+              '(factura ${a.numFactura ?? '—'}'
+              '${a.fechaPago != null ? ', ${_df.format(a.fechaPago!)}' : ''}). '
+              'Parece un reporte ya cargado.';
+          break;
+        }
+      }
+    } catch (_) {}
+    if (f.duplicado != null) f.incluir = false;
+  }
+
+  Future<void> _asignar(_LineaRevision f, Poliza? p) async {
+    setState(() {
+      f.poliza = p;
+      f.manual = true;
+      f.incluir = p != null;
+    });
+    await _verificarDuplicado(f);
+    if (mounted) setState(() {});
   }
 
   int get _incluidas => _filas.where((f) => f.incluir).length;
@@ -297,6 +351,9 @@ class _PaginaRevisionReportePagoState
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final listas = _filas.where((f) => f.lista).length;
+    final sinPoliza = _filas.where((f) => f.poliza == null).length;
+    final porRevisar = _filas.length - listas - sinPoliza;
 
     return Scaffold(
       appBar: AppBar(
@@ -322,10 +379,17 @@ class _PaginaRevisionReportePagoState
               padding: AppLayout.pagePadding,
               children: [
                 Text(
-                  'Revisá cada línea antes de guardar. Las que no encontraron una póliza '
-                  'coincidente están destildadas — asignala manualmente o dejala afuera.',
+                  'Revisá cada línea antes de guardar. Solo quedan tildadas de entrada las que '
+                  'coinciden exacto (número de póliza + anexo). Las demás necesitan que elijas '
+                  'la póliza o las dejes afuera.',
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
+                const SizedBox(height: 10),
+                Wrap(spacing: 8, runSpacing: 6, children: [
+                  _chip('$listas coinciden exacto', cs.secondaryContainer, cs.onSecondaryContainer),
+                  _chip('$porRevisar por revisar', AppTheme.warningContainer, AppTheme.onWarningContainer),
+                  _chip('$sinPoliza sin póliza', cs.errorContainer, cs.onErrorContainer),
+                ]),
                 const SizedBox(height: 16),
                 for (int i = 0; i < _filas.length; i++) ...[
                   _filaCard(_filas[i]),
@@ -336,9 +400,43 @@ class _PaginaRevisionReportePagoState
     );
   }
 
+  Widget _chip(String texto, Color bg, Color fg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(100)),
+        child: Text(texto, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+      );
+
+  (String, Color, Color) _estadoVisual(_LineaRevision f) {
+    final cs = Theme.of(context).colorScheme;
+    if (f.manual) {
+      return f.poliza == null
+          ? ('Sin póliza', cs.errorContainer, cs.onErrorContainer)
+          : ('Asignada a mano', cs.primaryContainer, cs.onPrimaryContainer);
+    }
+    return switch (f.match.estado) {
+      EstadoMatch.exacta => ('Coincide exacto', cs.secondaryContainer, cs.onSecondaryContainer),
+      EstadoMatch.unicaSinAnexo =>
+        ('Coincide (reporte sin anexo)', cs.secondaryContainer, cs.onSecondaryContainer),
+      EstadoMatch.revisar => ('Revisar', AppTheme.warningContainer, AppTheme.onWarningContainer),
+      EstadoMatch.ambigua => ('Varias opciones', AppTheme.warningContainer, AppTheme.onWarningContainer),
+      EstadoMatch.anexoNoRegistrado =>
+        ('Anexo no registrado', AppTheme.warningContainer, AppTheme.onWarningContainer),
+      EstadoMatch.noEncontrada => ('No encontrada', cs.errorContainer, cs.onErrorContainer),
+    };
+  }
+
   Widget _filaCard(_LineaRevision f) {
     final cs = Theme.of(context).colorScheme;
-    final encontrada = f.poliza != null;
+    final (etiqueta, bg, fg) = _estadoVisual(f);
+    final mostrarMotivo = !f.manual && f.match.motivo.isNotEmpty && !f.match.seIncluyeSolo;
+    final opciones = f.match.candidatos;
+
+    final extraido = [
+      'Póliza ${f.nroExtraido.isEmpty ? '—' : f.nroExtraido}',
+      'anexo ${f.anexoExtraido.isEmpty ? '—' : f.anexoExtraido}',
+      if (f.docExtraido.isNotEmpty) 'doc ${f.docExtraido}',
+      if (f.clienteExtraido.isNotEmpty) f.clienteExtraido,
+    ].join('  ·  ');
 
     return Card(
       color: f.incluir ? null : cs.surfaceContainerHighest,
@@ -352,32 +450,33 @@ class _PaginaRevisionReportePagoState
                 value: f.incluir,
                 onChanged: (v) => setState(() => f.incluir = v ?? false),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: encontrada ? cs.secondaryContainer : AppTheme.warningContainer,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: Text(
-                  encontrada ? 'Encontrada' : 'No encontrada',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: encontrada ? cs.onSecondaryContainer : AppTheme.onWarningContainer,
-                  ),
-                ),
-              ),
+              _chip(etiqueta, bg, fg),
+              if (f.duplicado != null) ...[
+                const SizedBox(width: 6),
+                _chip('Posible duplicado', cs.errorContainer, cs.onErrorContainer),
+              ],
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Extraído: ${f.nroExtraido.isEmpty ? '—' : f.nroExtraido}  ·  ${f.clienteExtraido.isEmpty ? '—' : f.clienteExtraido}',
+                  'Reporte: $extraido',
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ]),
-            const SizedBox(height: 8),
-            if (encontrada)
+            if (mostrarMotivo || f.duplicado != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 48, top: 2, bottom: 6),
+                child: Text(
+                  [if (f.duplicado != null) f.duplicado!, if (mostrarMotivo) f.match.motivo].join('\n'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: f.duplicado != null ? cs.error : AppTheme.onWarningContainer,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 6),
+            if (f.poliza != null)
               Padding(
                 padding: const EdgeInsets.only(left: 48, bottom: 8),
                 child: Column(
@@ -388,28 +487,40 @@ class _PaginaRevisionReportePagoState
                       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                     ),
                     Text(
-                      '${f.poliza!.nombreRamo ?? '—'} · ${f.poliza!.nombreProd ?? '—'}  '
-                      '·  Prima póliza: \$ ${Fmt.money(f.poliza!.primaPoliza)}',
+                      '${f.poliza!.nombreAseg ?? '—'} · ${f.poliza!.nombreRamo ?? '—'} · '
+                      '${f.poliza!.nombreProd ?? '—'}  ·  Prima póliza: \$ ${Fmt.money(f.poliza!.primaPoliza)}',
                       style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
-              )
-            else
+              ),
+            if (opciones.isNotEmpty && !f.match.seIncluyeSolo)
               Padding(
                 padding: const EdgeInsets.only(left: 48, bottom: 8),
-                child: BuscadorDropdown<Poliza>(
-                  label: 'Asignar póliza manualmente',
-                  value: f.poliza,
-                  items: f.poliza != null ? [f.poliza!] : [],
-                  itemLabel: (p) => '${p.nroPoliza ?? p.id}  –  ${p.nombreCliente ?? ''}',
-                  itemsLoader: (q) => _repoPolizas.listar(busqueda: q, limite: 60),
-                  onChanged: (p) => setState(() {
-                    f.poliza = p;
-                    if (p != null) f.incluir = true;
-                  }),
-                ),
+                child: Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final c in opciones)
+                    ChoiceChip(
+                      label: Text(
+                        '${c.nroPoliza ?? c.id} — ${c.nombreCliente ?? ''} '
+                        '(\$ ${Fmt.money(c.primaPoliza)})',
+                        style: const TextStyle(fontSize: 11.5),
+                      ),
+                      selected: f.poliza?.id == c.id,
+                      onSelected: (_) => _asignar(f, c),
+                    ),
+                ]),
               ),
+            Padding(
+              padding: const EdgeInsets.only(left: 48, bottom: 8),
+              child: BuscadorDropdown<Poliza>(
+                label: f.poliza == null ? 'Asignar póliza manualmente' : 'Cambiar póliza',
+                value: f.poliza,
+                items: f.poliza != null ? [f.poliza!] : [],
+                itemLabel: (p) => '${p.nroPoliza ?? p.id}  –  ${p.nombreCliente ?? ''}',
+                itemsLoader: (q) => _repoPolizas.listar(busqueda: q, limite: 60),
+                onChanged: (p) => _asignar(f, p),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.only(left: 48),
               child: Wrap(spacing: 10, runSpacing: 10, children: [

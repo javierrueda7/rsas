@@ -3,13 +3,15 @@ import 'package:flutter/material.dart';
 import '../datos/repositorio_catalogos.dart';
 import '../datos/sesion.dart';
 import 'pagina_inicio.dart';
-import 'pagina_recuperar_clave.dart';
 import 'theme/app_theme.dart';
 
 class PaginaLogin extends StatefulWidget {
   final String appEnv;
 
-  const PaginaLogin({super.key, required this.appEnv});
+  /// Mensaje a mostrar al abrir (ej. "Su sesión venció").
+  final String? mensajeInicial;
+
+  const PaginaLogin({super.key, required this.appEnv, this.mensajeInicial});
 
   @override
   State<PaginaLogin> createState() => _PaginaLoginState();
@@ -26,6 +28,12 @@ class _PaginaLoginState extends State<PaginaLogin> {
   String? _error;
 
   bool get _esDev => widget.appEnv != 'prod';
+
+  @override
+  void initState() {
+    super.initState();
+    _error = widget.mensajeInicial;
+  }
 
   @override
   void dispose() {
@@ -45,14 +53,14 @@ class _PaginaLoginState extends State<PaginaLogin> {
     setState(() => _cargando = true);
 
     try {
-      final usuario = await _repo.autenticar(
+      final sesion = await _repo.autenticar(
         _apodoCtrl.text.trim(),
         _claveCtrl.text,
       );
 
       if (!mounted) return;
 
-      if (usuario == null) {
+      if (sesion == null) {
         setState(() {
           _error = 'Usuario o contraseña incorrectos.';
           _cargando = false;
@@ -60,7 +68,7 @@ class _PaginaLoginState extends State<PaginaLogin> {
         return;
       }
 
-      Sesion.iniciar(usuario);
+      Sesion.iniciar(sesion.usuario, expira: sesion.expira);
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -69,11 +77,30 @@ class _PaginaLoginState extends State<PaginaLogin> {
       );
     } catch (e) {
       if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
       setState(() {
-        _error = 'Error al conectar. Verifica tu conexión.';
+        _error = msg.isNotEmpty && !msg.contains('SocketException') && !msg.contains('ClientException')
+            ? msg
+            : 'No se pudo conectar. Verifique su conexión a internet.';
         _cargando = false;
       });
     }
+  }
+
+  void _olvidoClave() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Olvidó su contraseña?'),
+        content: const Text(
+          'Pídale a un administrador que le asigne una contraseña nueva desde '
+          'Catálogos → Usuarios.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -227,13 +254,8 @@ class _PaginaLoginState extends State<PaginaLogin> {
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const PaginaRecuperarClave(),
-                                    ),
-                                  ),
-                                  child: const Text('¿Olvidaste tu contraseña?'),
+                                  onPressed: _olvidoClave,
+                                  child: const Text('¿Olvidó su contraseña?'),
                                 ),
                               ),
 

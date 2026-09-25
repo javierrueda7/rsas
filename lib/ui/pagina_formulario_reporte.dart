@@ -247,6 +247,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
               builder: (_) => PaginaRevisionReportePago(
                 idReporte: id,
                 lineas: lineas,
+                aseguradoraId: _aseguradora?.id,
               ),
             ),
           );
@@ -396,6 +397,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
             builder: (_) => PaginaRevisionReportePago(
               idReporte: _idReporte!,
               lineas: extraido.lineas,
+              aseguradoraId: _aseguradora?.id,
             ),
           ),
         );

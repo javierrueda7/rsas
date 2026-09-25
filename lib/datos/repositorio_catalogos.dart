@@ -1,27 +1,62 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/filtros_busqueda.dart';
 import 'catalogos.dart';
 import 'sesion.dart';
+
+/// Resultado de un login exitoso.
+class SesionIniciada {
+  final Usuario usuario;
+  final DateTime? expira;
+  const SesionIniciada(this.usuario, this.expira);
+}
 
 class RepositorioCatalogos {
   final SupabaseClient _db = Supabase.instance.client;
 
-  // Caché simple en memoria para catálogos chicos que se cargan seguido
-  // (dropdowns del formulario de póliza, etc.) — una sola traída completa
-  // por tabla sirve para todas las variantes de filtro (se filtra en Dart),
-  // y se invalida sola al crear/editar/eliminar en esa tabla.
+  // Caché en memoria para catálogos chicos que se cargan seguido (dropdowns
+  // del formulario de póliza, etc.). Una traída completa por tabla sirve
+  // para todas las variantes de filtro (se filtra en Dart). Se invalida al
+  // crear/editar/eliminar en esa tabla, al cerrar sesión, con el botón
+  // Recargar, y sola a los 10 minutos (para ver cambios de otros usuarios).
   static final Map<String, List<Map<String, dynamic>>> _cache = {};
+  static final Map<String, DateTime> _cacheCargadoEn = {};
+  static const Duration _vigenciaCache = Duration(minutes: 10);
 
-  Future<List<Map<String, dynamic>>> _filas(String tabla, String orderBy) async {
+  static void limpiarCache() {
+    _cache.clear();
+    _cacheCargadoEn.clear();
+  }
+
+  Future<List<Map<String, dynamic>>> _filas(
+    String tabla,
+    String orderBy, {
+    bool forzar = false,
+    String columnas = '*',
+  }) async {
     final cacheadas = _cache[tabla];
-    if (cacheadas != null) return cacheadas;
-    final res =
-        await _db.from(tabla).select().order(orderBy, ascending: true).limit(50000);
+    final cargado = _cacheCargadoEn[tabla];
+    if (!forzar &&
+        cacheadas != null &&
+        cargado != null &&
+        DateTime.now().difference(cargado) < _vigenciaCache) {
+      return cacheadas;
+    }
+    final res = await _db
+        .from(tabla)
+        .select(columnas)
+        .order(orderBy, ascending: true)
+        .order('id', ascending: true)
+        .limit(50000);
     final rows = (res as List).cast<Map<String, dynamic>>();
     _cache[tabla] = rows;
+    _cacheCargadoEn[tabla] = DateTime.now();
     return rows;
   }
 
-  void _invalidar(String tabla) => _cache.remove(tabla);
+  void _invalidar(String tabla) {
+    _cache.remove(tabla);
+    _cacheCargadoEn.remove(tabla);
+  }
 
   // Extrae el siguiente ID a partir de la fila más reciente de una tabla.
   int _siguienteIdDesde(List<Map<String, dynamic>> rows) {
@@ -60,10 +95,13 @@ Future<List<Cliente>> listarTodosClientes({
   final List<Cliente> todos = [];
   int desde = 0;
   while (true) {
+    // El id desempata: ordenar solo por nombre (que se repite) deja el
+    // orden entre páginas sin garantía y se pueden saltar o repetir filas.
     final res = await _db
         .from('clientes')
         .select(_selectClienteSinJoin)
         .order('nombre_cliente', ascending: true)
+        .order('id', ascending: true)
         .range(desde, desde + _pageClientes - 1);
     final rows = (res as List).cast<Map<String, dynamic>>();
     todos.addAll(rows.map(Cliente.fromMap));
@@ -75,25 +113,32 @@ Future<List<Cliente>> listarTodosClientes({
   return todos;
 }
 
+/// Tope de resultados de una búsqueda de clientes: una búsqueda de una
+/// letra no debe traerse casi toda la tabla.
+static const int maxResultadosBusquedaClientes = 500;
+
 /// Búsqueda server-side sin JOIN — para la lista de catálogo.
 Future<List<Cliente>> buscarClientesCompleto(String query) async {
   final q = query.trim();
   // Contra doc_cliente_norm (solo dígitos/letras, sin puntos ni guión) —
   // si buscan pegando el número tal como aparece en el documento (con
   // puntos o con el guión del NIT), igual tiene que encontrarlo.
-  final qDoc = q.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
+  final qDoc = normalizarAlfanumerico(q);
   dynamic req = _db.from('clientes').select(_selectClienteSinJoin);
 
   if (q.isNotEmpty) {
-    req = req.or(
-      'nombre_cliente.ilike.%$q%,'
-      'doc_cliente_norm.ilike.%$qDoc%,'
-      'tel_cliente.ilike.%$q%,'
-      'correo_cliente.ilike.%$q%',
-    );
+    req = req.or([
+      ilikeContiene('nombre_cliente', q),
+      if (qDoc.isNotEmpty) ilikeContiene('doc_cliente_norm', qDoc),
+      ilikeContiene('tel_cliente', q),
+      ilikeContiene('correo_cliente', q),
+    ].join(','));
   }
 
-  final res = await req.order('nombre_cliente', ascending: true).limit(50000);
+  final res = await req
+      .order('nombre_cliente', ascending: true)
+      .order('id', ascending: true)
+      .limit(maxResultadosBusquedaClientes);
   final rows = (res as List).cast<Map<String, dynamic>>();
   return rows.map(Cliente.fromMap).toList();
 }
@@ -105,13 +150,16 @@ Future<List<Cliente>> buscarClientes(String query, {int limit = 60}) async {
   // doc_cliente_norm es solo dígitos/letras en mayúsculas (sin puntos ni
   // guión) — evita que un guión de NIT en medio de la búsqueda haga fallar
   // el ilike (ver fix_doc_cliente_normalizado.sql).
-  final qDoc = q.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase();
+  final qDoc = normalizarAlfanumerico(q);
   dynamic req = _db
       .from('clientes')
       .select('id, nombre_cliente, tipodoc_cliente, doc_cliente, estado_cliente');
 
   if (q.isNotEmpty) {
-    req = req.or('nombre_cliente.ilike.%$q%,doc_cliente_norm.ilike.%$qDoc%');
+    req = req.or([
+      ilikeContiene('nombre_cliente', q),
+      if (qDoc.isNotEmpty) ilikeContiene('doc_cliente_norm', qDoc),
+    ].join(','));
   }
 
   final res = await req
@@ -186,13 +234,13 @@ Future<Cliente?> obtenerCliente(int id) async {
 
 /// Un mismo número de documento puede repetirse entre tipos distintos
 /// (una CC y un NIT con el mismo número, por ejemplo), pero no dentro del
-/// mismo tipo. doc_cliente ya se guarda sin puntos (ver
-/// fix_doc_cliente_sin_puntos.sql), así que compara tal cual.
+/// mismo tipo. Compara normalizado (doc_cliente_norm: solo letras y
+/// dígitos), así "900227885-1" y "9002278851" se reconocen como el mismo.
 Future<bool> existeDocCliente(String? tipoDoc, String doc, {int? excluirId}) async {
-  final docLimpio = doc.trim();
-  if (docLimpio.isEmpty) return false;
+  final docNorm = normalizarAlfanumerico(doc);
+  if (docNorm.isEmpty) return false;
 
-  dynamic query = _db.from('clientes').select('id').eq('doc_cliente', docLimpio);
+  dynamic query = _db.from('clientes').select('id').eq('doc_cliente_norm', docNorm);
   final tipo = (tipoDoc ?? '').trim();
   query = tipo.isEmpty
       ? query.filter('tipodoc_cliente', 'is', null)
@@ -261,14 +309,14 @@ Future<void> eliminarCliente(int id) async {
 }
 
     // ================== MUNICIPIOS ==================
-  Future<List<Municipio>> listarMunicipios() async {
-    final rows = await _filas('municipio', 'nombre_munic');
+  Future<List<Municipio>> listarMunicipios({bool forzar = false}) async {
+    final rows = await _filas('municipio', 'nombre_munic', forzar: forzar);
     return rows.map(Municipio.fromMap).toList();
   }
 
   // ================== ASESORES ==================
-Future<List<Asesor>> listarAsesores({bool soloActivos = false}) async {
-  final rows = await _filas('asesores', 'nombre_asesor');
+Future<List<Asesor>> listarAsesores({bool soloActivos = false, bool forzar = false}) async {
+  final rows = await _filas('asesores', 'nombre_asesor', forzar: forzar);
   final lista = rows.map(Asesor.fromMap).toList();
   return soloActivos ? lista.where((a) => a.estadoAsesor).toList() : lista;
 }
@@ -325,8 +373,8 @@ Future<void> eliminarAsesor(int id) async {
 }
 
  // ================== ASEGURADORAS ==================
-Future<List<Aseguradora>> listarAseguradoras({bool soloActivas = false}) async {
-  final rows = await _filas('aseguradoras', 'nombre_aseg');
+Future<List<Aseguradora>> listarAseguradoras({bool soloActivas = false, bool forzar = false}) async {
+  final rows = await _filas('aseguradoras', 'nombre_aseg', forzar: forzar);
   final lista = rows.map(Aseguradora.fromMap).toList();
   return soloActivas ? lista.where((a) => a.estadoAseg).toList() : lista;
 }
@@ -385,8 +433,8 @@ Future<void> eliminarAseguradora(int id) async {
 }
 
 // ================== RAMOS ==================
-Future<List<Ramo>> listarRamos({bool soloActivos = false}) async {
-  final rows = await _filas('ramos', 'nombre_ramo');
+Future<List<Ramo>> listarRamos({bool soloActivos = false, bool forzar = false}) async {
+  final rows = await _filas('ramos', 'nombre_ramo', forzar: forzar);
   final lista = rows.map(Ramo.fromMap).toList();
   return soloActivos ? lista.where((r) => r.estadoRamo).toList() : lista;
 }
@@ -448,8 +496,9 @@ Future<void> eliminarRamo(int id) async {
     int? ramoId,
     int? aseguradoraId,
     bool soloActivos = false,
+    bool forzar = false,
   }) async {
-    final rows = await _filas('productos', 'nombre_prod');
+    final rows = await _filas('productos', 'nombre_prod', forzar: forzar);
     var lista = rows.map(Producto.fromMap).toList();
     if (ramoId != null) lista = lista.where((p) => p.ramoId == ramoId).toList();
     if (aseguradoraId != null) {
@@ -501,10 +550,11 @@ Future<void> eliminarRamo(int id) async {
     return (res['producto_id'] as num).toInt();
   }
 
-  /// El digitador cambió el producto que la IA había sugerido para este
-  /// texto — se guarda como corrección para la próxima vez. Si ya había
-  /// una corrección para el mismo texto+aseguradora, la más reciente gana
-  /// (por si el error anterior era otro).
+  /// El digitador terminó eligiendo un producto distinto al que sugirió la
+  /// IA para este texto. La misma corrección repetida suma (veces + 1); una
+  /// corrección distinta reemplaza y vuelve a empezar en 1 — así una sola
+  /// corrección nunca se aplica sola. Atómico en la base (ver
+  /// registrar_aprendizaje_producto en migracion_2026_09_seguridad_y_pagos.sql).
   Future<void> registrarAprendizajeProducto(
     int aseguradoraId,
     String textoExtraidoNorm,
@@ -512,25 +562,11 @@ Future<void> eliminarRamo(int id) async {
   ) async {
     if (textoExtraidoNorm.trim().isEmpty) return;
     try {
-      final existente = await _db
-          .from('ia_aprendizaje_producto')
-          .select('id, veces')
-          .eq('aseguradora_id', aseguradoraId)
-          .eq('texto_extraido', textoExtraidoNorm)
-          .maybeSingle();
-      if (existente != null) {
-        await _db.from('ia_aprendizaje_producto').update({
-          'producto_id': productoIdCorrecto,
-          'veces': ((existente['veces'] as num?)?.toInt() ?? 1) + 1,
-          'fultmod': DateTime.now().toIso8601String(),
-        }).eq('id', existente['id']);
-      } else {
-        await _db.from('ia_aprendizaje_producto').insert({
-          'aseguradora_id': aseguradoraId,
-          'texto_extraido': textoExtraidoNorm,
-          'producto_id': productoIdCorrecto,
-        });
-      }
+      await _db.rpc('registrar_aprendizaje_producto', params: {
+        'p_aseg': aseguradoraId,
+        'p_texto': textoExtraidoNorm,
+        'p_producto': productoIdCorrecto,
+      });
     } catch (_) {
       // No es crítico — si falla, simplemente no se aprendió esta vez.
     }
@@ -556,8 +592,8 @@ Future<void> eliminarRamo(int id) async {
     return (res['intermediario_id'] as num).toInt();
   }
 
-  /// El usuario confirmó/corrigió el Intermediario para este texto de
-  /// cabecera — se guarda (o refuerza) como corrección para la próxima vez.
+  /// El usuario eligió un Intermediario distinto al sugerido para este
+  /// texto de cabecera. Misma regla que [registrarAprendizajeProducto].
   Future<void> registrarAprendizajeIntermediario(
     int aseguradoraId,
     String textoExtraidoNorm,
@@ -565,25 +601,11 @@ Future<void> eliminarRamo(int id) async {
   ) async {
     if (textoExtraidoNorm.trim().isEmpty) return;
     try {
-      final existente = await _db
-          .from('ia_aprendizaje_intermediario_reporte')
-          .select('id, veces')
-          .eq('aseguradora_id', aseguradoraId)
-          .eq('texto_extraido', textoExtraidoNorm)
-          .maybeSingle();
-      if (existente != null) {
-        await _db.from('ia_aprendizaje_intermediario_reporte').update({
-          'intermediario_id': intermediarioIdCorrecto,
-          'veces': ((existente['veces'] as num?)?.toInt() ?? 1) + 1,
-          'fultmod': DateTime.now().toIso8601String(),
-        }).eq('id', existente['id']);
-      } else {
-        await _db.from('ia_aprendizaje_intermediario_reporte').insert({
-          'aseguradora_id': aseguradoraId,
-          'texto_extraido': textoExtraidoNorm,
-          'intermediario_id': intermediarioIdCorrecto,
-        });
-      }
+      await _db.rpc('registrar_aprendizaje_intermediario', params: {
+        'p_aseg': aseguradoraId,
+        'p_texto': textoExtraidoNorm,
+        'p_interm': intermediarioIdCorrecto,
+      });
     } catch (_) {
       // No es crítico — si falla, simplemente no se aprendió esta vez.
     }
@@ -611,23 +633,10 @@ Future<void> eliminarRamo(int id) async {
   Future<void> reforzarAprendizajeRolCliente(
       int aseguradoraId, String rol) async {
     try {
-      final existente = await _db
-          .from('ia_aprendizaje_rol_cliente')
-          .select('id, veces')
-          .eq('aseguradora_id', aseguradoraId)
-          .eq('rol', rol)
-          .maybeSingle();
-      if (existente != null) {
-        await _db.from('ia_aprendizaje_rol_cliente').update({
-          'veces': ((existente['veces'] as num?)?.toInt() ?? 1) + 1,
-          'fultmod': DateTime.now().toIso8601String(),
-        }).eq('id', existente['id']);
-      } else {
-        await _db.from('ia_aprendizaje_rol_cliente').insert({
-          'aseguradora_id': aseguradoraId,
-          'rol': rol,
-        });
-      }
+      await _db.rpc('reforzar_aprendizaje_rol_cliente', params: {
+        'p_aseg': aseguradoraId,
+        'p_rol': rol,
+      });
     } catch (_) {}
   }
 
@@ -682,15 +691,20 @@ Future<void> eliminarRamo(int id) async {
   }
 
   // ================== USUARIOS ==================
+  // Columnas explícitas: clave_usuario (el hash) ya no se puede leer desde
+  // la app (ver migracion_2026_09_seguridad_y_pagos.sql, sección B).
+  static const String _colsUsuario =
+      'id, apodo_usuario, nombre_usuario, rol, asesor_id, correo_usuario, estado_usuario';
+
   Future<List<Usuario>> listarUsuarios({bool soloActivos = false}) async {
-    dynamic query = _db.from('usuarios').select();
+    dynamic query = _db.from('usuarios').select(_colsUsuario);
     if (soloActivos) query = query.eq('estado_usuario', true);
-    final res = await query.order('apodo_usuario', ascending: true).limit(50000);
+    final res = await query.order('apodo_usuario', ascending: true).limit(5000);
     return (res as List).cast<Map<String, dynamic>>().map(Usuario.fromMap).toList();
   }
 
   Future<Usuario?> obtenerUsuario(int id) async {
-    final res = await _db.from('usuarios').select().eq('id', id).maybeSingle();
+    final res = await _db.from('usuarios').select(_colsUsuario).eq('id', id).maybeSingle();
     if (res == null) return null;
     return Usuario.fromMap(res as Map<String, dynamic>);
   }
@@ -700,28 +714,35 @@ Future<void> eliminarRamo(int id) async {
     return _siguienteIdDesde((res as List).cast<Map<String, dynamic>>());
   }
 
+  /// Apodo repetido, sin distinguir mayúsculas ("Javier" = "javier").
   Future<bool> existeApodoUsuario(String apodo, {int? excludeId}) async {
-    dynamic q = _db.from('usuarios').select('id').eq('apodo_usuario', apodo.trim());
-    final res = await q.limit(50000);
-    final rows = (res as List).cast<Map<String, dynamic>>();
-    if (excludeId != null) return rows.any((r) => r['id'] != excludeId);
-    return rows.isNotEmpty;
+    dynamic q = _db
+        .from('usuarios')
+        .select('id')
+        .ilike('apodo_usuario', _escaparLike(apodo.trim()));
+    if (excludeId != null) q = q.neq('id', excludeId);
+    final res = await q.limit(1);
+    return (res as List).isNotEmpty;
   }
 
-  Future<void> crearUsuario(Usuario u) async {
+  /// [nuevaClave]: solo si el administrador escribió una clave nueva (la
+  /// base la hashea sola). Si es null, la clave actual no se toca.
+  Future<void> crearUsuario(Usuario u, {String? nuevaClave}) async {
     try {
       await _db.from('usuarios').insert({
         ...u.toInsertMap(),
+        if (nuevaClave != null && nuevaClave.isNotEmpty) 'clave_usuario': nuevaClave,
       });
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e, unico: 'Ya existe un usuario con ese apodo.'));
     }
   }
 
-  Future<void> actualizarUsuario(int id, Usuario u) async {
+  Future<void> actualizarUsuario(int id, Usuario u, {String? nuevaClave}) async {
     try {
       await _db.from('usuarios').update({
         ...u.toInsertMap(),
+        if (nuevaClave != null && nuevaClave.isNotEmpty) 'clave_usuario': nuevaClave,
       }).match({'id': id});
     } on PostgrestException catch (e) {
       throw Exception(_mensajePG(e, unico: 'Ya existe un usuario con ese apodo.'));
@@ -729,52 +750,19 @@ Future<void> eliminarRamo(int id) async {
   }
 
   Future<void> eliminarUsuario(int id) async {
-    try {
-      await _db.from('usuarios').delete().match({'id': id});
-    } on PostgrestException catch (e) {
-      throw Exception(_mensajePG(e));
-    }
-  }
-
-  /// Paso 1 de "Olvidé mi clave": ¿existe ese apodo? Corre ANTES del login,
-  /// así que usa una función SECURITY DEFINER propia (ver
-  /// lib/fix_rls_seguridad.sql) en vez de leer la tabla usuarios directo —
-  /// una vez con RLS, el rol anon no tiene acceso a esa tabla.
-  Future<bool> verificarApodoRecuperacion(String apodo) async {
-    final res = await _db.rpc('verificar_apodo_recuperacion', params: {
-      'p_apodo': apodo.trim(),
-    });
-    return res == true;
-  }
-
-  /// Paso 2: verifica que el apodo y el correo coincidan con un usuario
-  /// activo. Devuelve el apodo si la verificación es exitosa, null si no.
-  Future<String?> verificarRecuperacion(String apodo, String correo) async {
-    final res = await _db.rpc('verificar_recuperacion_usuario', params: {
-      'p_apodo': apodo.trim(),
-      'p_correo': correo.trim().toLowerCase(),
-    });
-    return res == true ? apodo.trim() : null;
-  }
-
-  /// Paso 3: cambia la clave del usuario identificado por [apodo], previa
-  /// revalidación server-side de que [correo] sigue coincidiendo (no confía
-  /// solo en que el paso 2 ya se haya cumplido del lado del cliente).
-  Future<bool> cambiarClave(String apodo, String correo, String nuevaClave) async {
-    final res = await _db.rpc('cambiar_clave_usuario', params: {
-      'p_apodo': apodo.trim(),
-      'p_correo': correo.trim().toLowerCase(),
-      'p_nueva_clave': nuevaClave,
-    });
-    return res == true;
+    await _deleteConProteccionFK(
+      table: 'usuarios',
+      match: {'id': id},
+      mensajeFK: 'No puede eliminar este usuario porque tiene pólizas, abonos o reportes '
+          'registrados a su nombre. Desactívelo en su lugar.',
+    );
   }
 
   /// Verifica apodo+clave y, si son válidos, deja al cliente autenticado
-  /// como rol `authenticated` de Supabase (necesario para la RLS, ver
-  /// lib/fix_rls_seguridad.sql). La verificación real sigue ocurriendo en
-  /// la base (función `autenticar_usuario`) — la Edge Function `login` solo
-  /// la invoca y firma el token, nunca ve ni compara el hash.
-  Future<Usuario?> autenticar(String apodo, String clave) async {
+  /// como rol `authenticated` de Supabase (base de datos y funciones de IA).
+  /// La verificación ocurre en la base; la Edge Function `login` solo la
+  /// invoca y firma el token. Devuelve null si los datos no coinciden.
+  Future<SesionIniciada?> autenticar(String apodo, String clave) async {
     final FunctionResponse res;
     try {
       res = await _db.functions.invoke('login', body: {
@@ -782,22 +770,30 @@ Future<void> eliminarRamo(int id) async {
         'clave': clave,
       });
     } on FunctionException catch (e) {
-      final detalle = e.details;
       if (e.status == 401) return null;
+      final detalle = e.details;
       final mensaje = detalle is Map ? detalle['error'] : null;
-      throw Exception(mensaje ?? 'Error al iniciar sesión (${e.status}).');
+      throw Exception(mensaje ?? 'No se pudo iniciar sesión (${e.status}).');
     }
 
     final data = (res.data as Map).cast<String, dynamic>();
     final accessToken = data['accessToken'] as String;
     _db.rest.setAuth(accessToken);
+    _db.functions.setAuth(accessToken);
 
-    return Usuario.fromMap((data['usuario'] as Map).cast<String, dynamic>());
+    final exp = data['expiresAt'];
+    final expira = exp is num
+        ? DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000)
+        : null;
+    return SesionIniciada(
+      Usuario.fromMap((data['usuario'] as Map).cast<String, dynamic>()),
+      expira,
+    );
   }
 
   // ================== FORMAS DE EXPEDICIÓN ==================
-  Future<List<FormaExpedicion>> listarFormasExpedicion() async {
-    final rows = await _filas('formaexp', 'nombre_formaexp');
+  Future<List<FormaExpedicion>> listarFormasExpedicion({bool forzar = false}) async {
+    final rows = await _filas('formaexp', 'nombre_formaexp', forzar: forzar);
     return rows.map(FormaExpedicion.fromMap).toList();
   }
 
@@ -840,8 +836,8 @@ Future<void> eliminarRamo(int id) async {
 
   // ================== FORMAS DE PAGO ==================
 
-  Future<List<FormaPago>> listarFormasPago({bool soloActivas = false}) async {
-    final rows = await _filas('formas_pago', 'nombre_forma_pago');
+  Future<List<FormaPago>> listarFormasPago({bool soloActivas = false, bool forzar = false}) async {
+    final rows = await _filas('formas_pago', 'nombre_forma_pago', forzar: forzar);
     final lista = rows.map(FormaPago.fromMap).toList();
     return soloActivas ? lista.where((f) => f.estadoFormaPago).toList() : lista;
   }
@@ -885,8 +881,8 @@ Future<void> eliminarRamo(int id) async {
 
   // ================== INTERMEDIARIOS ==================
 
-  Future<List<Intermediario>> listarIntermediarios({bool soloActivos = false}) async {
-    final rows = await _filas('intermediarios', 'nombre_interm');
+  Future<List<Intermediario>> listarIntermediarios({bool soloActivos = false, bool forzar = false}) async {
+    final rows = await _filas('intermediarios', 'nombre_interm', forzar: forzar);
     final lista = rows.map(Intermediario.fromMap).toList();
     return soloActivos ? lista.where((i) => i.estadoInterm).toList() : lista;
   }
@@ -905,6 +901,12 @@ Future<void> eliminarRamo(int id) async {
       throw Exception(_mensajePG(e));
     }
   }
+
+  /// Para comparar texto literal con ilike: % y _ dejan de ser comodines.
+  static String _escaparLike(String s) => s
+      .replaceAll(r'\', r'\\')
+      .replaceAll('%', r'\%')
+      .replaceAll('_', r'\_');
 
   String _mensajePG(PostgrestException e, {String? unico}) {
     if (e.code == '23505') return unico ?? 'Ya existe un registro con ese valor (duplicado).';

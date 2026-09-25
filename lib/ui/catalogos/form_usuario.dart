@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../../datos/sesion.dart';
 import '../theme/app_layout.dart';
 import '../widgets/section_card.dart';
 
@@ -17,9 +18,7 @@ class _FormUsuarioState extends State<FormUsuario> {
   final repo = RepositorioCatalogos();
 
   bool guardando = false;
-  bool cargandoId = true;
 
-  late final TextEditingController idCtrl;
   late final TextEditingController apodoCtrl;
   late final TextEditingController nombreCtrl;
   late final TextEditingController claveCtrl;
@@ -28,38 +27,35 @@ class _FormUsuarioState extends State<FormUsuario> {
   String _rol = 'D';
   bool _estadoUsuario = true;
 
-  // Roles disponibles: A=Administrador, D=Digitador
-  static const _roles = [
-    ('A', 'Administrador'),
-    ('D', 'Digitador'),
-  ];
+  static const int _minLargoClave = 8;
+
+  // A = Administrador, D = Digitador. Si el usuario ya tiene otro rol (ej.
+  // S), se muestra y se conserva en vez de cambiarlo sin avisar.
+  late final List<(String, String)> _roles;
 
   bool get esEdicion => widget.usuario != null;
+  bool get _esUnoMismo => esEdicion && widget.usuario!.id == Sesion.usuarioId;
 
   @override
   void initState() {
     super.initState();
     final u = widget.usuario;
-    idCtrl = TextEditingController(text: esEdicion ? u!.id.toString() : '');
     apodoCtrl = TextEditingController(text: u?.apodoUsuario ?? '');
     nombreCtrl = TextEditingController(text: u?.nombreUsuario ?? '');
     claveCtrl = TextEditingController();
     correoCtrl = TextEditingController(text: u?.correoUsuario ?? '');
 
     _rol = u?.rol.toUpperCase() ?? 'D';
-    if (!_roles.any((r) => r.$1 == _rol)) _rol = 'D';
+    _roles = [
+      ('A', 'Administrador'),
+      ('D', 'Digitador'),
+      if (_rol != 'A' && _rol != 'D') (_rol, 'Rol actual'),
+    ];
     _estadoUsuario = u?.estadoUsuario ?? true;
-
-    if (!esEdicion) {
-      _cargarSiguienteId();
-    } else {
-      cargandoId = false;
-    }
   }
 
   @override
   void dispose() {
-    idCtrl.dispose();
     apodoCtrl.dispose();
     nombreCtrl.dispose();
     claveCtrl.dispose();
@@ -67,29 +63,15 @@ class _FormUsuarioState extends State<FormUsuario> {
     super.dispose();
   }
 
-  Future<void> _cargarSiguienteId() async {
-    try {
-      final nextId = await repo.obtenerSiguienteIdUsuario();
-      if (!mounted) return;
-      idCtrl.text = nextId.toString();
-    } catch (e) {
-      _toast('No se pudo cargar el siguiente ID: $e');
-    } finally {
-      if (mounted) setState(() => cargandoId = false);
-    }
-  }
-
   void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  String? _validarId(String? v) {
-    final s = (v ?? '').trim();
-    if (s.isEmpty) return 'Requerido';
-    final n = int.tryParse(s);
-    if (n == null) return 'Debe ser numérico';
-    if (n <= 0) return 'Debe ser mayor que 0';
+  String? _validarClave(String? v) {
+    final s = v ?? '';
+    if (s.isEmpty) return esEdicion ? null : 'Requerida para usuarios nuevos';
+    if (s.length < _minLargoClave) return 'Mínimo $_minLargoClave caracteres';
     return null;
   }
 
@@ -98,9 +80,8 @@ class _FormUsuarioState extends State<FormUsuario> {
     FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    final idNum = int.tryParse(idCtrl.text.trim());
-    if (idNum == null || idNum <= 0) {
-      _toast('El ID debe ser un número válido mayor que 0.');
+    if (_esUnoMismo && (!_estadoUsuario || _rol != 'A')) {
+      _toast('No puede desactivarse ni quitarse el rol de Administrador a sí mismo.');
       return;
     }
 
@@ -108,41 +89,28 @@ class _FormUsuarioState extends State<FormUsuario> {
     final nombre = nombreCtrl.text.trim();
     final clave = claveCtrl.text;
 
-    if (!esEdicion && clave.isEmpty) {
-      _toast('La contraseña es requerida para usuarios nuevos.');
-      return;
-    }
-
     setState(() => guardando = true);
     try {
-      if (!esEdicion) {
-        if (await repo.existeApodoUsuario(apodo)) {
-          _toast('Ya existe un usuario con ese apodo.');
-          return;
-        }
-      } else {
-        if (await repo.existeApodoUsuario(apodo, excludeId: widget.usuario!.id)) {
-          _toast('Ya existe otro usuario con ese apodo.');
-          return;
-        }
+      if (await repo.existeApodoUsuario(apodo, excludeId: widget.usuario?.id)) {
+        _toast('Ya existe otro usuario con ese apodo.');
+        return;
       }
 
       final correo = correoCtrl.text.trim().toLowerCase();
       final u = Usuario(
-        id: esEdicion ? widget.usuario!.id : idNum,
+        id: widget.usuario?.id ?? 0,
         apodoUsuario: apodo,
         nombreUsuario: nombre,
         rol: _rol,
-        claveUsuario: clave.isEmpty ? widget.usuario?.claveUsuario : clave,
         correoUsuario: correo.isEmpty ? null : correo,
         estadoUsuario: _estadoUsuario,
         asesorId: widget.usuario?.asesorId,
       );
 
       if (esEdicion) {
-        await repo.actualizarUsuario(widget.usuario!.id, u);
+        await repo.actualizarUsuario(widget.usuario!.id, u, nuevaClave: clave);
       } else {
-        await repo.crearUsuario(u);
+        await repo.crearUsuario(u, nuevaClave: clave);
       }
 
       if (!mounted) return;
@@ -158,18 +126,6 @@ class _FormUsuarioState extends State<FormUsuario> {
     return SectionCard(titulo: titulo, children: campos);
   }
 
-  Widget _fila2(Widget a, Widget b) {
-    final w = MediaQuery.of(context).size.width;
-    if (w < 700) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [a, const SizedBox(height: 12), b]);
-    }
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(child: a),
-      const SizedBox(width: 16),
-      Expanded(child: b),
-    ]);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -183,7 +139,7 @@ class _FormUsuarioState extends State<FormUsuario> {
             )
           else
             TextButton.icon(
-              onPressed: cargandoId ? null : _guardar,
+              onPressed: _guardar,
               icon: const Icon(Icons.save),
               label: const Text('Guardar'),
             ),
@@ -199,33 +155,17 @@ class _FormUsuarioState extends State<FormUsuario> {
               padding: AppLayout.pagePadding,
               children: [
                 _seccion('Identificación', [
-                  _fila2(
-                    TextFormField(
-                      controller: idCtrl,
-                      enabled: !esEdicion,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: esEdicion ? 'ID' : 'ID sugerido',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: cargandoId
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                              )
-                            : null,
-                      ),
-                      validator: _validarId,
+                  TextFormField(
+                    controller: apodoCtrl,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: 'Usuario (apodo) *',
+                      border: const OutlineInputBorder(),
+                      helperText: esEdicion
+                          ? 'ID ${widget.usuario!.id} · nombre corto para iniciar sesión'
+                          : 'Nombre corto para iniciar sesión',
                     ),
-                    TextFormField(
-                      controller: apodoCtrl,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Usuario (apodo) *',
-                        border: OutlineInputBorder(),
-                        helperText: 'Nombre corto para iniciar sesión',
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -246,7 +186,6 @@ class _FormUsuarioState extends State<FormUsuario> {
                       labelText: 'Correo electrónico',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.email_outlined),
-                      helperText: 'Requerido para recuperar contraseña',
                     ),
                     validator: (v) {
                       final s = (v ?? '').trim();
@@ -266,7 +205,9 @@ class _FormUsuarioState extends State<FormUsuario> {
                       labelText: esEdicion ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña *',
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock_outline),
+                      helperText: 'Mínimo $_minLargoClave caracteres',
                     ),
+                    validator: _validarClave,
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -291,7 +232,7 @@ class _FormUsuarioState extends State<FormUsuario> {
                 ]),
 
                 FilledButton.icon(
-                  onPressed: (guardando || cargandoId) ? null : _guardar,
+                  onPressed: guardando ? null : _guardar,
                   icon: guardando
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.save),

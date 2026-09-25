@@ -16,8 +16,7 @@ class PaginaCatalogos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rol = Sesion.usuario?.rol.toUpperCase() ?? '';
-    final esAdmin = rol == 'A' || rol.isEmpty; // sin sesión = acceso completo en prod
+    final esAdmin = Sesion.esAdmin;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Catálogos')),
