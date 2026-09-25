@@ -1477,17 +1477,9 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              Text('Código: $idReal',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 20)),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Copiar código',
-                icon: const Icon(Icons.copy, size: 18),
-                onPressed: () => copiar(ctx, '$idReal', 'Código $idReal copiado'),
-              ),
-            ]),
+            Text('Código: $idReal',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 20)),
             const SizedBox(height: 12),
             Text('Nro. Póliza: ${_nroCtrl.text.trim().isEmpty ? '—' : _nroCtrl.text.trim()}'),
             Text('Cliente: ${cliente?.nombreCliente ?? '—'}'),
