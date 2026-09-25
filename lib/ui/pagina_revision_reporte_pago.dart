@@ -12,6 +12,7 @@ import '../utils/formatters.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
 import 'widgets/buscador_dropdown.dart';
+import 'widgets/selector_fecha.dart';
 
 class _MoneyFormatter extends TextInputFormatter {
   @override
@@ -450,12 +451,11 @@ class _PaginaRevisionReportePagoState
       width: 140,
       child: InkWell(
         onTap: () async {
-          final d = await showDatePicker(
-            context: context,
-            initialDate: f.fechaPago ?? DateTime.now(),
-            firstDate: DateTime(2000),
-            lastDate: DateTime(2100),
-            locale: const Locale('es', 'CO'),
+          final d = await mostrarSelectorFecha(
+            context,
+            inicial: f.fechaPago,
+            primera: DateTime(2000),
+            ultima: DateTime(2100),
           );
           if (d != null) setState(() => f.fechaPago = d);
         },

@@ -19,6 +19,7 @@ import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
 import 'widgets/buscador_dropdown.dart';
 import 'widgets/section_card.dart';
+import 'widgets/selector_fecha.dart';
 
 extension FirstWhereOrNullExt<E> on Iterable<E> {
   E? firstWhereOrNull(bool Function(E) test) {
@@ -1241,12 +1242,11 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         suffixIcon: IconButton(
           icon: const Icon(Icons.calendar_month),
           onPressed: () async {
-            final now = DateTime.now();
-            final sel = await showDatePicker(
-              context: context,
-              initialDate: fecha ?? now,
-              firstDate: DateTime(2000),
-              lastDate: DateTime(2100),
+            final sel = await mostrarSelectorFecha(
+              context,
+              inicial: fecha,
+              primera: DateTime(2000),
+              ultima: DateTime(2100),
             );
             if (sel != null) {
               setState(() {

@@ -536,6 +536,59 @@ Future<void> eliminarRamo(int id) async {
     }
   }
 
+  /// Igual que [buscarProductoAprendido] pero para el Intermediario al
+  /// importar un Reporte de Pago: el texto de cabecera del documento (ej.
+  /// "5728 - SERRANO MANTILLA LUZ STELLA") casi nunca coincide en forma con
+  /// el nombre guardado, así que el primer match casi siempre falla — con
+  /// esto, desde la segunda vez que aparece ese mismo texto de esa misma
+  /// aseguradora, se usa directo lo aprendido.
+  Future<int?> buscarIntermediarioAprendido(
+      int aseguradoraId, String textoExtraidoNorm) async {
+    if (textoExtraidoNorm.trim().isEmpty) return null;
+    final res = await _db
+        .from('ia_aprendizaje_intermediario_reporte')
+        .select('intermediario_id')
+        .eq('aseguradora_id', aseguradoraId)
+        .eq('texto_extraido', textoExtraidoNorm)
+        .gte('veces', 2)
+        .maybeSingle();
+    if (res == null) return null;
+    return (res['intermediario_id'] as num).toInt();
+  }
+
+  /// El usuario confirmó/corrigió el Intermediario para este texto de
+  /// cabecera — se guarda (o refuerza) como corrección para la próxima vez.
+  Future<void> registrarAprendizajeIntermediario(
+    int aseguradoraId,
+    String textoExtraidoNorm,
+    int intermediarioIdCorrecto,
+  ) async {
+    if (textoExtraidoNorm.trim().isEmpty) return;
+    try {
+      final existente = await _db
+          .from('ia_aprendizaje_intermediario_reporte')
+          .select('id, veces')
+          .eq('aseguradora_id', aseguradoraId)
+          .eq('texto_extraido', textoExtraidoNorm)
+          .maybeSingle();
+      if (existente != null) {
+        await _db.from('ia_aprendizaje_intermediario_reporte').update({
+          'intermediario_id': intermediarioIdCorrecto,
+          'veces': ((existente['veces'] as num?)?.toInt() ?? 1) + 1,
+          'fultmod': DateTime.now().toIso8601String(),
+        }).eq('id', existente['id']);
+      } else {
+        await _db.from('ia_aprendizaje_intermediario_reporte').insert({
+          'aseguradora_id': aseguradoraId,
+          'texto_extraido': textoExtraidoNorm,
+          'intermediario_id': intermediarioIdCorrecto,
+        });
+      }
+    } catch (_) {
+      // No es crítico — si falla, simplemente no se aprendió esta vez.
+    }
+  }
+
   /// Rol (tomador/asegurado/beneficiario) que históricamente resultó ser
   /// el cliente real para esta aseguradora — solo si ya se confirmó 2+
   /// veces, para no guiarse por un solo caso. Sirve de prioridad cuando un

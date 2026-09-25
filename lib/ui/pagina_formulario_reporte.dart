@@ -21,6 +21,7 @@ import 'widgets/stat_card.dart';
 import 'pagina_estado_cuenta.dart';
 import 'pagina_revision_reporte_pago.dart';
 import 'widgets/buscador_dropdown.dart';
+import 'widgets/selector_fecha.dart';
 
 // ── Formateo moneda colombiana mientras escribe ───────────────────────────────
 class _ColMoneyFormatter extends TextInputFormatter {
@@ -95,6 +96,16 @@ class _FormularioReporteState extends State<FormularioReportePago> {
   bool _cargandoAbonos  = false;
   bool _importando      = false;
   List<Map<String, dynamic>> _lineasPendientes = [];
+
+  // Aprendizaje de correcciones IA para el Intermediario (ver
+  // ia_aprendizaje_intermediario_reporte): el texto de cabecera del
+  // documento casi nunca coincide en forma con el nombre guardado, así que
+  // si el usuario termina eligiendo un Intermediario distinto (o eligiendo
+  // uno cuando la IA no sugirió ninguno) para este mismo texto/aseguradora,
+  // se guarda la corrección para la próxima vez.
+  int?    _intermSugeridoPorIA;
+  String? _textoIntermParaAprendizaje;
+  int?    _asegIdEnSugerenciaInterm;
 
   List<AbonoPoliza>  _abonos        = [];
   List<Aseguradora>  _aseguradoras  = [];
@@ -189,6 +200,23 @@ class _FormularioReporteState extends State<FormularioReportePago> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _guardando = true);
     try {
+      // Aprendizaje: si para este mismo texto de cabecera (misma
+      // aseguradora que cuando se importó) el usuario terminó confirmando/
+      // corrigiendo un Intermediario distinto al sugerido (incluyendo el
+      // caso de que no se haya sugerido ninguno), se guarda para la
+      // próxima vez.
+      if (_textoIntermParaAprendizaje != null &&
+          _asegIdEnSugerenciaInterm != null &&
+          _intermediario != null &&
+          _intermediario!.id != _intermSugeridoPorIA &&
+          _aseguradora?.id == _asegIdEnSugerenciaInterm) {
+        await _repoCatalogos.registrarAprendizajeIntermediario(
+          _asegIdEnSugerenciaInterm!,
+          _textoIntermParaAprendizaje!,
+          _intermediario!.id,
+        );
+      }
+
       final data = {
         'fecha_rep':        _fechaRep.toIso8601String().substring(0, 10),
         'aseg_id':          _aseguradora?.id,
@@ -302,14 +330,57 @@ class _FormularioReporteState extends State<FormularioReportePago> {
       final nombreAseg = extraido.cabecera['nombre_aseguradora'] as String?;
       final matchAseg = _matchPorNombre(
           _aseguradoras, (a) => a.nombreAseg, nombreAseg);
+      final asegParaAprendizaje = matchAseg ?? _aseguradora;
       final dRep = _parseFechaISO(extraido.cabecera['fecha_reporte']);
       final dIni = _parseFechaISO(extraido.cabecera['fecha_inicio_periodo']);
       final dFin = _parseFechaISO(extraido.cabecera['fecha_fin_periodo']);
+      final vComTotal = extraido.cabecera['vlr_comision_total'];
+      // Prima total: si el documento no trae una fila de total general (le
+      // pasa a varios formatos de "cuenta corriente"), se calcula sumando
+      // lo que sí se logró extraer de las líneas — mejor una suma real que
+      // dejarlo en blanco.
+      final vPrimaTotalCabecera = extraido.cabecera['vlr_prima_total'];
+      final vPrimaTotal = vPrimaTotalCabecera is num
+          ? vPrimaTotalCabecera
+          : extraido.lineas.fold<num>(0, (s, l) {
+              final v = l['vlrprima_poliza'] ?? l['vlrabono_prima'];
+              return s + (v is num ? v : 0);
+            });
+
+      // Intermediario: el texto de cabecera casi nunca coincide en forma
+      // con el nombre guardado (trae código + nombre reordenado) — primero
+      // se prueba lo aprendido de correcciones anteriores para esta misma
+      // aseguradora, y si no hay, el matcheo difuso de siempre.
+      final textoInterm = extraido.cabecera['nombre_intermediario'] as String?;
+      final textoIntermNorm =
+          textoInterm != null ? _normalizarTexto(textoInterm) : '';
+      Intermediario? matchInterm;
+      if (textoIntermNorm.isNotEmpty && asegParaAprendizaje != null) {
+        try {
+          final idAprendido = await _repoCatalogos.buscarIntermediarioAprendido(
+              asegParaAprendizaje.id, textoIntermNorm);
+          if (idAprendido != null) {
+            matchInterm =
+                _intermediarios.firstOrNull((i) => i.id == idAprendido);
+          }
+        } catch (_) {}
+      }
+      matchInterm ??= _matchPorNombre(
+          _intermediarios, (i) => i.nombreInterm, textoInterm);
+      if (textoIntermNorm.isNotEmpty && asegParaAprendizaje != null) {
+        _intermSugeridoPorIA = matchInterm?.id;
+        _textoIntermParaAprendizaje = textoIntermNorm;
+        _asegIdEnSugerenciaInterm = asegParaAprendizaje.id;
+      }
+
       setState(() {
         if (matchAseg != null) _aseguradora = matchAseg;
+        if (matchInterm != null) _intermediario = matchInterm;
         if (dRep != null) _fechaRep = dRep;
         if (dIni != null) _finiRep = dIni;
         if (dFin != null) _ffinRep = dFin;
+        if (vPrimaTotal > 0) _ctrlPrimaManual.text = Fmt.money(vPrimaTotal);
+        if (vComTotal is num) _ctrlComManual.text = Fmt.money(vComTotal);
       });
 
       if (extraido.lineas.isEmpty) {
@@ -417,12 +488,11 @@ class _FormularioReporteState extends State<FormularioReportePago> {
     ));
   }
 
-  Future<DateTime?> _pickDate(DateTime? initial) => showDatePicker(
-        context: context,
-        initialDate: initial ?? DateTime.now(),
-        firstDate: DateTime(2000),
-        lastDate: DateTime(2100),
-        locale: const Locale('es', 'CO'),
+  Future<DateTime?> _pickDate(DateTime? initial) => mostrarSelectorFecha(
+        context,
+        inicial: initial,
+        primera: DateTime(2000),
+        ultima: DateTime(2100),
       );
 
   // ── UI ────────────────────────────────────────────────────────────────────
@@ -1073,12 +1143,11 @@ class _DialogAbonoState extends State<_DialogAbono> {
                       value: _fechaPago,
                       df: _df,
                       onTap: () async {
-                        final d = await showDatePicker(
-                          context: context,
-                          initialDate: _fechaPago ?? DateTime.now(),
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                          locale: const Locale('es', 'CO'),
+                        final d = await mostrarSelectorFecha(
+                          context,
+                          inicial: _fechaPago,
+                          primera: DateTime(2000),
+                          ultima: DateTime(2100),
                         );
                         if (d != null) setState(() => _fechaPago = d);
                       },

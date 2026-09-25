@@ -118,9 +118,35 @@ const CABECERA_SCHEMA = {
   type: "OBJECT",
   properties: {
     nombre_aseguradora: { type: "STRING", nullable: true, description: "Nombre de la compañía aseguradora que emite el reporte" },
+    nombre_intermediario: {
+      type: "STRING",
+      nullable: true,
+      description:
+        "Nombre o código del intermediario/corredor de seguros al que se dirige el reporte, tal " +
+        "como aparece impreso en la cabecera del documento (puede incluir un código antes del " +
+        "nombre, ej. '5728 - SERRANO MANTILLA LUZ STELLA') — copiá el texto tal cual sale, no lo " +
+        "reordenes ni lo limpies.",
+    },
     fecha_reporte: { type: "STRING", nullable: true, description: "Fecha del reporte/corte, formato YYYY-MM-DD" },
-    fecha_inicio_periodo: { type: "STRING", nullable: true, description: "Fecha de inicio del período que cubre el reporte, formato YYYY-MM-DD" },
-    fecha_fin_periodo: { type: "STRING", nullable: true, description: "Fecha de fin del período que cubre el reporte, formato YYYY-MM-DD" },
+    fecha_inicio_periodo: { type: "STRING", nullable: true, description: "Fecha de inicio del período que cubre el reporte, formato YYYY-MM-DD. Null si el documento solo trae una fecha de corte y no un rango." },
+    fecha_fin_periodo: { type: "STRING", nullable: true, description: "Fecha de fin del período (o fecha de corte si es una sola fecha), formato YYYY-MM-DD" },
+    vlr_prima_total: {
+      type: "NUMBER",
+      nullable: true,
+      description:
+        "Valor TOTAL de prima/saldo del reporte completo, número plano — buscá una fila de " +
+        "totales al final del documento (ej. 'Total Prima', 'Total Saldo', suma general de la " +
+        "columna de prima). Si el documento no trae un total general de prima (solo totales por " +
+        "sección/ramo, o ningún total), dejalo null — no sumes las líneas vos mismo.",
+    },
+    vlr_comision_total: {
+      type: "NUMBER",
+      nullable: true,
+      description:
+        "Valor TOTAL de comisión acreditada del reporte completo, número plano — buscá una fila " +
+        "de totales al final del documento (ej. 'Total Comisión Acreditada', 'Total Comisión', " +
+        "'Valores Acreditados'). Si no hay un total general, dejalo null — no sumes las líneas vos mismo.",
+    },
   },
 };
 
@@ -174,6 +200,9 @@ Deno.serve(async (req: Request) => {
     "aparte con signo contrario — no las omitas ni las canceles entre sí, cada una es una fila " +
     "independiente). Si un dato no aparece, dejalo en null — no inventes valores. No omitas " +
     "ninguna fila de la tabla aunque falten algunos datos en ella.\n\n" +
+    "Además, buscá en la cabecera/pie del documento los TOTALES generales del reporte completo " +
+    "(prima y comisión) si el documento los muestra explícitamente en una fila de totales — no " +
+    "los calcules vos sumando las líneas, solo copiá lo que ya viene impreso como total.\n\n" +
     "IMPORTANTE sobre negativos: algunos reportes muestran los valores negativos (reversiones) " +
     "con signo '-' y otros con formato contable entre paréntesis, ej. '(168.093,5)' significa " +
     "-168093.5 — interpretá ambos formatos como negativos en los campos numéricos.";

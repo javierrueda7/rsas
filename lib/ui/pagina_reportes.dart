@@ -11,6 +11,7 @@ import '../datos/poliza.dart';
 import '../datos/repositorio_polizas.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
+import 'widgets/selector_fecha.dart';
 import 'widgets/stat_card.dart';
 
 // ── Modelo auxiliar ───────────────────────────────────────────────────────────
@@ -249,16 +250,14 @@ class _PaginaReportesState extends State<PaginaReportes>
   // ── Selectores de fechas ──────────────────────────────────────────────────
 
   Future<void> _seleccionarFfin() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      locale: const Locale('es', 'CO'),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2035),
-      initialDateRange: (_filtroFfinDesde != null && _filtroFfinHasta != null)
+    final picked = await mostrarSelectorRangoFecha(
+      context,
+      primera: DateTime(2000),
+      ultima: DateTime(2035),
+      inicial: (_filtroFfinDesde != null && _filtroFfinHasta != null)
           ? DateTimeRange(start: _filtroFfinDesde!, end: _filtroFfinHasta!)
           : DateTimeRange(start: DateTime(_hoy.year, 1, 1), end: _hoy),
-      helpText: 'Rango F. Vencimiento',
-      saveText: 'Aplicar',
+      titulo: 'Rango F. Vencimiento',
     );
     if (picked != null && mounted) {
       setState(() {
@@ -269,16 +268,14 @@ class _PaginaReportesState extends State<PaginaReportes>
   }
 
   Future<void> _seleccionarFreg() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      locale: const Locale('es', 'CO'),
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-      initialDateRange: (_filtroFregDesde != null && _filtroFregHasta != null)
+    final picked = await mostrarSelectorRangoFecha(
+      context,
+      primera: DateTime(2000),
+      ultima: DateTime.now().add(const Duration(days: 1)),
+      inicial: (_filtroFregDesde != null && _filtroFregHasta != null)
           ? DateTimeRange(start: _filtroFregDesde!, end: _filtroFregHasta!)
           : DateTimeRange(start: DateTime(_hoy.year, 1, 1), end: _hoy),
-      helpText: 'Rango F. Registro',
-      saveText: 'Aplicar',
+      titulo: 'Rango F. Registro',
     );
     if (picked != null && mounted) {
       setState(() {
@@ -299,16 +296,14 @@ class _PaginaReportesState extends State<PaginaReportes>
   }
 
   Future<void> _seleccionarFexp() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      locale: const Locale('es', 'CO'),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2035),
-      initialDateRange: (_filtroFexpDesde != null && _filtroFexpHasta != null)
+    final picked = await mostrarSelectorRangoFecha(
+      context,
+      primera: DateTime(2000),
+      ultima: DateTime(2035),
+      inicial: (_filtroFexpDesde != null && _filtroFexpHasta != null)
           ? DateTimeRange(start: _filtroFexpDesde!, end: _filtroFexpHasta!)
           : DateTimeRange(start: DateTime(_hoy.year, 1, 1), end: _hoy),
-      helpText: 'Rango F. Expedición',
-      saveText: 'Aplicar',
+      titulo: 'Rango F. Expedición',
     );
     if (picked != null && mounted) {
       setState(() {
