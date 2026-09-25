@@ -91,6 +91,14 @@ begin
   end loop;
 end $$;
 
+-- Políticas viejas "for all using (true)" de migraciones anteriores: al ser
+-- permisivas se suman a las de arriba y las anulan (un usuario desactivado
+-- o un digitador seguía pudiendo escribir). Se eliminan.
+drop policy if exists ia_aprendizaje_intermediario_reporte_all on ia_aprendizaje_intermediario_reporte;
+drop policy if exists ia_aprendizaje_producto_all on ia_aprendizaje_producto;
+drop policy if exists ia_aprendizaje_rol_cliente_all on ia_aprendizaje_rol_cliente;
+drop policy if exists polizas_pendientes_all on polizas_pendientes;
+
 -- Tablas que en la app solo administra el rol A: todos leen, solo A escribe.
 do $$
 declare
