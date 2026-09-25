@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -57,19 +58,26 @@ class RepositorioIA {
     Map<String, dynamic>? extra,
   }) async {
     try {
-      final res = await _db.functions.invoke(
-        function,
-        body: {
-          'fileBase64': base64Encode(bytes),
-          'mimeType': mimeType,
-          if (extra != null) ...extra,
-        },
-      );
+      final res = await _db.functions
+          .invoke(
+            function,
+            body: {
+              'fileBase64': base64Encode(bytes),
+              'mimeType': mimeType,
+              if (extra != null) ...extra,
+            },
+          )
+          // El servidor corta a los 150 s; un poco más de margen acá.
+          .timeout(const Duration(seconds: 170));
       return res.data;
     } on FunctionException catch (e) {
       final detalle = e.details;
       final mensaje = detalle is Map ? detalle['error'] : null;
-      throw Exception(mensaje ?? 'Error al leer el documento (${e.status}).');
+      throw Exception(mensaje ?? 'No se pudo leer el documento (${e.status}).');
+    } on TimeoutException {
+      throw Exception('La lectura del documento tardó demasiado. Intente de nuevo.');
+    } catch (_) {
+      throw Exception('No se pudo conectar con el servicio. Verifique su conexión a internet.');
     }
   }
 }

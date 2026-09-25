@@ -491,8 +491,8 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       final completados = await _aplicarDatosExtraidos(pp.datos);
       if (!mounted) return;
       _toast(completados > 0
-          ? 'Póliza predigitada — revisá los $completados campo(s) antes de guardar.'
-          : 'No se pudo aplicar la información predigitada, completá a mano.');
+          ? 'Póliza predigitada: revise los $completados campo(s) antes de guardar.'
+          : 'No se pudo aplicar la información predigitada; complétela a mano.');
     }
   }
 
@@ -818,7 +818,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
       _ => null,
     };
     if (bytes == null || mimeType == null) {
-      _toast('No se pudo leer el archivo. Usá PDF, JPG, PNG o WEBP.');
+      _toast('No se pudo leer el archivo. Use PDF, JPG, PNG o WEBP.');
       return;
     }
 
@@ -849,10 +849,10 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
         };
         avisoCliente = ' Cliente extraído: "${nombreSugerido ?? '—'}" '
             '(doc "${docSugerido ?? '—'}") — no se encontró en la base, '
-            'buscalo a mano.';
+            'búsquelo a mano.';
       }
       _toast(completados > 0
-          ? 'Se completaron $completados campo(s) automáticamente. Revisá antes de guardar.$avisoCliente'
+          ? 'Se completaron $completados campo(s) automáticamente. Revise antes de guardar.$avisoCliente'
           : 'No se pudo identificar ningún dato en el documento.');
     } catch (e) {
       _toast('Error al importar: $e');
@@ -1459,7 +1459,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
             Text('Aseguradora: ${aseguradora?.nombreAseg ?? '—'}'),
             Text('Prima: \$ ${_primaCtrl.text}'),
             const SizedBox(height: 12),
-            const Text('Anotá el código antes de cerrar este mensaje.',
+            const Text('Anote el código antes de cerrar este mensaje.',
                 style: TextStyle(fontSize: 12)),
           ],
         ),

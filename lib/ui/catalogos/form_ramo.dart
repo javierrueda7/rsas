@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
+import '../../utils/numeros_co.dart';
 import '../../datos/repositorio_catalogos.dart';
 import '../theme/app_layout.dart';
 import '../widgets/section_card.dart';
@@ -95,26 +96,14 @@ class _FormRamoState extends State<FormRamo> {
     return null;
   }
 
-  num _parseNumConDefault100(String s) {
-    final t = s.trim();
-    if (t.isEmpty) return 100;
-    final limpio = t
-        .replaceAll(RegExp(r'[^0-9,.\-]'), '')
-        .replaceAll('.', '')
-        .replaceAll(',', '.');
-    return num.tryParse(limpio) ?? 100;
-  }
+  // Parser compartido: "12.5" es 12,5 (antes se borraban los puntos → 125).
+  num _parseNumConDefault100(String s) => parseNumCO(s) ?? 100;
 
   String? _validarPorcom(String? v) {
-    final t = (v ?? '').trim();
-    if (t.isEmpty) return null;
-    final limpio = t
-        .replaceAll(RegExp(r'[^0-9,.\-]'), '')
-        .replaceAll('.', '')
-        .replaceAll(',', '.');
-    final n = num.tryParse(limpio);
+    if ((v ?? '').trim().isEmpty) return null;
+    final n = parseNumCO(v);
     if (n == null) return 'Valor inválido';
-    if (n < 0) return 'No puede ser negativo';
+    if (n < 0 || n > 100) return 'Debe estar entre 0 y 100';
     return null;
   }
 

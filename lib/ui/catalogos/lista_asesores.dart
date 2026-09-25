@@ -45,10 +45,10 @@ class _ListaAsesoresState extends State<ListaAsesores> {
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+  Future<void> _cargar({bool forzar = false}) async {
     setState(() => cargando = true);
     try {
-      final res = await repo.listarAsesores(soloActivos: _soloActivos);
+      final res = await repo.listarAsesores(soloActivos: _soloActivos, forzar: forzar);
       res.sort((a, b) => a.id.compareTo(b.id));
       if (!mounted) return;
       setState(() {
@@ -336,7 +336,7 @@ class _ListaAsesoresState extends State<ListaAsesores> {
           IconButton(
             tooltip: 'Refrescar',
             icon: const Icon(Icons.refresh),
-            onPressed: cargando ? null : _cargar,
+            onPressed: cargando ? null : () => _cargar(forzar: true),
           ),
         ],
       ),

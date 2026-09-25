@@ -285,7 +285,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
       _ => null,
     };
     if (bytes == null || mimeType == null) {
-      _snack('No se pudo leer el archivo. Usá PDF, XLSX, JPG, PNG o WEBP.', error: true);
+      _snack('No se pudo leer el archivo. Use PDF, XLSX, JPG, PNG o WEBP.', error: true);
       return;
     }
 
@@ -377,7 +377,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
         setState(() => _lineasPendientes = extraido.lineas);
         _snack(
             'Se completó la cabecera y se detectaron ${extraido.lineas.length} línea(s). '
-            'Guardá el reporte para revisarlas y crear los abonos.');
+            'Guarde el reporte para revisarlas y crear los abonos.');
       }
     } catch (e) {
       _snack('Error al importar: $e', error: true);

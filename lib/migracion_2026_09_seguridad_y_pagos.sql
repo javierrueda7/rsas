@@ -587,6 +587,85 @@ create index if not exists idx_polizas_ffin_poliza on polizas (ffin_poliza);
 create index if not exists idx_polizas_fcreado on polizas (fcreado desc);
 
 
+-- ═══ I. Clientes duplicados por documento normalizado ══════════════════════
+-- Antes se comparaba el documento tal cual: "900227885-1" y "9002278851"
+-- (el mismo NIT) no aparecían como duplicados.
+
+create or replace view vw_clientes_duplicados as
+select c.*
+from clientes c
+where coalesce(c.doc_cliente_norm, '') <> ''
+  and coalesce(c.tipodoc_cliente, '') <> ''
+  and (c.tipodoc_cliente, c.doc_cliente_norm) in (
+    select tipodoc_cliente, doc_cliente_norm
+    from clientes
+    where coalesce(doc_cliente_norm, '') <> ''
+      and coalesce(tipodoc_cliente, '') <> ''
+    group by tipodoc_cliente, doc_cliente_norm
+    having count(*) > 1
+  );
+
+alter view public.vw_clientes_duplicados set (security_invoker = true);
+
+-- Fusión: además de mover las pólizas, verifica que todos sean el mismo
+-- documento y completa en el cliente que se conserva los datos que le
+-- falten (teléfono, correo, dirección, etc.) antes de borrar los demás.
+create or replace function fusionar_clientes(p_id_bueno bigint, p_ids_malos bigint[])
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_doc text;
+  v_distintos int;
+begin
+  if p_id_bueno = any(p_ids_malos) then
+    raise exception 'El cliente a conservar no puede estar en la lista de sobrantes.';
+  end if;
+
+  select doc_cliente_norm into v_doc from clientes where id = p_id_bueno;
+  select count(*) into v_distintos
+    from clientes
+   where id = any(p_ids_malos)
+     and coalesce(doc_cliente_norm, '') <> coalesce(v_doc, '');
+  if v_distintos > 0 then
+    raise exception 'Solo se pueden fusionar clientes con el mismo documento.';
+  end if;
+
+  update clientes b set
+    tel_cliente       = coalesce(nullif(b.tel_cliente, ''),       m.tel_cliente),
+    correo_cliente    = coalesce(nullif(b.correo_cliente, ''),    m.correo_cliente),
+    dir_cliente       = coalesce(nullif(b.dir_cliente, ''),       m.dir_cliente),
+    munic_id          = coalesce(b.munic_id,                      m.munic_id),
+    contacto_cliente  = coalesce(nullif(b.contacto_cliente, ''),  m.contacto_cliente),
+    cargocont_cliente = coalesce(nullif(b.cargocont_cliente, ''), m.cargocont_cliente),
+    asesor_id         = coalesce(b.asesor_id,                     m.asesor_id),
+    notas_cliente     = coalesce(nullif(b.notas_cliente, ''),     m.notas_cliente)
+  from (
+    select
+      (array_agg(tel_cliente)       filter (where coalesce(tel_cliente, '') <> ''))[1]       as tel_cliente,
+      (array_agg(correo_cliente)    filter (where coalesce(correo_cliente, '') <> ''))[1]    as correo_cliente,
+      (array_agg(dir_cliente)       filter (where coalesce(dir_cliente, '') <> ''))[1]       as dir_cliente,
+      (array_agg(munic_id)          filter (where munic_id is not null))[1]                  as munic_id,
+      (array_agg(contacto_cliente)  filter (where coalesce(contacto_cliente, '') <> ''))[1]  as contacto_cliente,
+      (array_agg(cargocont_cliente) filter (where coalesce(cargocont_cliente, '') <> ''))[1] as cargocont_cliente,
+      (array_agg(asesor_id)         filter (where asesor_id is not null))[1]                 as asesor_id,
+      (array_agg(notas_cliente)     filter (where coalesce(notas_cliente, '') <> ''))[1]     as notas_cliente
+    from clientes
+    where id = any(p_ids_malos)
+  ) m
+  where b.id = p_id_bueno;
+
+  update polizas set cliente_id = p_id_bueno where cliente_id = any(p_ids_malos);
+  delete from clientes where id = any(p_ids_malos);
+end;
+$$;
+
+revoke execute on function fusionar_clientes(bigint, bigint[]) from public, anon;
+grant execute on function fusionar_clientes(bigint, bigint[]) to authenticated;
+
+
 -- ═══ Verificación (debe devolver filas coherentes) ═════════════════════════
 
 -- 1. Políticas por tabla (usuarios/asesores/... con app_lectura + app_escritura).

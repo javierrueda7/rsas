@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
+import '../../utils/numeros_co.dart';
 import '../../datos/repositorio_catalogos.dart';
 import '../../utils/formatters.dart';
 import '../theme/app_layout.dart';
@@ -119,20 +120,21 @@ class _FormAsesorState extends State<FormAsesor> {
     return null;
   }
 
-  num? _parseNumeroONull(String v) {
-    final t = v.trim();
-    if (t.isEmpty) return null;
-    final limpio = t
-        .replaceAll(RegExp(r'[^0-9,.\-]'), '')
-        .replaceAll('.', '')
-        .replaceAll(',', '.');
-    return num.tryParse(limpio);
+  // Parser compartido: "12.5" es 12,5 (antes se borraban los puntos → 125).
+  num? _parseNumeroONull(String v) => parseNumCO(v);
+
+  String? _validarPorcentaje(String? v) {
+    if ((v ?? '').trim().isEmpty) return null;
+    final n = parseNumCO(v);
+    if (n == null) return 'Valor inválido';
+    if (n < 0 || n > 100) return 'Debe estar entre 0 y 100';
+    return null;
   }
 
   void _formatearPorcentaje() {
     final n = _parseNumeroONull(porccomCtrl.text);
     if (n == null) return;
-    porccomCtrl.text = Fmt.numCO(n, dec: 2);
+    porccomCtrl.text = formatearNumCO(n, maxDecimales: 5);
   }
 
   String? _validarCorreo(String? v) {
@@ -332,7 +334,8 @@ class _FormAsesorState extends State<FormAsesor> {
                     textInputAction: TextInputAction.next,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
+                    validator: _validarPorcentaje,
+                      decoration: const InputDecoration(
                       labelText: '% Comisión',
                       helperText: 'Ej: 70 o 70,5',
                       border: OutlineInputBorder(),

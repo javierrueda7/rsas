@@ -83,7 +83,7 @@ class _PaginaClientesDuplicadosState extends State<PaginaClientesDuplicados> {
           '${sobrantes.map((c) => '• #${c.id} ${c.nombreCliente}').join('\n')}\n\n'
           'hacia "#${conservar.id} ${conservar.nombreCliente}", y los clientes '
           'de arriba se van a eliminar. Esto no se puede deshacer.\n\n'
-          '¿Confirmás?',
+          '¿Confirma?',
         ),
         actions: [
           TextButton(

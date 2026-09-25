@@ -82,9 +82,9 @@ class _PaginaCargaMasivaPolizasState extends State<PaginaCargaMasivaPolizas> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Seleccioná varios PDF o imágenes de pólizas. Cada uno se manda a la IA y '
-              'queda como "Pendiente de revisión" — podés salir de esta pantalla y seguir '
-              'usando la app mientras se procesan, no hace falta esperar acá.',
+              'Seleccione varios PDF o imágenes de pólizas. Cada uno se envía a la IA y '
+              'queda como "Pendiente de revisión". Puede salir de esta pantalla y seguir '
+              'usando la app mientras se procesan; no hace falta esperar acá.',
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 16),
@@ -111,12 +111,22 @@ class _PaginaCargaMasivaPolizasState extends State<PaginaCargaMasivaPolizas> {
                         ? 'Procesando ${_servicio.procesados}/${items.length}...'
                         : 'Procesar ${items.length} archivo(s)'),
                   ),
+                if (terminado && _servicio.hayFallidos) ...[
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    // Solo reenvía los que fallaron: los exitosos no se
+                    // vuelven a cobrar.
+                    onPressed: () => _servicio.procesarTodos(),
+                    icon: const Icon(Icons.refresh),
+                    label: Text('Reintentar $errores fallido(s)'),
+                  ),
+                ],
               ],
             ),
             if (_servicio.procesando) ...[
               const SizedBox(height: 12),
               Text(
-                'Esto sigue corriendo aunque salgas de esta pantalla.',
+                'Esto sigue corriendo aunque salga de esta pantalla.',
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12, fontStyle: FontStyle.italic),
               ),
             ],
@@ -132,7 +142,7 @@ class _PaginaCargaMasivaPolizasState extends State<PaginaCargaMasivaPolizas> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          '$ok predigitada(s), $errores con error. Revisalas desde "Pólizas pendientes".',
+                          '$ok predigitada(s), $errores con error. Revíselas desde "Pólizas pendientes".',
                           style: TextStyle(color: AppTheme.onWarningContainer),
                         ),
                       ),

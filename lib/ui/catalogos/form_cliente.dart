@@ -10,9 +10,22 @@ import '../widgets/section_card.dart';
 /// los campos de plata — el guion del dígito de verificación de NIT (si lo
 /// hay) se deja tal cual, sin agruparle puntos a lo que viene después.
 class _DocInputFormatter extends TextInputFormatter {
+  /// CC y NIT: solo dígitos (y el guion del dígito de verificación), con
+  /// puntos de miles. Pasaporte, CE y otros: letras y dígitos tal cual
+  /// (antes las letras se borraban y no se podía escribir un pasaporte).
+  final bool soloNumerico;
+  const _DocInputFormatter({this.soloNumerico = true});
+
   @override
   TextEditingValue formatEditUpdate(
       TextEditingValue oldValue, TextEditingValue newValue) {
+    if (!soloNumerico) {
+      final t = newValue.text.toUpperCase().replaceAll(RegExp(r'[^0-9A-Z\-]'), '');
+      return newValue.copyWith(
+        text: t,
+        selection: TextSelection.collapsed(offset: t.length),
+      );
+    }
     final limpio = newValue.text.replaceAll(RegExp(r'[^0-9\-]'), '');
     if (limpio.isEmpty) return newValue.copyWith(text: '');
 
@@ -62,6 +75,8 @@ class _FormClienteState extends State<FormCliente> {
   late final TextEditingController cargocontCtrl;
 
   static const List<String> tiposDocNormalizados = ['CC', 'CE', 'NIT', 'PAS', 'OTRO'];
+
+  bool get _docNumerico => tipoDocSel == null || tipoDocSel == 'CC' || tipoDocSel == 'NIT';
 
   String? tipoDocSel;
   String tipopersSel = 'N';
@@ -175,25 +190,27 @@ class _FormClienteState extends State<FormCliente> {
     // fácil de leer mientras se digita (ver fix_doc_cliente_sin_puntos.sql).
     final doc = _limpiarONull(docCtrl.text.replaceAll('.', ''));
     if (doc != null && (tipoDocSel == null || tipoDocSel!.trim().isEmpty)) {
-      _toast('Selecciona el tipo de documento.');
+      _toast('Seleccione el tipo de documento.');
       return;
     }
 
-    if (doc != null) {
-      final existe = await repo.existeDocCliente(
-        tipoDocSel,
-        doc,
-        excluirId: esEdicion ? widget.cliente!.id : null,
-      );
-      if (existe) {
-        _toast('Ya existe un cliente con ese tipo y número de documento.');
-        return;
-      }
-    }
-
+    // "guardando" se marca antes de la verificación: con doble clic se
+    // hacían dos verificaciones, las dos pasaban y se creaban dos clientes.
     setState(() => guardando = true);
 
     try {
+      if (doc != null) {
+        final existe = await repo.existeDocCliente(
+          tipoDocSel,
+          doc,
+          excluirId: esEdicion ? widget.cliente!.id : null,
+        );
+        if (existe) {
+          _toast('Ya existe un cliente con ese tipo y número de documento.');
+          return;
+        }
+      }
+
       if (esEdicion) {
         final c = Cliente(
           id: widget.cliente!.id,
@@ -392,12 +409,12 @@ class _FormClienteState extends State<FormCliente> {
                         flex: 3,
                         child: TextFormField(
                           controller: docCtrl,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [_DocInputFormatter()],
-                          decoration: const InputDecoration(
+                          keyboardType: _docNumerico ? TextInputType.number : TextInputType.text,
+                          inputFormatters: [_DocInputFormatter(soloNumerico: _docNumerico)],
+                          decoration: InputDecoration(
                             labelText: 'Documento',
-                            border: OutlineInputBorder(),
-                            helperText: 'Los puntos se agregan solos',
+                            border: const OutlineInputBorder(),
+                            helperText: _docNumerico ? 'Los puntos se agregan solos' : null,
                           ),
                         ),
                       ),

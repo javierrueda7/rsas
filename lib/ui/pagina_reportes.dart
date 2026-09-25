@@ -11,6 +11,7 @@ import '../datos/poliza.dart';
 import '../datos/repositorio_polizas.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
+import '../utils/numeros_co.dart';
 import 'widgets/selector_fecha.dart';
 import 'widgets/stat_card.dart';
 
@@ -65,8 +66,61 @@ class _PaginaReportesState extends State<PaginaReportes>
   DateTime? _filtroFexpDesde;    // F. Expedición desde
   DateTime? _filtroFexpHasta;    // F. Expedición hasta
 
+  /// Las pólizas ANULADAS no cuentan como vigentes ni suman prima, salvo
+  /// que se pida verlas.
+  bool _incluirAnuladas = false;
+
   // ── Ordenamiento en tabs agrupados ────────────────────────────────────────
   bool _sortByPrima = false;
+
+  // ── Cálculos memorizados ──────────────────────────────────────────────────
+  // Con ~32 mil pólizas, recalcular filtros, listas y grupos en cada
+  // setState (ej. abrir/cerrar el panel de filtros) hacía lenta la pantalla.
+  // Cada cálculo se guarda junto a la "firma" de los datos y filtros, y solo
+  // se repite cuando algo de eso cambia.
+  final Map<String, Object?> _memoCache = {};
+  String _memoFirma = '';
+
+  String get _firmaFiltros => [
+        identityHashCode(_polizas), _polizas.length, _busqueda,
+        _filtroAseg, _filtroRamo, _filtroAsesor, _filtroProd, _filtroCliente,
+        _filtroEstado, _filtroFfinDesde, _filtroFfinHasta, _filtroFregDesde,
+        _filtroFregHasta, _filtroFexpDesde, _filtroFexpHasta, _incluirAnuladas,
+        _sortByPrima, _hoy,
+      ].join('|');
+
+  T _memo<T>(String clave, T Function() calcular) {
+    final firma = _firmaFiltros;
+    if (firma != _memoFirma) {
+      _memoCache.clear();
+      _memoFirma = firma;
+    }
+    if (_memoCache.containsKey(clave)) return _memoCache[clave] as T;
+    final valor = calcular();
+    _memoCache[clave] = valor;
+    return valor;
+  }
+
+  // Etiqueta de agrupación y de filtro: la misma para las dos cosas, así al
+  // tocar el grupo "Sin aseguradora" el filtro encuentra esas pólizas (antes
+  // se comparaba contra '' y daba 0 resultados).
+  static String _etqAseg(Poliza p) => p.nombreAseg ?? 'Sin aseguradora';
+  static String _etqRamo(Poliza p) => p.nombreRamo ?? 'Sin ramo';
+  static String _etqAsesor(Poliza p) => p.nombreAsesor ?? 'Sin asesor';
+  static String _etqProd(Poliza p) => p.nombreProd ?? 'Sin producto';
+
+  /// Rango de fechas cerrado en ambos extremos por día calendario: "hasta"
+  /// incluye todo ese día y nada del siguiente (antes entraba también el
+  /// día siguiente a medianoche, ej. "próximos 30 días" incluía el 31).
+  static bool _enRango(DateTime? d, DateTime? desde, DateTime? hasta) {
+    if (desde == null && hasta == null) return true;
+    if (d == null) return false;
+    if (desde != null && d.isBefore(desde)) return false;
+    if (hasta != null && !d.isBefore(DateTime(hasta.year, hasta.month, hasta.day + 1))) {
+      return false;
+    }
+    return true;
+  }
 
   final _df = DateFormat('dd/MM/yyyy');
   final _nf  = NumberFormat.decimalPattern('es_CO');
@@ -112,12 +166,13 @@ class _PaginaReportesState extends State<PaginaReportes>
   String _mensajeError(Object e) {
     final s = e.toString();
     if (s.contains('57014') || s.contains('canceling') || s.contains('timeout') || s.contains('TimeoutException')) {
-      return 'La consulta tardó demasiado.\nIntenta de nuevo o contacta al administrador.';
+      return 'La consulta tardó demasiado.\nIntente de nuevo o contacte al administrador.';
     }
     if (s.contains('SocketException') || s.contains('network') || s.contains('connection')) {
-      return 'Sin conexión a internet.\nVerifica tu red e intenta de nuevo.';
+      return 'Sin conexión a internet.\nVerifique su red e intente de nuevo.';
     }
-    return 'Error al cargar los datos.\n$s';
+    debugPrint('Reportes: error al cargar: $s');
+    return 'No se pudieron cargar los datos.\nIntente de nuevo en un momento.';
   }
 
   // ── Listas dinámicas (cada una considera los demás filtros activos) ──────────
@@ -127,53 +182,55 @@ class _PaginaReportesState extends State<PaginaReportes>
       // doc_cliente se guarda sin puntos — si buscan con puntos igual matchea.
       (p.docCliente ?? '').toLowerCase().contains(q.replaceAll('.', ''));
 
-  List<String> get _listaAseg => _polizas.where((p) {
-    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
-    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
-    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+  List<String> get _listaAseg => _memo('_listaAseg', () => _polizas.where((p) {
+    if (_filtroRamo != null && _etqRamo(p) != _filtroRamo) return false;
+    if (_filtroProd != null && _etqProd(p) != _filtroProd) return false;
+    if (_filtroAsesor != null && _etqAsesor(p) != _filtroAsesor) return false;
     if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
         !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
-  }).map((p) => p.nombreAseg ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreAseg ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
-  List<String> get _listaRamos => _polizas.where((p) {
-    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
-    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
-    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+  List<String> get _listaRamos => _memo('_listaRamos', () => _polizas.where((p) {
+    if (_filtroAseg != null && _etqAseg(p) != _filtroAseg) return false;
+    if (_filtroProd != null && _etqProd(p) != _filtroProd) return false;
+    if (_filtroAsesor != null && _etqAsesor(p) != _filtroAsesor) return false;
     if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
         !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
-  }).map((p) => p.nombreRamo ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreRamo ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
-  List<String> get _listaAsesores => _polizas.where((p) {
-    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
-    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
-    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
+  List<String> get _listaAsesores => _memo('_listaAsesores', () => _polizas.where((p) {
+    if (_filtroAseg != null && _etqAseg(p) != _filtroAseg) return false;
+    if (_filtroRamo != null && _etqRamo(p) != _filtroRamo) return false;
+    if (_filtroProd != null && _etqProd(p) != _filtroProd) return false;
     if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
         !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
-  }).map((p) => p.nombreAsesor ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreAsesor ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
-  List<String> get _listaProductos => _polizas.where((p) {
-    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
-    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
-    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+  List<String> get _listaProductos => _memo('_listaProductos', () => _polizas.where((p) {
+    if (_filtroAseg != null && _etqAseg(p) != _filtroAseg) return false;
+    if (_filtroRamo != null && _etqRamo(p) != _filtroRamo) return false;
+    if (_filtroAsesor != null && _etqAsesor(p) != _filtroAsesor) return false;
     if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
         !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
-  }).map((p) => p.nombreProd ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreProd ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
-  List<String> get _listaClientes => _polizas.where((p) {
-    if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
-    if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
-    if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
-    if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
+  List<String> get _listaClientes => _memo('_listaClientes', () => _polizas.where((p) {
+    if (_filtroAseg != null && _etqAseg(p) != _filtroAseg) return false;
+    if (_filtroRamo != null && _etqRamo(p) != _filtroRamo) return false;
+    if (_filtroProd != null && _etqProd(p) != _filtroProd) return false;
+    if (_filtroAsesor != null && _etqAsesor(p) != _filtroAsesor) return false;
     return true;
-  }).map((p) => p.nombreCliente ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreCliente ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
   // ── Filtrado ──────────────────────────────────────────────────────────────
 
-  List<Poliza> get _filtradas {
+  List<Poliza> get _filtradas => _memo('filtradas', _calcularFiltradas);
+
+  List<Poliza> _calcularFiltradas() {
     final hoy = _hoy;
     final q = _busqueda.toLowerCase();
     final intId = q.isNotEmpty ? int.tryParse(_busqueda) : null;
@@ -190,10 +247,11 @@ class _PaginaReportesState extends State<PaginaReportes>
             (p.bienAsegurado ?? '').toLowerCase().contains(q);
         if (!coincide) return false;
       }
-      if (_filtroAseg   != null && (p.nombreAseg   ?? '') != _filtroAseg)   return false;
-      if (_filtroRamo   != null && (p.nombreRamo   ?? '') != _filtroRamo)   return false;
-      if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
-      if (_filtroProd   != null && (p.nombreProd   ?? '') != _filtroProd)   return false;
+      if (!_incluirAnuladas && p.estadoPolizaId == 'A') return false;
+      if (_filtroAseg   != null && _etqAseg(p) != _filtroAseg)   return false;
+      if (_filtroRamo   != null && _etqRamo(p) != _filtroRamo)   return false;
+      if (_filtroAsesor != null && _etqAsesor(p) != _filtroAsesor) return false;
+      if (_filtroProd   != null && _etqProd(p) != _filtroProd)   return false;
       if (_filtroCliente != null && _filtroCliente!.isNotEmpty &&
           !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
       if (_filtroEstado == 1 &&
@@ -201,25 +259,9 @@ class _PaginaReportesState extends State<PaginaReportes>
       if (_filtroEstado == 2 &&
           (p.ffinPoliza == null || !p.ffinPoliza!.isBefore(hoy))) return false;
       if (_filtroEstado == 3 && p.ffinPoliza != null) return false;
-      if (_filtroFfinDesde != null &&
-          (p.ffinPoliza == null || p.ffinPoliza!.isBefore(_filtroFfinDesde!))) return false;
-      if (_filtroFfinHasta != null &&
-          (p.ffinPoliza == null ||
-           p.ffinPoliza!.isAfter(_filtroFfinHasta!.add(const Duration(days: 1))))) return false;
-      if (_filtroFregDesde != null) {
-        final fc = p.fcreado?.toLocal();
-        if (fc == null || fc.isBefore(_filtroFregDesde!)) return false;
-      }
-      if (_filtroFregHasta != null) {
-        final fc = p.fcreado?.toLocal();
-        if (fc == null ||
-            fc.isAfter(_filtroFregHasta!.add(const Duration(days: 1)))) return false;
-      }
-      if (_filtroFexpDesde != null &&
-          (p.fexpPoliza == null || p.fexpPoliza!.isBefore(_filtroFexpDesde!))) return false;
-      if (_filtroFexpHasta != null &&
-          (p.fexpPoliza == null ||
-           p.fexpPoliza!.isAfter(_filtroFexpHasta!.add(const Duration(days: 1))))) return false;
+      if (!_enRango(p.ffinPoliza, _filtroFfinDesde, _filtroFfinHasta)) return false;
+      if (!_enRango(p.fcreado?.toLocal(), _filtroFregDesde, _filtroFregHasta)) return false;
+      if (!_enRango(p.fexpPoliza, _filtroFexpDesde, _filtroFexpHasta)) return false;
       return true;
     }).toList();
   }
@@ -231,6 +273,7 @@ class _PaginaReportesState extends State<PaginaReportes>
       ((_filtroFregDesde != null || _filtroFregHasta != null) ? 1 : 0) +
       ((_filtroFexpDesde != null || _filtroFexpHasta != null) ? 1 : 0) +
       (_busqueda.isNotEmpty ? 1 : 0) +
+      (_incluirAnuladas ? 1 : 0) +
       (_filtroCliente != null && _filtroCliente!.isNotEmpty ? 1 : 0);
 
   void _limpiarFiltros() {
@@ -241,6 +284,7 @@ class _PaginaReportesState extends State<PaginaReportes>
       _clienteResetKey++;
       _filtroAseg = _filtroRamo = _filtroAsesor = _filtroProd = null;
       _filtroEstado = 0;
+      _incluirAnuladas = false;
       _filtroFfinDesde = _filtroFfinHasta = null;
       _filtroFregDesde = _filtroFregHasta = null;
       _filtroFexpDesde = _filtroFexpHasta = null;
@@ -354,42 +398,67 @@ class _PaginaReportesState extends State<PaginaReportes>
 
   // Reciben la lista ya filtrada (calculada una sola vez por build en vez de
   // que cada tab la vuelva a derivar de _filtradas por su cuenta).
-  List<Poliza> _vigentes(List<Poliza> filtradas) => filtradas
-      .where((p) => p.ffinPoliza != null && !p.ffinPoliza!.isBefore(_hoy))
-      .toList();
+  // Reciben la lista ya filtrada (siempre _filtradas) y se memorizan.
+  List<Poliza> _vigentes(List<Poliza> filtradas) => _memo('vigentes', () {
+        final hoy = _hoy;
+        return filtradas
+            .where((p) => p.ffinPoliza != null && !p.ffinPoliza!.isBefore(hoy))
+            .toList();
+      });
 
-  List<Poliza> _vencidas(List<Poliza> filtradas) => filtradas
-      .where((p) => p.ffinPoliza != null && p.ffinPoliza!.isBefore(_hoy))
-      .toList()
-    ..sort((a, b) => b.ffinPoliza!.compareTo(a.ffinPoliza!));
+  List<Poliza> _vencidas(List<Poliza> filtradas) => _memo('vencidas', () {
+        final hoy = _hoy;
+        return filtradas
+            .where((p) => p.ffinPoliza != null && p.ffinPoliza!.isBefore(hoy))
+            .toList()
+          ..sort((a, b) => b.ffinPoliza!.compareTo(a.ffinPoliza!));
+      });
 
   List<Poliza> _porVencer(List<Poliza> filtradas, int desdeD, int hastaD) =>
-      filtradas.where((p) {
-        if (p.ffinPoliza == null) return false;
-        final diff = p.ffinPoliza!.difference(_hoy).inDays;
-        return diff >= desdeD && diff <= hastaD;
-      }).toList()
-        ..sort((a, b) => a.ffinPoliza!.compareTo(b.ffinPoliza!));
+      _memo('porVencer:$desdeD:$hastaD', () {
+        final hoy = _hoy;
+        return filtradas.where((p) {
+          if (p.ffinPoliza == null) return false;
+          final diff = p.ffinPoliza!.difference(hoy).inDays;
+          return diff >= desdeD && diff <= hastaD;
+        }).toList()
+          ..sort((a, b) => a.ffinPoliza!.compareTo(b.ffinPoliza!));
+      });
 
-  List<Poliza> _sinFfin(List<Poliza> filtradas) => filtradas
+  List<Poliza> _sinFfin(List<Poliza> filtradas) => _memo('sinFfin', () => filtradas
       .where((p) => p.ffinPoliza == null)
       .toList()
-        ..sort((a, b) => (b.fcreado ?? DateTime(0)).compareTo(a.fcreado ?? DateTime(0)));
+        ..sort((a, b) => (b.fcreado ?? DateTime(0)).compareTo(a.fcreado ?? DateTime(0))));
 
-  double _primaTotal(List<Poliza> filtradas) =>
-      filtradas.fold(0.0, (s, p) => s + p.primaPoliza);
+  /// Suma exacta (en centavos): con doubles sobre miles de pólizas quedaban
+  /// residuos como ",001" en pantalla.
+  num _primaTotal(List<Poliza> filtradas) =>
+      _memo('primaTotal', () => sumarDinero(filtradas.map((p) => p.primaPoliza)));
 
-  Map<String, _Grupo> _agrupar(List<Poliza> lista, String Function(Poliza) key) {
-    final map = <String, _Grupo>{};
-    for (final p in lista) {
-      final k = key(p);
-      (map[k] ??= _Grupo(k)).agregar(p);
-    }
-    final entries = map.entries.toList()
-      ..sort((a, b) => _sortByPrima
-          ? b.value.prima.compareTo(a.value.prima)
-          : b.value.cantidad.compareTo(a.value.cantidad));
-    return Map.fromEntries(entries);
+  /// [porPrima] null = según el orden elegido en las pestañas; el Resumen
+  /// siempre ordena por cantidad (su barra muestra cantidades).
+  Map<String, _Grupo> _agrupar(
+    List<Poliza> lista,
+    String clave,
+    String Function(Poliza) key, {
+    bool? porPrima,
+  }) {
+    final ordenPrima = porPrima ?? _sortByPrima;
+    return _memo('agrupar:$clave:$ordenPrima', () {
+      final map = <String, _Grupo>{};
+      for (final p in lista) {
+        final k = key(p);
+        (map[k] ??= _Grupo(k)).agregar(p);
+      }
+      final entries = map.entries.toList()
+        ..sort((a, b) {
+          final c = ordenPrima
+              ? b.value.prima.compareTo(a.value.prima)
+              : b.value.cantidad.compareTo(a.value.cantidad);
+          return c != 0 ? c : a.key.compareTo(b.key);
+        });
+      return Map.fromEntries(entries);
+    });
   }
 
   // ── Filtro rápido desde tab agrupado ──────────────────────────────────────
@@ -407,11 +476,14 @@ class _PaginaReportesState extends State<PaginaReportes>
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
           label: 'Quitar',
-          onPressed: () => setState(() {
-            if (tipo == 'aseg') _filtroAseg = null;
-            if (tipo == 'ramo') _filtroRamo = null;
-            if (tipo == 'asesor') _filtroAsesor = null;
-          }),
+          onPressed: () {
+            if (!mounted) return;
+            setState(() {
+              if (tipo == 'aseg') _filtroAseg = null;
+              if (tipo == 'ramo') _filtroRamo = null;
+              if (tipo == 'asesor') _filtroAsesor = null;
+            });
+          },
         ),
       ),
     );
@@ -570,13 +642,13 @@ class _PaginaReportesState extends State<PaginaReportes>
                     children: [
                       _tabResumen(filtradas),
                       _tabAgrupado(
-                          _agrupar(filtradas, (p) => p.nombreAseg ?? 'Sin aseguradora'),
+                          _agrupar(filtradas, 'aseg', _etqAseg),
                           'Aseguradora', 'aseg', filtradas),
                       _tabAgrupado(
-                          _agrupar(filtradas, (p) => p.nombreRamo ?? 'Sin ramo'),
+                          _agrupar(filtradas, 'ramo', _etqRamo),
                           'Ramo', 'ramo', filtradas),
                       _tabAgrupado(
-                          _agrupar(filtradas, (p) => p.nombreAsesor ?? 'Sin asesor'),
+                          _agrupar(filtradas, 'asesor', _etqAsesor),
                           'Asesor', 'asesor', filtradas),
                       _tabVencimientos(filtradas),
                     ],
@@ -690,6 +762,13 @@ class _PaginaReportesState extends State<PaginaReportes>
               _chipEstado(label: 'Vencidas',  valor: 2),
               const SizedBox(width: 6),
               _chipEstado(label: 'Sin fecha', valor: 3),
+              const SizedBox(width: 12),
+              FilterChip(
+                label: const Text('Incluir anuladas', style: TextStyle(fontSize: 12)),
+                selected: _incluirAnuladas,
+                visualDensity: VisualDensity.compact,
+                onSelected: (v) => setState(() => _incluirAnuladas = v),
+              ),
               const Spacer(),
               Text(
                 '$nFil de $nTot pólizas',
@@ -1016,8 +1095,8 @@ class _PaginaReportesState extends State<PaginaReportes>
     final pv60 = _porVencer(fil, 31, 60);
     final pv90 = _porVencer(fil, 61, 90);
     final primaTotal = _primaTotal(fil);
-    final topAseg = _agrupar(fil, (p) => p.nombreAseg ?? 'Sin aseguradora').values.take(5).toList();
-    final topRamo = _agrupar(fil, (p) => p.nombreRamo ?? 'Sin ramo').values.take(5).toList();
+    final topAseg = _agrupar(fil, 'aseg', _etqAseg, porPrima: false).values.take(5).toList();
+    final topRamo = _agrupar(fil, 'ramo', _etqRamo, porPrima: false).values.take(5).toList();
 
     return SingleChildScrollView(
       padding: AppLayout.pagePadding,
@@ -1034,8 +1113,10 @@ class _PaginaReportesState extends State<PaginaReportes>
                     Text('Resumen general',
                         style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                     Text(
-                      'Datos al ${_df.format(_hoy)} · ${_nf.format(total)} pólizas con fecha'
-                      '${sinFfin > 0 ? ' · ${_nf.format(sinFfin)} sin fecha' : ''}'
+                      '${RepositorioPolizas.cacheCargadoEn != null ? 'Datos cargados ${DateFormat('dd/MM/yyyy HH:mm').format(RepositorioPolizas.cacheCargadoEn!)} · ' : ''}'
+                      '${_nf.format(total)} pólizas'
+                      '${sinFfin > 0 ? ' · ${_nf.format(sinFfin)} sin fecha de vencimiento' : ''}'
+                      '${_incluirAnuladas ? '' : ' · sin anuladas'}'
                       '${_filtrosActivos > 0 ? ' (filtradas de ${_nf.format(_polizas.length)})' : ''}',
                       style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
@@ -1363,7 +1444,8 @@ class _PaginaReportesState extends State<PaginaReportes>
       ('Vencen en 0 – 30 días',      _porVencer(fil, 0, 30),  AppTheme.danger,    Icons.warning_amber_outlined),
       ('Vencen en 31 – 60 días',     _porVencer(fil, 31, 60), AppTheme.warning,  Icons.access_time_outlined),
       ('Vencen en 61 – 90 días',     _porVencer(fil, 61, 90), Colors.amber.shade700,   Icons.event_outlined),
-      ('Ya vencidas (últimas 100)', _vencidas(fil).take(100).toList(), AppTheme.inkSoft, Icons.cancel_outlined),
+      ('Ya vencidas: ${_nf.format(_vencidas(fil).length)} en total — se muestran las 100 más recientes',
+          _vencidas(fil).take(100).toList(), AppTheme.inkSoft, Icons.cancel_outlined),
       ('Sin fecha de vencimiento',  _sinFfin(fil), AppTheme.inkSoft, Icons.event_busy_outlined),
     ];
 
@@ -1373,7 +1455,7 @@ class _PaginaReportesState extends State<PaginaReportes>
         final (titulo, lista, color, icono) = rec;
         if (lista.isEmpty) return const [];
 
-        final primaSeccion = lista.fold(0.0, (s, p) => s + p.primaPoliza);
+        final primaSeccion = sumarDinero(lista.map((p) => p.primaPoliza));
 
         return [
           Padding(
@@ -1594,7 +1676,6 @@ class _ExcelParams {
 }
 
 Uint8List? _buildExcelBytes(_ExcelParams p) {
-  final df  = DateFormat('dd/MM/yyyy');
   final dfh = DateFormat('dd/MM/yyyy HH:mm');
 
   Map<String, ({int cantidad, double prima})> agrupar(
@@ -1636,12 +1717,12 @@ Uint8List? _buildExcelBytes(_ExcelParams p) {
       TextCellValue(pol.nombreAseg ?? ''),
       TextCellValue(pol.nombreRamo ?? ''),
       TextCellValue(pol.nombreProd ?? ''),
-      TextCellValue(pol.finiPoliza != null ? df.format(pol.finiPoliza!) : ''),
-      TextCellValue(pol.ffinPoliza != null ? df.format(pol.ffinPoliza!) : ''),
+      _celdaFecha(pol.finiPoliza),
+      _celdaFecha(pol.ffinPoliza),
       DoubleCellValue(pol.primaPoliza.toDouble()),
       DoubleCellValue(pol.valorPoliza.toDouble()),
       pol.vlrasegPoliza != null ? DoubleCellValue(pol.vlrasegPoliza!.toDouble()) : TextCellValue(''),
-      TextCellValue(pol.fexpPoliza != null ? df.format(pol.fexpPoliza!) : ''),
+      _celdaFecha(pol.fexpPoliza),
       TextCellValue(pol.nombreAsesor ?? ''),
       TextCellValue(pol.fcreado != null ? dfh.format(pol.fcreado!.toLocal()) : ''),
       TextCellValue(pol.fultmod != null ? dfh.format(pol.fultmod!.toLocal()) : ''),
@@ -1687,7 +1768,7 @@ Uint8List? _buildExcelBytes(_ExcelParams p) {
       TextCellValue(pol.nombreAseg ?? ''),
       TextCellValue(pol.nombreRamo ?? ''),
       TextCellValue(pol.nombreProd ?? ''),
-      TextCellValue(df.format(pol.ffinPoliza!)),
+      _celdaFecha(pol.ffinPoliza),
       IntCellValue(pol.ffinPoliza!.difference(p.hoy).inDays),
       DoubleCellValue(pol.primaPoliza.toDouble()),
       TextCellValue(pol.nombreAsesor ?? ''),
@@ -1763,3 +1844,8 @@ class _IconoCargandoState extends State<_IconoCargando>
     );
   }
 }
+
+/// Fecha como celda de fecha real de Excel (antes iba como texto y no se
+/// podía ordenar ni filtrar por fecha).
+CellValue? _celdaFecha(DateTime? d) =>
+    d == null ? null : DateCellValue(year: d.year, month: d.month, day: d.day);

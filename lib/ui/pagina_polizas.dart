@@ -42,59 +42,92 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   String? _filtroCliente;
   int _clienteResetKey = 0;
 
+  // ── Cálculos memorizados ──────────────────────────────────────────────
+  // Las opciones de los filtros y la lista filtrada recorren hasta ~32 mil
+  // pólizas: se recalculan solo cuando cambian los datos, los filtros o el
+  // orden (no en cada repintado por el contador de carga o la carga masiva).
+  final Map<String, Object?> _memoCache = {};
+  String _memoFirma = '';
+
+  String get _firma => [
+        identityHashCode(polizas), polizas.length, _filtroAseg, _filtroRamo,
+        _filtroProd, _filtroAsesor, _filtroCliente, _sortColumnIndex, _sortAscending,
+        _versionOrden,
+      ].join('|');
+
+  /// Se incrementa al reordenar en el mismo lugar (misma lista, otro orden).
+  int _versionOrden = 0;
+
+  T _memo<T>(String clave, T Function() calcular) {
+    final f = _firma;
+    if (f != _memoFirma) {
+      _memoCache.clear();
+      _memoFirma = f;
+    }
+    if (_memoCache.containsKey(clave)) return _memoCache[clave] as T;
+    final v = calcular();
+    _memoCache[clave] = v;
+    return v;
+  }
+
+  /// Identificador de la última búsqueda pedida: si llega la respuesta de
+  /// una anterior (más lenta), se descarta. Antes, una búsqueda escrita
+  /// mientras cargaba se ignoraba y la lista no coincidía con el buscador.
+  int _reqId = 0;
+
   bool _matchCliente(Poliza p, String q) =>
       (p.nombreCliente ?? '').toLowerCase().contains(q) ||
       // doc_cliente se guarda sin puntos — si buscan con puntos igual matchea.
       (p.docCliente ?? '').toLowerCase().contains(q.replaceAll('.', ''));
 
-  List<String> get _opAseguradoras => polizas.where((p) {
+  List<String> get _opAseguradoras => _memo('_opAseguradoras', () => polizas.where((p) {
     if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
     if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
     if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
     if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
-  }).map((p) => p.nombreAseg ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreAseg ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
-  List<String> get _opRamos => polizas.where((p) {
+  List<String> get _opRamos => _memo('_opRamos', () => polizas.where((p) {
     if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
     if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
     if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
     if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
-  }).map((p) => p.nombreRamo ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreRamo ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
-  List<String> get _opProductos => polizas.where((p) {
+  List<String> get _opProductos => _memo('_opProductos', () => polizas.where((p) {
     if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
     if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
     if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
     if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
-  }).map((p) => p.nombreProd ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreProd ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
-  List<String> get _opAsesores => polizas.where((p) {
+  List<String> get _opAsesores => _memo('_opAsesores', () => polizas.where((p) {
     if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
     if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
     if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
     if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
-  }).map((p) => p.nombreAsesor ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreAsesor ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
-  List<String> get _opClientes => polizas.where((p) {
+  List<String> get _opClientes => _memo('_opClientes', () => polizas.where((p) {
     if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
     if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
     if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
     if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
     return true;
-  }).map((p) => p.nombreCliente ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort();
+  }).map((p) => p.nombreCliente ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort());
 
-  List<Poliza> get _polizasFiltradas => polizas.where((p) {
+  List<Poliza> get _polizasFiltradas => _memo('filtradas', () => polizas.where((p) {
     if (_filtroAseg != null && (p.nombreAseg ?? '') != _filtroAseg) return false;
     if (_filtroRamo != null && (p.nombreRamo ?? '') != _filtroRamo) return false;
     if (_filtroProd != null && (p.nombreProd ?? '') != _filtroProd) return false;
     if (_filtroAsesor != null && (p.nombreAsesor ?? '') != _filtroAsesor) return false;
     if (_filtroCliente != null && !_matchCliente(p, _filtroCliente!.toLowerCase())) return false;
     return true;
-  }).toList();
+  }).toList());
 
   void _setFiltro(void Function() setter) {
     setState(setter);
@@ -162,29 +195,33 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
   }
 
   /// Carga inicial rápida: 500 más recientes.
+  static const int _limiteRapido = 500;
+
   Future<void> _cargar() async {
     final busqueda = ctrlBuscar.text.trim();
-    if (cargando) return;
+    final req = ++_reqId;
     if (mounted) setState(() { cargando = true; _datosCompletos = false; _errorCarga = null; });
     try {
-      final data = await repo.listar(busqueda: busqueda, limite: 500)
+      final data = await repo.listar(busqueda: busqueda, limite: _limiteRapido)
           .timeout(const Duration(seconds: 30));
-      if (mounted) {
-        setState(() {
-          polizas = data;
-          _aplicarOrden();
-        });
-      }
+      if (!mounted || req != _reqId) return;
+      setState(() {
+        polizas = data;
+        // Si cupo todo, ya son todos los resultados (antes una búsqueda de
+        // 12 pólizas decía "mostrando las 12 más recientes").
+        _datosCompletos = data.length < _limiteRapido;
+        _aplicarOrden();
+      });
     } catch (e) {
-      if (mounted) setState(() => _errorCarga = _mensajeError(e));
+      if (mounted && req == _reqId) setState(() => _errorCarga = _mensajeError(e));
     } finally {
-      if (mounted) setState(() => cargando = false);
+      if (mounted && req == _reqId) setState(() => cargando = false);
     }
   }
 
   /// Carga completa paginada: trae todos los registros de a 1.000.
   Future<void> _cargarTodo({bool forzar = false}) async {
-    if (cargando) return;
+    final req = ++_reqId;
     if (mounted) setState(() { cargando = true; _cargados = 0; _errorCarga = null; });
     final busqueda = ctrlBuscar.text.trim();
     try {
@@ -192,20 +229,19 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         busqueda: busqueda,
         forzar: forzar,
         onProgreso: (n) {
-          if (mounted) setState(() => _cargados = n);
+          if (mounted && req == _reqId) setState(() => _cargados = n);
         },
       ).timeout(const Duration(minutes: 3));
-      if (mounted) {
-        setState(() {
-          polizas = data;
-          _datosCompletos = true;
-          _aplicarOrden();
-        });
-      }
+      if (!mounted || req != _reqId) return;
+      setState(() {
+        polizas = data;
+        _datosCompletos = true;
+        _aplicarOrden();
+      });
     } catch (e) {
-      if (mounted) setState(() => _errorCarga = _mensajeError(e));
+      if (mounted && req == _reqId) setState(() => _errorCarga = _mensajeError(e));
     } finally {
-      if (mounted) setState(() => cargando = false);
+      if (mounted && req == _reqId) setState(() => cargando = false);
     }
   }
 
@@ -216,18 +252,19 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         s.contains('timeout') ||
         s.contains('canceling') ||
         s.contains('TimeoutException')) {
-      return 'La consulta tardó demasiado.\nVerifica tu conexión e intenta de nuevo.';
+      return 'La consulta tardó demasiado.\nVerifique su conexión e intente de nuevo.';
     }
     if (s.contains('network') ||
         s.contains('connection') ||
         s.contains('SocketException') ||
         s.contains('Failed host')) {
-      return 'Sin conexión a internet.\nVerifica tu red e intenta de nuevo.';
+      return 'Sin conexión a internet.\nVerifique su red e intente de nuevo.';
     }
-    return 'Error al cargar pólizas.\nIntenta de nuevo.';
+    return 'Error al cargar pólizas.\nIntente de nuevo.';
   }
 
   void _aplicarOrden() {
+    _versionOrden++;
     polizas.sort((a, b) {
       final int cmp;
       switch (_sortColumnIndex) {
@@ -435,6 +472,9 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const PaginaFormularioPolizas()),
     );
+    if (!mounted) return;
+    // La caché ya tiene la póliza guardada (se refresca solo esa fila), así
+    // que recargar "todo" no vuelve a descargar las 32 mil.
     _datosCompletos ? _cargarTodo() : _cargar();
     _cargarPendientesCount();
   }
@@ -445,6 +485,7 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
         builder: (_) => PaginaFormularioPolizas(poliza: p),
       ),
     );
+    if (!mounted) return;
     _datosCompletos ? _cargarTodo() : _cargar();
   }
 
@@ -935,10 +976,11 @@ class _PaginaPolizasState extends State<PaginaPolizas> {
                 context,
                 MaterialPageRoute(builder: (_) => const PaginaPolizasPendientes()),
               );
+              if (!mounted) return;
               _cargarPendientesCount();
-              // Si desde ahí se terminó de digitar y guardar una póliza
-              // real, esta lista tiene que reflejarla al volver.
-              _datosCompletos ? _cargarTodo(forzar: true) : _cargar();
+              // Si desde ahí se guardó una póliza real, la caché ya la tiene
+              // (se refresca solo esa fila): no hace falta bajar todo otra vez.
+              _datosCompletos ? _cargarTodo() : _cargar();
             },
           ),
           IconButton(

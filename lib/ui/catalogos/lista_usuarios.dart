@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../datos/catalogos.dart';
 import '../../datos/repositorio_catalogos.dart';
+import '../../datos/sesion.dart';
 import '../theme/app_theme.dart';
 import 'form_usuario.dart';
 
@@ -97,6 +98,12 @@ class _ListaUsuariosState extends State<ListaUsuarios> {
   }
 
   Future<void> _eliminar(Usuario u) async {
+    if (u.id == Sesion.usuarioId) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No puede eliminar su propio usuario.'),
+      ));
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

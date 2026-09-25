@@ -45,10 +45,10 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+  Future<void> _cargar({bool forzar = false}) async {
     setState(() => cargando = true);
     try {
-      final res = await repo.listarAseguradoras(soloActivas: _soloActivas);
+      final res = await repo.listarAseguradoras(soloActivas: _soloActivas, forzar: forzar);
       if (!mounted) return;
 
       res.sort((a, b) => a.id.compareTo(b.id));
@@ -150,7 +150,7 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
     } catch (e) {
       final msg = _esErrorRelacion(e)
           ? 'No se puede eliminar porque esta aseguradora está relacionada con productos o pólizas.'
-          : 'Error eliminando: $e';
+          : e.toString().replaceFirst('Exception: ', '');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -337,7 +337,7 @@ class _ListaAseguradorasState extends State<ListaAseguradoras> {
           IconButton(
             tooltip: 'Refrescar',
             icon: const Icon(Icons.refresh),
-            onPressed: cargando ? null : _cargar,
+            onPressed: cargando ? null : () => _cargar(forzar: true),
           ),
         ],
       ),

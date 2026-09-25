@@ -46,13 +46,13 @@ class _ListaProductosState extends State<ListaProductos> {
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+  Future<void> _cargar({bool forzar = false}) async {
     setState(() => cargando = true);
     try {
       final res = await Future.wait([
-        repo.listarProductos(),
-        repo.listarRamos(),
-        repo.listarAseguradoras(),
+        repo.listarProductos(forzar: forzar),
+        repo.listarRamos(forzar: forzar),
+        repo.listarAseguradoras(forzar: forzar),
       ]);
 
       final prods = res[0] as List<Producto>;
@@ -143,7 +143,7 @@ class _ListaProductosState extends State<ListaProductos> {
     } catch (e) {
       final msg = _esErrorRelacion(e)
           ? 'No se puede eliminar porque este producto ya está relacionado con pólizas.'
-          : 'Error eliminando: $e';
+          : e.toString().replaceFirst('Exception: ', '');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
@@ -369,7 +369,7 @@ class _ListaProductosState extends State<ListaProductos> {
           IconButton(
             tooltip: 'Refrescar',
             icon: const Icon(Icons.refresh),
-            onPressed: cargando ? null : _cargar,
+            onPressed: cargando ? null : () => _cargar(forzar: true),
           ),
         ],
       ),

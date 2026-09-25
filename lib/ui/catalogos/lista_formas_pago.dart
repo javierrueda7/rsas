@@ -44,10 +44,10 @@ class _ListaFormasPagoState extends State<ListaFormasPago> {
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+  Future<void> _cargar({bool forzar = false}) async {
     setState(() => cargando = true);
     try {
-      final res = await repo.listarFormasPago(soloActivas: _soloActivas);
+      final res = await repo.listarFormasPago(soloActivas: _soloActivas, forzar: forzar);
       if (!mounted) return;
       setState(() {
         items = res;
@@ -247,7 +247,7 @@ class _ListaFormasPagoState extends State<ListaFormasPago> {
       appBar: AppBar(
         title: const Text('Formas de Pago'),
         actions: [
-          IconButton(tooltip: 'Refrescar', icon: const Icon(Icons.refresh), onPressed: cargando ? null : _cargar),
+          IconButton(tooltip: 'Refrescar', icon: const Icon(Icons.refresh), onPressed: cargando ? null : () => _cargar(forzar: true)),
         ],
       ),
       floatingActionButton: FloatingActionButton(

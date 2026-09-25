@@ -45,10 +45,10 @@ class _ListaRamosState extends State<ListaRamos> {
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+  Future<void> _cargar({bool forzar = false}) async {
     setState(() => cargando = true);
     try {
-      final res = await repo.listarRamos(soloActivos: _soloActivos);
+      final res = await repo.listarRamos(soloActivos: _soloActivos, forzar: forzar);
 
       res.sort((a, b) => a.id.compareTo(b.id));
 
@@ -150,7 +150,7 @@ class _ListaRamosState extends State<ListaRamos> {
     } catch (e) {
       final msg = _esErrorRelacion(e)
           ? 'No se puede eliminar porque este ramo está relacionado con productos o pólizas.'
-          : 'Error eliminando: $e';
+          : e.toString().replaceFirst('Exception: ', '');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -339,7 +339,7 @@ class _ListaRamosState extends State<ListaRamos> {
           IconButton(
             tooltip: 'Refrescar',
             icon: const Icon(Icons.refresh),
-            onPressed: cargando ? null : _cargar,
+            onPressed: cargando ? null : () => _cargar(forzar: true),
           ),
         ],
       ),

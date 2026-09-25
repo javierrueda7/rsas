@@ -56,7 +56,12 @@ class _ListaClientesState extends State<ListaClientes> {
 
   Map<int, String> _municNombre = {};
 
+  /// Solo vale la respuesta de la última búsqueda: si una anterior (más
+  /// lenta) llega después, se descarta en vez de pisar la lista.
+  int _reqId = 0;
+
   Future<void> _cargar() async {
+    final req = ++_reqId;
     setState(() { cargando = true; _todosLoaded = false; });
     try {
       final q = _buscarCtrl.text.trim();
@@ -98,7 +103,13 @@ class _ListaClientesState extends State<ListaClientes> {
 
       conMunic.sort((a, b) => a.id.compareTo(b.id));
 
-      if (!mounted) return;
+      if (!mounted || req != _reqId) return;
+      if (q.isNotEmpty && clientes.length >= RepositorioCatalogos.maxResultadosBusquedaClientes) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Hay más de 500 coincidencias: se muestran las primeras 500. '
+              'Escriba más letras para afinar la búsqueda.'),
+        ));
+      }
       setState(() {
         items = conMunic;
         _sortColumnIndex = 0;
@@ -206,7 +217,7 @@ class _ListaClientesState extends State<ListaClientes> {
     } catch (e) {
       final msg = _esErrorRelacion(e)
           ? 'No se puede eliminar porque este cliente ya está relacionado con pólizas.'
-          : 'Error eliminando: $e';
+          : e.toString().replaceFirst('Exception: ', '');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
@@ -470,7 +481,7 @@ class _ListaClientesState extends State<ListaClientes> {
             child: TextField(
               controller: _buscarCtrl,
               decoration: InputDecoration(
-                labelText: 'Buscar (nombre, doc, tel, correo, municipio)',
+                labelText: 'Buscar (nombre, documento, teléfono, correo)',
                 border: const OutlineInputBorder(),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _buscarCtrl.text.isEmpty
