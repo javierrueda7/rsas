@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../datos/abono_poliza.dart';
 import '../datos/repositorio_pagos.dart';
+import '../utils/filtros_busqueda.dart';
 import '../utils/formatters.dart';
 import '../utils/numeros_co.dart';
 import '../utils/generador_pdf.dart';
@@ -44,6 +45,28 @@ class _PaginaEstadoCuentaState extends State<PaginaEstadoCuenta> {
   bool _exportando  = false;
   List<AbonoPoliza> _abonos = [];
   ReportePago?      _reporte;
+
+  // Buscador de la tabla (solo en el estado de cuenta de un reporte): por
+  // código de póliza, número de póliza o cliente.
+  final _ctrlFiltro = TextEditingController();
+
+  List<AbonoPoliza> get _abonosFiltrados {
+    final q = _ctrlFiltro.text.trim();
+    if (q.isEmpty) return _abonos;
+    final codigo = int.tryParse(q.replaceFirst('#', ''));
+    final norm = normalizarAlfanumerico(q);
+    final texto = q.toUpperCase();
+    return _abonos.where((a) =>
+        a.idPoliza == codigo ||
+        (norm.isNotEmpty && normalizarAlfanumerico(a.nroPoliza ?? '').contains(norm)) ||
+        (a.nombreCliente ?? '').toUpperCase().contains(texto)).toList();
+  }
+
+  @override
+  void dispose() {
+    _ctrlFiltro.dispose();
+    super.dispose();
+  }
 
   // Totales
   // Los abonos anulados (estado A) no suman, igual que en la base. Suma
@@ -260,8 +283,30 @@ class _PaginaEstadoCuentaState extends State<PaginaEstadoCuenta> {
                               icon: Icons.history_outlined,
                               title: 'Historial de Pagos'),
                           const SizedBox(height: 10),
+                          if (!widget.esModoPoliza) ...[
+                            TextField(
+                              controller: _ctrlFiltro,
+                              onChanged: (_) => setState(() {}),
+                              decoration: InputDecoration(
+                                hintText: 'Buscar por código de póliza, número de póliza o cliente...',
+                                prefixIcon: const Icon(Icons.search),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                                helperText: _ctrlFiltro.text.trim().isEmpty
+                                    ? null
+                                    : 'Mostrando ${_abonosFiltrados.length} de ${_abonos.length} pagos',
+                                suffixIcon: _ctrlFiltro.text.isEmpty
+                                    ? null
+                                    : IconButton(
+                                        icon: const Icon(Icons.clear),
+                                        onPressed: () => setState(_ctrlFiltro.clear),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
                           _TablaHistorial(
-                            abonos: _abonos,
+                            abonos: _abonosFiltrados,
                             df: _df,
                             modoPoliza: widget.esModoPoliza,
                             onVerFactura: _verFactura,
