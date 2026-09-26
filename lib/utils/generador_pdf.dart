@@ -567,20 +567,22 @@ class GeneradorPdf {
     return pw.Table(
       border: pw.TableBorder.all(color: _grisClaro, width: 0.5),
       columnWidths: const {
-        0: pw.FlexColumnWidth(1.5),
-        1: pw.FlexColumnWidth(2.5),
-        2: pw.FlexColumnWidth(2),
+        0: pw.FlexColumnWidth(0.8),
+        1: pw.FlexColumnWidth(1.5),
+        2: pw.FlexColumnWidth(2.5),
         3: pw.FlexColumnWidth(2),
         4: pw.FlexColumnWidth(2),
-        5: pw.FlexColumnWidth(1),
+        5: pw.FlexColumnWidth(2),
+        6: pw.FlexColumnWidth(1),
       },
       children: [
         _tablaHeader(
-            ['N° Póliza', 'Cliente', 'Ramo / Producto', 'Abono', 'Comisión', 'Estado']),
+            ['Cód.', 'N° Póliza', 'Cliente', 'Ramo / Producto', 'Abono', 'Comisión', 'Estado']),
         ...abonos.asMap().entries.map((e) {
           final a = e.value;
           return _tablaFila([
-            a.nroPoliza ?? '${a.idPoliza}',
+            '${a.idPoliza}',
+            a.nroPoliza ?? '—',
             a.nombreCliente ?? '—',
             "${a.nombreRamo ?? '—'}${a.nombreProd != null ? ' / ${a.nombreProd!}' : ''}",
             '\$ ${Fmt.money(a.vlrabonoprima)}',
@@ -590,6 +592,7 @@ class GeneradorPdf {
         }),
         _tablaTotal([
           'TOTALES',
+          '',
           '',
           '',
           '\$ ${Fmt.money(totAbono)}',

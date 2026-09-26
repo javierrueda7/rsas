@@ -486,9 +486,18 @@ class _TablaHistorial extends StatelessWidget {
                       style: const TextStyle(fontSize: 12),
                     )),
                     if (!modoPoliza)
-                      DataCell(Text(a.nroPoliza ?? '${a.idPoliza}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 12))),
+                      DataCell(Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(a.nroPoliza ?? '—',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 12)),
+                          Text('Cód. ${a.idPoliza}',
+                              style: TextStyle(
+                                  fontSize: 10, color: AppTheme.inkSoft)),
+                        ],
+                      )),
                     if (!modoPoliza)
                       DataCell(Text(a.nombreCliente ?? '—',
                           style: const TextStyle(fontSize: 12))),
@@ -787,7 +796,8 @@ class _PaginaFacturaState extends State<_PaginaFactura> {
                           child: _SeccionFactura(
                             titulo: 'DATOS DE LA PÓLIZA',
                             filas: [
-                              ('N° Póliza', a.nroPoliza ?? '${a.idPoliza}'),
+                              ('N° Póliza', a.nroPoliza ?? '—'),
+                              ('Código', '${a.idPoliza}'),
                               ('Aseguradora', a.nombreAseg ?? '—'),
                               ('Ramo', a.nombreRamo ?? '—'),
                               ('Producto', a.nombreProd ?? '—'),
