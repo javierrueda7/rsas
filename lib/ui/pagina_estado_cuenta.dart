@@ -11,6 +11,7 @@ import '../utils/numeros_co.dart';
 import '../utils/generador_pdf.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
+import 'widgets/tabla_ancho_completo.dart';
 import 'widgets/stat_card.dart';
 
 /// Pantalla de estado de cuenta.
@@ -270,7 +271,7 @@ class _PaginaEstadoCuentaState extends State<PaginaEstadoCuenta> {
                       ),
                     ),
                   ],
-                )),
+                ), maxWidth: AppLayout.maxTableWidth),
     );
   }
 }
@@ -453,9 +454,8 @@ class _TablaHistorial extends StatelessWidget {
         controller: hScroll,
         thumbVisibility: true,
         trackVisibility: true,
-        child: SingleChildScrollView(
+        child: TablaAnchoCompleto(
           controller: hScroll,
-          scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.only(bottom: 10),
           child: DataTable(
             headingRowColor:
@@ -490,7 +490,8 @@ class _TablaHistorial extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(a.nroPoliza ?? '—',
+                          CeldaAnchoFijo(a.nroPoliza ?? '—',
+                              ancho: 200,
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 12)),
                           Text('Cód. ${a.idPoliza}',
@@ -499,8 +500,8 @@ class _TablaHistorial extends StatelessWidget {
                         ],
                       )),
                     if (!modoPoliza)
-                      DataCell(Text(a.nombreCliente ?? '—',
-                          style: const TextStyle(fontSize: 12))),
+                      DataCell(CeldaAnchoFijo(a.nombreCliente ?? '—',
+                          ancho: 300, style: const TextStyle(fontSize: 12))),
                     if (modoPoliza)
                       DataCell(Text(
                         a.idrepPago != null ? '#${a.idrepPago}' : '—',

@@ -30,11 +30,16 @@ class AppLayout {
   /// muchas columnas) — se centran en vez de estirarse en monitores anchos.
   static const double maxContentWidth = 1200;
 
-  /// Envuelve [child] centrado con [maxContentWidth] como ancho máximo.
-  static Widget centered(Widget child) {
+  /// Ancho máximo para pantallas con tablas de muchas columnas: más
+  /// generoso, para que nombres y números se vean completos.
+  static const double maxTableWidth = 1600;
+
+  /// Envuelve [child] centrado con [maxWidth] (por defecto
+  /// [maxContentWidth]) como ancho máximo.
+  static Widget centered(Widget child, {double maxWidth = maxContentWidth}) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: maxContentWidth),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,
       ),
     );

@@ -17,6 +17,7 @@ import '../utils/formatters.dart';
 import '../utils/numeros_co.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
+import 'widgets/tabla_ancho_completo.dart';
 import 'widgets/stat_card.dart';
 import 'pagina_estado_cuenta.dart';
 import 'pagina_revision_reporte_pago.dart';
@@ -740,7 +741,7 @@ class _FormularioReporteState extends State<FormularioReportePago> {
               ),
             ),
           ],
-        )),
+        ), maxWidth: AppLayout.maxTableWidth),
       ),
     );
   }
@@ -774,9 +775,8 @@ class _TablaAbonos extends StatelessWidget {
         controller: hScroll,
         thumbVisibility: true,
         trackVisibility: true,
-        child: SingleChildScrollView(
+        child: TablaAnchoCompleto(
           controller: hScroll,
-          scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.only(bottom: 10),
           child: DataTable(
             headingRowColor: WidgetStateProperty.all(cs.surfaceContainerHighest),
@@ -797,16 +797,17 @@ class _TablaAbonos extends StatelessWidget {
             ],
             rows: abonos.map((a) {
               return DataRow(cells: [
-                DataCell(Text(
+                DataCell(CeldaAnchoFijo(
                   a.nroPoliza ?? '${a.idPoliza}',
+                  ancho: 200,
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 )),
                 DataCell(Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(a.nombreCliente ?? '—',
-                        style: const TextStyle(fontSize: 12)),
+                    CeldaAnchoFijo(a.nombreCliente ?? '—',
+                        ancho: 300, style: const TextStyle(fontSize: 12)),
                     if (a.docCliente != null)
                       Text(
                         '${a.tipodocCliente ?? ''} ${Fmt.doc(a.docCliente)}',

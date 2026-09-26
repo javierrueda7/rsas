@@ -12,6 +12,7 @@ import 'pagina_formulario_reporte.dart';
 import 'pagina_estado_cuenta.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
+import 'widgets/tabla_ancho_completo.dart';
 import 'widgets/selector_fecha.dart';
 
 class PaginaReportesPago extends StatefulWidget {
@@ -272,9 +273,8 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
                       notificationPredicate: (n) => n.depth == 1,
                       child: SingleChildScrollView(
                         controller: _vScroll,
-                        child: SingleChildScrollView(
+                        child: TablaAnchoCompleto(
                           controller: _hScroll,
-                          scrollDirection: Axis.horizontal,
                           child: DataTable(
                             headingRowColor: WidgetStateProperty.all(
                               cs.surfaceContainerHighest,
@@ -306,8 +306,8 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
                                     style: const TextStyle(fontWeight: FontWeight.bold),
                                   )),
                                   DataCell(Text(_df.format(r.fechaRep))),
-                                  DataCell(Text(r.nombreAseg ?? '—')),
-                                  DataCell(Text(r.nombreInterm ?? '—')),
+                                  DataCell(CeldaAnchoFijo(r.nombreAseg ?? '—', ancho: 200)),
+                                  DataCell(CeldaAnchoFijo(r.nombreInterm ?? '—', ancho: 260)),
                                   DataCell(Text(periodo,
                                       style: const TextStyle(fontSize: 11))),
                                   DataCell(
@@ -373,7 +373,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
                   ),
           ),
         ],
-      )),
+      ), maxWidth: AppLayout.maxTableWidth),
     );
   }
 }
