@@ -14,6 +14,7 @@ import '../datos/catalogos.dart';
 import '../datos/poliza.dart';
 import '../datos/poliza_pendiente.dart';
 import '../datos/sesion.dart';
+import '../utils/filtros_busqueda.dart';
 import '../utils/formatters.dart';
 import 'catalogos/form_cliente.dart';
 import 'theme/app_layout.dart';
@@ -1353,7 +1354,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
     setState(() => _guardando = true);
 
     try {
-      final nroPolizaTrim = _nroCtrl.text.trim();
+      final nroPolizaTrim = formatearNroPoliza(_nroCtrl.text);
       final nroPolizaCambio = !esEdicion ||
           _normalizarNroLocal(nroPolizaTrim) !=
               _normalizarNroLocal(_nroPolizaOriginal ?? '') ||
@@ -1522,7 +1523,7 @@ class _PaginaFormularioPolizasState extends State<PaginaFormularioPolizas> {
   /// — se reusa para el snapshot que se guarda en un borrador.
   Map<String, dynamic> _mapaActual() {
     return <String, dynamic>{
-      'nro_poliza': _nroCtrl.text.trim().isEmpty ? null : _nroCtrl.text.trim(),
+      'nro_poliza': _nroCtrl.text.trim().isEmpty ? null : formatearNroPoliza(_nroCtrl.text),
       'cliente_id': _idValido(cliente?.id),
       'asesor_id': _idValido(asesor1?.id),
       'intermediario_id': _idValido(intermediario?.id),
