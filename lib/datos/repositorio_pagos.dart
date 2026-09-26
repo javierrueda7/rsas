@@ -31,15 +31,32 @@ class RepositorioPagos {
 
   // ── REPORTES ───────────────────────────────────────────────────────────────
 
+  /// [busqueda]: aseguradora, intermediario o código del reporte ("1418" o
+  /// "#1418"). [estado]: null = todos. [desde]/[hasta]: fecha del reporte,
+  /// ambos días incluidos. Todo se filtra en la base, así que alcanza
+  /// también a los reportes que no caben en el [limite].
   Future<List<ReportePago>> listarReportes({
     String busqueda = '',
+    String? estado,
+    DateTime? desde,
+    DateTime? hasta,
     int limite = 300,
   }) async {
     final q = busqueda.trim();
     dynamic req = _db.from(_vistaReportes).select(_colsReporte);
     if (q.isNotEmpty) {
-      req = req.or('${ilikeContiene('nombre_aseg', q)},${ilikeContiene('nombre_interm', q)}');
+      final codigo = int.tryParse(q.replaceFirst('#', '').trim());
+      final filtros = [
+        ilikeContiene('nombre_aseg', q),
+        ilikeContiene('nombre_interm', q),
+        if (codigo != null) 'id.eq.$codigo',
+      ];
+      req = req.or(filtros.join(','));
     }
+    if (estado != null) req = req.eq('estado_rep', estado);
+    String dia(DateTime d) => d.toIso8601String().substring(0, 10);
+    if (desde != null) req = req.gte('fecha_rep', dia(desde));
+    if (hasta != null) req = req.lte('fecha_rep', dia(hasta));
     final res = await req.order('fecha_rep', ascending: false).limit(limite);
     return (res as List).cast<Map<String, dynamic>>().map(ReportePago.fromMap).toList();
   }

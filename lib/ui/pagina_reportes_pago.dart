@@ -12,6 +12,7 @@ import 'pagina_formulario_reporte.dart';
 import 'pagina_estado_cuenta.dart';
 import 'theme/app_layout.dart';
 import 'theme/app_theme.dart';
+import 'widgets/selector_fecha.dart';
 
 class PaginaReportesPago extends StatefulWidget {
   const PaginaReportesPago({super.key});
@@ -31,6 +32,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
   bool _cargando = false;
   List<ReportePago> _reportes = [];
   String _filtroEstado = 'TODOS';
+  DateTimeRange? _fechas; // fecha del reporte; null = todas
 
   static const _estados = ['TODOS', 'I', 'C', 'R', 'V', 'A'];
 
@@ -49,16 +51,25 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
     super.dispose();
   }
 
+  // Cada carga tiene su número: si el usuario cambia el filtro o la búsqueda
+  // mientras otra está en curso, solo se muestra la respuesta de la última.
+  int _consulta = 0;
+
   Future<void> _cargar() async {
-    if (_cargando) return;
+    final n = ++_consulta;
     setState(() => _cargando = true);
     try {
-      final data = await _repo.listarReportes(busqueda: _ctrlBuscar.text.trim());
-      if (mounted) setState(() => _reportes = data);
+      final data = await _repo.listarReportes(
+        busqueda: _ctrlBuscar.text.trim(),
+        estado: _filtroEstado == 'TODOS' ? null : _filtroEstado,
+        desde: _fechas?.start,
+        hasta: _fechas?.end,
+      );
+      if (mounted && n == _consulta) setState(() => _reportes = data);
     } catch (e) {
-      if (mounted) _snack('Error al cargar: $e', error: true);
+      if (mounted && n == _consulta) _snack('Error al cargar: $e', error: true);
     } finally {
-      if (mounted) setState(() => _cargando = false);
+      if (mounted && n == _consulta) setState(() => _cargando = false);
     }
   }
 
@@ -67,9 +78,19 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
     _debounce = Timer(const Duration(milliseconds: 400), _cargar);
   }
 
-  List<ReportePago> get _filtrados {
-    if (_filtroEstado == 'TODOS') return _reportes;
-    return _reportes.where((r) => r.estadoRep == _filtroEstado).toList();
+  Future<void> _seleccionarFechas() async {
+    final hoy = DateTime.now();
+    final picked = await mostrarSelectorRangoFecha(
+      context,
+      primera: DateTime(2000),
+      ultima: DateTime(hoy.year + 1, 12, 31),
+      inicial: _fechas ?? DateTimeRange(start: DateTime(hoy.year, 1, 1), end: hoy),
+      titulo: 'Fecha del reporte',
+    );
+    if (picked != null && mounted) {
+      setState(() => _fechas = picked);
+      _cargar();
+    }
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -127,7 +148,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
   @override
   Widget build(BuildContext context) {
     final cs     = Theme.of(context).colorScheme;
-    final lista  = _filtrados;
+    final lista  = _reportes;
 
     return Scaffold(
       appBar: AppBar(
@@ -162,7 +183,7 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
               controller: _ctrlBuscar,
               onChanged: _onBuscar,
               decoration: InputDecoration(
-                hintText: 'Buscar por aseguradora o intermediario...',
+                hintText: 'Buscar por código, aseguradora o intermediario...',
                 prefixIcon: const Icon(Icons.search),
                 border: const OutlineInputBorder(),
                 isDense: true,
@@ -175,22 +196,45 @@ class _PaginaReportesPagoState extends State<PaginaReportesPago> {
               ),
             ),
           ),
-          // ── Filtros de estado ────────────────────────────────────────────
+          // ── Filtros de fecha y estado ────────────────────────────────────
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             child: Row(
-              children: _estados.map((e) {
-                final selected = _filtroEstado == e;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: FilterChip(
-                    label: Text(e == 'TODOS' ? 'Todos' : labelEstadoPago(e)),
-                    selected: selected,
-                    onSelected: (_) => setState(() => _filtroEstado = e),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: InputChip(
+                    avatar: const Icon(Icons.date_range, size: 18),
+                    label: Text(_fechas == null
+                        ? 'Fecha: todas'
+                        : '${_df.format(_fechas!.start)} – ${_df.format(_fechas!.end)}'),
+                    selected: _fechas != null,
+                    showCheckmark: false,
+                    onPressed: _seleccionarFechas,
+                    onDeleted: _fechas == null
+                        ? null
+                        : () {
+                            setState(() => _fechas = null);
+                            _cargar();
+                          },
                   ),
-                );
-              }).toList(),
+                ),
+                ..._estados.map((e) {
+                  final selected = _filtroEstado == e;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: FilterChip(
+                      label: Text(e == 'TODOS' ? 'Todos' : labelEstadoPago(e)),
+                      selected: selected,
+                      onSelected: (_) {
+                        setState(() => _filtroEstado = e);
+                        _cargar();
+                      },
+                    ),
+                  );
+                }),
+              ],
             ),
           ),
           // ── Contador ────────────────────────────────────────────────────
